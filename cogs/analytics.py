@@ -6,12 +6,6 @@ from utils import emojis, checks
 from utils.logger import *
 
 
-def has_access():
-    async def predicate(ctx):
-        return await ctx.bot.data_manager.check_access(ctx)
-    return commands.check(predicate)
-
-
 class Analytics(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -35,16 +29,16 @@ class Analytics(commands.Cog):
             if (len(search_monitor) == 1):
                 channel = guild.get_channel(int(search_monitor[0]))
                 logger.log("SYSTEM", f"Scanning channel: {channel.name} in {guild.name}")
-            try:
-                async for message in channel.history(limit=None, oldest_first=False):
-                    if not self.has_mantis_reaction(message):
-                        if (message.author.id == 575252669443211264):
-                            await self.processing_queue.put(message)
-                    else:
-                        # Stop scanning this channel after finding the first processed message
-                        break
-            except Exception as e:
-                    logger.error(f"Error fetching history in channel {channel.name}: {e}")
+                try:
+                    async for message in channel.history(limit=None, oldest_first=False):
+                        if not self.has_mantis_reaction(message):
+                            if (message.author.id == 575252669443211264):
+                                await self.processing_queue.put(message)
+                        else:
+                            # Stop scanning this channel after finding the first processed message
+                            break
+                except Exception as e:
+                        logger.error(f"Error fetching history in channel {channel.name}: {e}")
 
 
     # Check if the message has a Mantis reaction
@@ -148,10 +142,11 @@ class Analytics(commands.Cog):
                 pass
             if (status == 'good'):
                 logger.success(f"*** Processed open modmail ticket (Message ID: {message.id}) GOOD DATA ***")
+            else:
                 logger.warning(f"*** Processed open modmail ticket (Message ID: {message.id}) BAD DATA ***")
 
         except Exception as e:
-            logger.error(f"Error processing caught modmail ticket: {e}")
+            logger.exception(f"Error processing caught modmail ticket: {e}")
 
 
     # Updates Modmail tickets as closed in the DB
@@ -234,10 +229,11 @@ class Analytics(commands.Cog):
             logger.error(f"Error closing modmail ticket: {e}")
 
 
+    # TODO add this wherever it goes: await self.bot.process_commands(message)
     # On-message event listener for messages in #modmail-log channels or modmail categories
     @commands.Cog.listener()
     async def on_message(self, message):
-        if (isinstance(message.channel, discord.DMChannel)):
+        if (isinstance(message.channel, discord.DMChannel) or not message.guild):
             return
 
         messageID = message.id
@@ -245,10 +241,6 @@ class Analytics(commands.Cog):
         this_channel = message.channel
         this_channelID = this_channel.id
         this_channel_catID = message.channel.category_id
-        this_authorID = message.author.id
-        timestamp = message.created_at
-        format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
-        monitor_type = ""
 
         search_monitor = [
             (channelID, monitorType) for guildID, channelID, monitorType 
@@ -257,8 +249,13 @@ class Analytics(commands.Cog):
 
         if (len(search_monitor) == 0):
             logger.debug(f"Message not within a monitored channel / category (Channel: {this_channel.name} | Guild: {guild.name})")
+            return
 
         elif (len(search_monitor) == 1):
+            this_authorID = message.author.id
+            timestamp = message.created_at
+            format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            monitor_type = ""
             monitor_type = search_monitor[0][1]
 
             # Check if channel is a Modmail log

@@ -66,7 +66,7 @@ class Util(commands.Cog):
 
     @commands.command()
     async def ping(self, ctx):
-        raise BotError("Ping is currently brokey")
+        raise BotError("Ping is currently broken (for testing purposes)")
         await ctx.send(f"{emojis.mantis} pong! {round(self.bot.latency * 1000,2)} ms")
 
 

@@ -74,11 +74,18 @@ class DataManager:
 
     # mySQL query executor
     async def execute_query(self, query: str, fetch_results: bool = True, execute_many: bool = False, content = None):
+        # Check if connection pool exists (again)
+        if self.db_pool is None:
+            logger.warning("Connection pool not found: Reconnecting...")
+            await self.connect_to_db()
+
         conn = None
         try:
             conn = await self.db_pool.acquire()
             if conn is None:
+                logger.warning("Connection not acquired from pool: Reconnecting...")
                 await self.connect_to_db()
+                conn = await self.db_pool.acquire()
             
             async with conn.cursor() as cursor:
                 if execute_many:

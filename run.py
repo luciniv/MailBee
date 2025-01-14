@@ -32,7 +32,7 @@ class Mantid(commands.Bot):
         description = ""
 
         # Create bot instance with command prefix
-        super().__init__(command_prefix=commands.when_mentioned_or('m!'), intents=intents, description=description)
+        super().__init__(command_prefix=commands.when_mentioned_or('m!'), intents=intents, description=description, help_command=None)
         self.data_manager = DataManager()
         self.channel_status = ChannelStatus()
 
@@ -68,15 +68,19 @@ class Mantid(commands.Bot):
                         logger.success(f"Loaded cog: {filename}")
                     except Exception as e:
                         ready = False
-                        logger.error(f"Failed to load {filename}: {e}")
+                        logger.exception(f"Failed to load {filename}: {e}")
 
-        # Prints READY ASCII text, just looks weird here              
+        # Prints READY ASCII text           
         if ready:
-            logger.log("NOTIF", "\n  ___   ___     _     ___   __   __\n | _ \ | __|   /_\   |   \  \ \ / /\n |   / | _|   / _ \  | |) |  \ V / \n |_|_\ |___| /_/ \_\ |___/    |_|  \n")
+            logger.log("NOTIF", "\n  ___   ___     _     ___   __   __"
+                                "\n | _ \ | __|   /_\   |   \  \ \ / /"
+                                "\n |   / | _|   / _ \  | |) |  \ V / "
+                                "\n |_|_\ |___| /_/ \_\ |___/    |_|  "
+                                "\n                                   ")
             logger.log("SYSTEM", f"Bot is ready! Logged in as {self.user} (ID: {self.user.id})")
         else:
             logger.critical("❌❌❌ Bot experienced core failures: Resolve listed errors before further use ❌❌❌")
-            self.close()
+            await super().close()
 
 
     # Close database and redis connections before shutdown
@@ -106,15 +110,6 @@ async def reload(ctx, cog: str):
         logger.error(f"Failed to reload {cog}.py: {e}")
 
 
-# # Error handling for the reload command
-# @reload.error
-# async def reload_error(ctx, error):
-#     if isinstance(error, commands.NotOwner):
-#         logger.info(f"Denied !reload permissions for {ctx.message.author.name}")
-#     else:
-#         logger.error(f"!reload sent an error: {error}")
-
-
 # Sync slash commands
 @bot.command(name="sync", aliases=["s"])
 @checks.is_owner()
@@ -130,44 +125,41 @@ async def sync_commands(ctx):
         await message.edit(content=f"{emojis.mantis} Main tree globally synced {len(synced)} commands.") 
 
 
-# # Error handling for the sync command
-# @sync_commands.error
-# async def sync_error(ctx, error):
-#     if isinstance(error, commands.NotOwner):
-#         logger.info(f"Denied !sync permissions for {ctx.message.author.name}")
-#     else:
-#         logger.error(f"!sync sent an error: {error}")
-
-
 # Centralized error handling event
 @bot.event
 async def on_command_error(ctx, error):
-    errorMsg = "❌ An unexpected error occurred. Please try again later"
-
-    if isinstance(error, commands.NotOwner):
-        errorMsg = f"❌ Ownership error: You need ownership of Mantid to use this command"
-    
-    elif isinstance(error, AccessError):
-        errorMsg = f"❌ Access error: {error}"
-
-    elif isinstance(error, BotError):
+    try:
+        errorMsg = "❌ An unexpected error occurred. Please try again later"
+        
         if (ctx.author.id in owners):
-            errorMsg = f"❌ An error occurred: {error}"
+                errorMsg = f"❌ An unexpected error occurred: {error}"
+
+        if isinstance(error, commands.NotOwner):
+            errorMsg = "❌ Ownership error: You need ownership of Mantid to use this command"
+        
+        elif isinstance(error, AccessError):
+            errorMsg = f"❌ Access error: {error}"
+
+        elif isinstance(error, BotError):
+            errorMsg = "❌ An error occurred. Please try again later"
+
+            if (ctx.author.id in owners):
+                errorMsg = f"❌ An error occurred: {error}"
+            logger.error(f"❌ General command error: {error}")
+
+        elif isinstance(error, commands.CommandNotFound):
+            errorMsg = "❌ This command does not exist, run /help to view a list of available commands"
+        
         else:
-            errorMsg = f"❌ An error occurred"
-        logger.error(f"❌ General command error: {error}")
+            logger.error(f"❌ Unexpected command error: {error}")
 
-    elif isinstance(error, commands.CommandNotFound):
-        errorMsg = "❌ This command does not exist, run /help to view a list of available commands"
-    
-    else:
-        logger.error(f"❌ Unexpected command error: {error}")
+        errorEmbed = discord.Embed(title="",
+                                description=f"{errorMsg}",
+                                color=0xFF0000)
+        await ctx.send(embed=errorEmbed, ephemeral=True)
 
-    errorEmbed = discord.Embed(title="",
-                               description=f"{errorMsg}",
-                               color=0xFF0000)
-    await ctx.send(embed=errorEmbed, ephemeral=True)
-
+    except discord.errors.NotFound:
+        logger.warning("Failed to send error message: Message context no longer exists")
 
 
 # Run the bot

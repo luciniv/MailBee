@@ -17,11 +17,8 @@ class AccessError(BotError):
     def __str__(self):
         details = ""
         if self.required_permission:
-            details += f"Required permission: {self.required_permission}"
+            details += f"\n\nRequired permission: {self.required_permission}"
         return f"{super().__str__()} ({details})"
 
 
 # Add more error classes if needed
-
-# class RuntimeError(BotError):
-#     pass
