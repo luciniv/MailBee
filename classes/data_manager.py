@@ -1,4 +1,5 @@
 import aiomysql
+from pymysql.err import OperationalError
 import asyncio
 import redis.asyncio as redis
 from dotenv import load_dotenv
@@ -74,50 +75,61 @@ class DataManager:
 
     # mySQL query executor
     async def execute_query(self, query: str, fetch_results: bool = True, execute_many: bool = False, content = None):
-        # Check if connection pool exists (again)
-        if self.db_pool is None:
-            logger.warning("Connection pool not found: Reconnecting...")
-            await self.connect_to_db()
+        
+        retry = 0
+        max_retries = 3
 
-        conn = None
-        try:
-            conn = await self.db_pool.acquire()
-            if conn is None:
-                logger.warning("Connection not acquired from pool: Reconnecting...")
-                await self.connect_to_db()
+        while retry < max_retries:
+            try:
+                # Check if connection pool exists (again)
+                if self.db_pool is None:
+                    logger.warning("Connection pool not found: Reconnecting...")
+                    await self.connect_to_db()
+
+                conn = None
                 conn = await self.db_pool.acquire()
-            
-            async with conn.cursor() as cursor:
-                if execute_many:
-                    if not content or not isinstance(content, list):
-                        raise ValueError("Content for 'execute_many' must be a non-empty list of tuples")
-    
-                    await conn.begin()  # Begin a transaction
-                    try:
-                        await cursor.executemany(query, content)
-                        await conn.commit()
-                    except Exception as e:
-                        logger.exception(f"Error during transaction: {e}")
-                        await conn.rollback()
-                        raise
-                else:
-                    await cursor.execute(query, content)
-                    if fetch_results:
-                        return await cursor.fetchall()
-                    return None
+
+                if conn is None:
+                    logger.warning("Connection not acquired from pool: Reconnecting...")
+                    await self.connect_to_db()
+                    conn = await self.db_pool.acquire()
                 
-        except Exception as e:
-            logger.exception(f"Error executing query: {e}")
-            raise
+                async with conn.cursor() as cursor:
+                    if execute_many:
+                        if not content or not isinstance(content, list):
+                            raise ValueError("Content for 'execute_many' must be a non-empty list of tuples")
+                        
+                        # Begin a transaction
+                        await conn.begin()  
+                        try:
+                            await cursor.executemany(query, content)
+                            await conn.commit()
 
-        finally:
-            if conn:
-                try:
-                    self.db_pool.release(conn)
+                        except Exception as e:
+                            logger.exception(f"Error during transaction: {e}")
+                            await conn.rollback()
+                    else:
+                        await cursor.execute(query, content)
+                        if fetch_results:
+                            return await cursor.fetchall()
+                        return None
+                    
+            except OperationalError as e:
+                logger.exception(f"Operational error occurred, retrying connection: {e}")
 
-                except Exception as e:
-                    logger.exception(f"Failed to release connection: {e}")
-                    raise
+            finally:
+                if conn:
+                    try:
+                        self.db_pool.release(conn)
+
+                    except Exception as e:
+                        logger.exception(f"Failed to release connection: {e}")
+                        raise
+            
+            await asyncio.sleep(2)
+            retry += 1
+        
+        raise Exception("Query execution failed after all retry attempts")
 
 
     # Variably controlled cache updater

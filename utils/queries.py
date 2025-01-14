@@ -24,41 +24,71 @@ def generate_fields(data: List[int], index: int) -> List[str]:
 
 
 # Generate query string and get results for the member_stats command
-def member_stats(guildID: discord.Guild, closeByID: int):
-    intervals = ["1 DAY", "7 DAY", "1 MONTH"]
+def mod_data(guildID: discord.Guild, closeByID: int, intervals: List[str]):
     query = "SELECT"
     
     for span in intervals:
+        if (span != "TOTAL"):
+            query += f"""
+                (SELECT COUNT(*) 
+                FROM tickets 
+                WHERE guildID = {guildID}
+                AND closeByID = {closeByID}
+                AND status = 'closed' 
+                AND dateClose >= NOW() - INTERVAL {span}),
+
+                (SELECT COUNT(*) 
+                FROM tickets 
+                WHERE guildID = {guildID}
+                AND status = 'closed' 
+                AND dateClose >= NOW() - INTERVAL {span}),
+            
+                (SELECT COUNT(*) 
+                FROM ticket_messages 
+                INNER JOIN tickets 
+                ON ticket_messages.modmail_messageID = tickets.messageID 
+                WHERE tickets.guildID = {guildID}
+                AND ticket_messages.authorID = {closeByID}
+                AND ticket_messages.type = 'Sent'
+                AND ticket_messages.date >= NOW() - INTERVAL {span}),
+
+                (SELECT COUNT(*) 
+                FROM ticket_messages 
+                INNER JOIN tickets 
+                ON ticket_messages.modmail_messageID = tickets.messageID 
+                WHERE tickets.guildID = {guildID}
+                AND ticket_messages.type = 'Sent'
+                AND ticket_messages.date >= NOW() - INTERVAL {span}),
+
+                (SELECT COUNT(*) 
+                FROM ticket_messages 
+                INNER JOIN tickets 
+                ON ticket_messages.modmail_messageID = tickets.messageID 
+                WHERE tickets.guildID = {guildID}
+                AND ticket_messages.authorID = {closeByID}
+                AND ticket_messages.type = 'Discussion'
+                AND ticket_messages.date >= NOW() - INTERVAL {span}),
+
+                (SELECT COUNT(*) 
+                FROM ticket_messages 
+                INNER JOIN tickets 
+                ON ticket_messages.modmail_messageID = tickets.messageID 
+                WHERE tickets.guildID = {guildID}
+                AND ticket_messages.type = 'Discussion'
+                AND ticket_messages.date >= NOW() - INTERVAL {span}),"""
+        
+    if "TOTAL" in intervals:
         query += f"""
             (SELECT COUNT(*) 
             FROM tickets 
             WHERE guildID = {guildID}
-            AND closeByID = {closeByID}
-            AND status = 'closed' 
-            AND dateClose >= NOW() - INTERVAL {span}),
+            AND closeByID = {closeByID} 
+            AND status = 'closed'),
 
             (SELECT COUNT(*) 
             FROM tickets 
             WHERE guildID = {guildID}
-            AND status = 'closed' 
-            AND dateClose >= NOW() - INTERVAL {span}),
-        
-            (SELECT COUNT(*) 
-            FROM ticket_messages 
-            INNER JOIN tickets 
-            ON ticket_messages.modmail_messageID = tickets.messageID 
-            WHERE tickets.guildID = {guildID}
-            AND ticket_messages.authorID = {closeByID}
-            AND ticket_messages.type = 'Sent'
-            AND ticket_messages.date >= NOW() - INTERVAL {span}),
-
-            (SELECT COUNT(*) 
-            FROM ticket_messages 
-            INNER JOIN tickets 
-            ON ticket_messages.modmail_messageID = tickets.messageID 
-            WHERE tickets.guildID = {guildID}
-            AND ticket_messages.type = 'Sent'
-            AND ticket_messages.date >= NOW() - INTERVAL {span}),
+            AND status = 'closed'),
 
             (SELECT COUNT(*) 
             FROM ticket_messages 
@@ -66,59 +96,34 @@ def member_stats(guildID: discord.Guild, closeByID: int):
             ON ticket_messages.modmail_messageID = tickets.messageID 
             WHERE tickets.guildID = {guildID}
             AND ticket_messages.authorID = {closeByID}
-            AND ticket_messages.type = 'Discussion'
-            AND ticket_messages.date >= NOW() - INTERVAL {span}),
+            AND ticket_messages.type = 'Sent'),
 
             (SELECT COUNT(*) 
             FROM ticket_messages 
             INNER JOIN tickets 
             ON ticket_messages.modmail_messageID = tickets.messageID 
             WHERE tickets.guildID = {guildID}
-            AND ticket_messages.type = 'Discussion'
-            AND ticket_messages.date >= NOW() - INTERVAL {span}),
+            AND ticket_messages.type = 'Sent'),
+
+            (SELECT COUNT(*) 
+            FROM ticket_messages 
+            INNER JOIN tickets 
+            ON ticket_messages.modmail_messageID = tickets.messageID 
+            WHERE tickets.guildID = {guildID}
+            AND ticket_messages.authorID = {closeByID}
+            AND ticket_messages.type = 'Discussion'),
+
+            (SELECT COUNT(*) 
+            FROM ticket_messages 
+            INNER JOIN tickets 
+            ON ticket_messages.modmail_messageID = tickets.messageID 
+            WHERE tickets.guildID = {guildID}
+            AND ticket_messages.type = 'Discussion');
             """
-        
-    query += f"""
-        (SELECT COUNT(*) 
-        FROM tickets 
-        WHERE guildID = {guildID}
-        AND closeByID = {closeByID} 
-        AND status = 'closed'),
+    else:
+        # Fixes possible dangling comma
+        query = query.rstrip(',') + ';'
 
-        (SELECT COUNT(*) 
-        FROM tickets 
-        WHERE guildID = {guildID}
-        AND status = 'closed'),
-
-        (SELECT COUNT(*) 
-        FROM ticket_messages 
-        INNER JOIN tickets 
-        ON ticket_messages.modmail_messageID = tickets.messageID 
-        WHERE tickets.guildID = {guildID}
-        AND ticket_messages.authorID = {closeByID}
-        AND ticket_messages.type = 'Sent'),
-
-        (SELECT COUNT(*) 
-        FROM ticket_messages 
-        INNER JOIN tickets 
-        ON ticket_messages.modmail_messageID = tickets.messageID 
-        WHERE tickets.guildID = {guildID}
-        AND ticket_messages.type = 'Sent'),
-
-        (SELECT COUNT(*) 
-        FROM ticket_messages 
-        INNER JOIN tickets 
-        ON ticket_messages.modmail_messageID = tickets.messageID 
-        WHERE tickets.guildID = {guildID}
-        AND ticket_messages.authorID = {closeByID}
-        AND ticket_messages.type = 'Discussion'),
-
-        (SELECT COUNT(*) 
-        FROM ticket_messages 
-        INNER JOIN tickets 
-        ON ticket_messages.modmail_messageID = tickets.messageID 
-        WHERE tickets.guildID = {guildID}
-        AND ticket_messages.type = 'Discussion');
-        """
+    print(query)
     
     return query

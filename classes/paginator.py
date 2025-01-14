@@ -10,6 +10,7 @@ class Paginator(View):
         self.message = None
 
 
+    # Logic for the previous button, takes the view back a page
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.success)
     async def prev_page(self, interaction: discord.Interaction, button: Button):
         if self.current_page > 0:
@@ -19,6 +20,7 @@ class Paginator(View):
             await interaction.response.defer()
 
 
+    # Logic for the next button, takes the view forward a page
     @discord.ui.button(label="Next", style=discord.ButtonStyle.success)
     async def next_page(self, interaction: discord.Interaction, button: Button):
         if self.current_page < len(self.pages) - 1:
@@ -28,6 +30,7 @@ class Paginator(View):
             await interaction.response.defer()
 
 
+    # Disables buttons after view times out
     async def on_timeout(self):
         for child in self.children:
             child.disabled = True

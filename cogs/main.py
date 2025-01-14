@@ -184,7 +184,7 @@ class Main(commands.Cog):
                                         description=f"Roles with access to Mantid in: **{guildName}** ({this_guildID})", 
                                         color=0x3ad407)
                 permsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
-                search_access[20]
+    
                 if not search_access:
                     permsEmbed.description=""
                     permsEmbed.color=0xFF0000
@@ -194,7 +194,7 @@ class Main(commands.Cog):
                 else:
                     for row in search_access:
                         permsEmbed.add_field(name="", 
-                                            value=f"<@&{row[0]}> - **{row[1]}**", 
+                                            value=f"{emojis.mantis} <@&{row[0]}> - **{row[1]}**", 
                                             inline=False)
                 
                 await ctx.send(embed=permsEmbed)
@@ -217,7 +217,7 @@ class Main(commands.Cog):
                 else:
                     for row in search_monitor:
                         monitorEmbed.add_field(name="", 
-                                            value=f"<#{row[0]}> - **{row[1]}**", 
+                                            value=f"{emojis.mantis} <#{row[0]}> - **{row[1]}**", 
                                             inline=False)
                 
                 await ctx.send(embed=monitorEmbed)
