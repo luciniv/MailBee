@@ -163,8 +163,8 @@ class Analytics(commands.Cog):
                 embed = message.embeds[0]
                 footer = embed.footer.text
                 openID = (footer.split())[-1]
-                author_name = embed.author.name
-                closeName = author_name[:-2]
+                author_name = (embed.author.name).split
+                closeName = author_name[0][:-2]
                 closeID = guild.get_member_named(closeName).id
 
                 query = f"""
@@ -278,7 +278,7 @@ class Analytics(commands.Cog):
                             if (embed.title == "Message Received"):
                                 footer = embed.footer.text
                                 authorID = (footer.split())[-1]
-                                print("Modmail DM message received")
+                                logger.debug("Modmail DM message received")
                             
                                 await self.bot.data_manager.add_ticket_message(messageID, 
                                                                                modmail_messageID, 
@@ -293,7 +293,7 @@ class Analytics(commands.Cog):
                                 author_name = embed.author.name
                                 author_username = author_name[:-2]
                                 authorID = guild.get_member_named(author_username).id
-                                print(f"Modmail bot sent message from {author_username}, {authorID}")
+                                logger.debug(f"Modmail bot sent message from {author_username}, {authorID}")
 
                                 await self.bot.data_manager.add_ticket_message(messageID, 
                                                                                modmail_messageID, 
@@ -310,11 +310,12 @@ class Analytics(commands.Cog):
                         # Chatting message, message to be sent by Modmail, OR =close 
                         if (message.content.startswith("=")):
                             # Chatting message or =close
-                            if (message.content.startswith("=close")):
+                            if (message.content.startswith("=close") or message.content.startswith("=aclose")):
                                 logger.debug(f"Modmail channel {this_channel.name} ({this_channelID}) closed")
                                 await self.log_closed_ticket(message, modmail_messageID)
 
                             else: 
+                                logger.debug(f"Chatting message in ticket {this_channel.name}")
                                 # Store chatting message, label it as such
                                 await self.bot.data_manager.add_ticket_message(messageID, 
                                                                                modmail_messageID, 
@@ -322,7 +323,6 @@ class Analytics(commands.Cog):
                                                                                this_authorID, 
                                                                                format_time, 
                                                                                "Discussion")
-                                logger.debug(f"Chatting message in ticket {this_channel.name}")
                         else:
                             pass
                             # Message to be sent by Modmail (IGNORE)

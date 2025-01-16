@@ -13,34 +13,61 @@ class Stats(commands.Cog):
     def __init__(self, bot):
         self.bot = bot 
 
+        # separate commands for csv output, gets data for all mods in a server or all servers (preferably not both)
+
     def build_stat_embed():
         pass
-    # tackle either this or member averages first
+  
 
     # Server stats
-    # Current total open and total overall (opened or closed) --> doenst work for timeframes
+    # Current total tickets open DONE
+    # Total tickets overall DONE
 
-    # Number of tickets opened (in timespans) --> avg compatible
-    # Number of tickets closed (in timespans) --> avg compatible
-
-    # Average ticket duration (in timespans)                            --> ONLY averages
-    # Average first response time (in timespans)                        --> ONLY averages
-    # Average time for moderator reply to user message (in timespans)   --> ONLY averages
-
+    # vvv display these like the others
+    # Average ticket duration (past week, past month, all time) DONE
+    # Average first response time (past week, past month, all time) DONE
+    # Average number of messages (sent and received) to resolve a ticket (past week, past month, all time)
 
 
-    # Ticket content breakdown
-    # Average number of messages sent to user to resolve a ticket (again)
-    # Average number of discussion messages, sent, received, their ratio idk
-
-
-    @commands.hybrid_command(name="server_stats", description="Display this server's statistics")
+    @commands.hybrid_command(name="server_stats", description="Display this server's statistics,"
+                            " includes current tickets open and response averages")
     @checks.has_access()
-    async def server_stats(self, ctx):
-        guildID = ctx.guild.id
-        editEmbed = discord.Embed(title=f"Edit Results {emojis.mantis}", 
-                                description="", 
-                                color=0x3ad407)
+    @app_commands.describe(timeframe="Select list to show (server role permissions or monitored channels)")
+    @app_commands.choices(timeframe=[
+        app_commands.Choice(name="Past Week", value="1 WEEK"),
+        app_commands.Choice(name="Past Month", value="1 MONTH"),
+        app_commands.Choice(name="All Time", value="TOTAL"),
+        app_commands.Choice(name="All of the above", value="ALL")])
+    async def server_stats(self, ctx, timeframe: discord.app_commands.Choice[str]):
+        try:
+            # Allows command to take longer than 3 seconds
+            await ctx.defer()
+
+            # choice = timeframe.value
+            # name = timeframe.name
+            guildID = ctx.guild.id
+            rows = ["Past Hour", "Past Day", "Past Week", "Past Month", "All Time"]
+            columns = ["✅ Tickets Closed", "📤 Ticket Replies", "💬 Ticket Chats"]
+            intervals = ["1 HOUR", "1 DAY", "7 DAY", "1 MONTH", "TOTAL"]
+
+            bot_user = self.bot.user
+            time_now = datetime.now()
+            format_time = time_now.strftime("Today at %-I:%M %p")
+
+            statsEmbed = discord.Embed(title=f"Server Statistics {emojis.mantis}", 
+                                    description=f"Data formatted as **moderator's data** / **total data** - percent ratio", 
+                                    color=0x3ad407)
+            statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.avatar.url)
+            statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+
+            query = queries.server_stats(guildID, intervals)
+            result = await self.bot.data_manager.execute_query(query)
+
+            
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/server_stats sent an error: {e}")
+
         
 
     # Print user specific data
@@ -51,13 +78,10 @@ class Stats(commands.Cog):
     # Daily, weekly, monthly, all time
     # All total comparisons include percents
 
-    # Could do a bar chart as well, send charts SEPARATE!! so the full image is displayed :)
+    # Could do a bar chart as well, send charts SEPARATE!! so the full image is displayed
 
-    # Button view logic for displaying data? gives the option to select different timeframes
-    # Click button to say yes to outputting thing, embed updates
-    # Click again to say no to outputting thing, embed updates
 
-    @commands.hybrid_command(name="mod_data", description="Display a moderator's ticketing data over the past X amount of time")
+    @commands.hybrid_command(name="mod_activity", description="Display a moderator's ticketing activity over the past X amount of time")
     @checks.has_access()
     @app_commands.describe(member="Selected moderator")
     @app_commands.describe(timeframe="Select list to show (server role permissions or monitored channels)")
@@ -68,7 +92,7 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Past Month", value="1 MONTH"),
         app_commands.Choice(name="All Time", value="TOTAL"),
         app_commands.Choice(name="All of the above", value="ALL")])
-    async def mod_data(self, ctx, member: discord.Member, timeframe: discord.app_commands.Choice[str]):
+    async def mod_activity(self, ctx, member: discord.Member, timeframe: discord.app_commands.Choice[str]):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
@@ -90,7 +114,7 @@ class Stats(commands.Cog):
             format_time = time_now.strftime("Today at %-I:%M %p")
 
             statsEmbed = discord.Embed(title=f"Moderator Data {emojis.mantis}", 
-                                    description=f"Data is formatted as **moderator's data** / **total data** - percent ratio", 
+                                    description=f"Data formatted as **moderator's data** / **total data** - **calculated percent**", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=member.name, icon_url=member.avatar.url)
             statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
@@ -121,7 +145,7 @@ class Stats(commands.Cog):
 
         except Exception as e:
             logger.exception(e)
-            raise BotError(f"/member_stats sent an error: {e}")
+            raise BotError(f"/mod_data sent an error: {e}")
             
             
         
@@ -135,6 +159,10 @@ class Stats(commands.Cog):
     @app_commands.describe(member="Selected member")
     async def mod_averages(self, ctx, member: discord.Member):
         pass
+
+
+
+
 
     # close metric --> the % of discussion and ticket messages sent to the user in a ticket that this person also closed
     # helps identify how much of the work they're doing in the tickets they close

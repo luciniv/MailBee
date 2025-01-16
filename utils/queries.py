@@ -23,8 +23,120 @@ def generate_fields(data: List[int], index: int) -> List[str]:
     return fields
 
 
+def server_stats(guildID: int, intervals: List[str]):
+    query = f"""
+        SELECT 
+        (SELECT COUNT(*)
+        FROM tickets
+        WHERE tickets.guildID = {guildID}
+        AND tickets.status = 'open'),
+
+        (SELECT COUNT(*)
+        FROM tickets
+        WHERE tickets.status = 'open'),
+
+        (SELECT COUNT(*)
+        FROM tickets
+        WHERE tickets.guildID = {guildID}),
+
+        (SELECT COUNT(*)
+        FROM tickets),
+        """
+
+    for span in intervals:
+        if (span != "TOTAL"):
+            query += f"""
+                (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg_duration
+                FROM tickets
+                WHERE guildID = {guildID}
+                AND status = 'closed'
+                AND dateClose >= NOW() - INTERVAL {span}),
+                
+                (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg_duration
+                FROM tickets
+                WHERE status = 'closed'
+                AND dateClose >= NOW() - INTERVAL {span}),
+                    
+                (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg_first_response
+                FROM tickets
+                INNER JOIN (
+                    SELECT modmail_messageID, MIN(date) AS date
+                    FROM ticket_messages
+                    WHERE type = 'Sent'
+                    GROUP BY modmail_messageID
+                ) AS first_message
+                ON tickets.messageID = first_message.modmail_messageID
+                WHERE tickets.guildID = {guildID}
+                AND tickets.status = 'closed'
+                AND tickets.flag = 'good'
+                AND tickets.dateClose >= NOW() - INTERVAL {span}),
+                
+                (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg_first_response
+                FROM tickets
+                INNER JOIN (
+                    SELECT modmail_messageID, MIN(date) AS date
+                    FROM ticket_messages
+                    WHERE type = 'Sent'
+                    GROUP BY modmail_messageID
+                ) AS first_message
+                ON tickets.messageID = first_message.modmail_messageID
+                WHERE tickets.status = 'closed'
+                AND tickets.flag = 'good'
+                AND tickets.dateClose >= NOW() - INTERVAL {span}),"""
+
+    if "TOTAL" in intervals:
+        query += f"""
+            (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg_duration
+            FROM tickets
+            WHERE guildID = {guildID}
+            AND status = 'closed',
+            
+            (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg_duration
+            FROM tickets
+            WHERE status = 'closed',
+                
+            (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg_first_response
+            FROM tickets
+            INNER JOIN (
+                SELECT modmail_messageID, MIN(date) AS date
+                FROM ticket_messages
+                WHERE type = 'Sent'
+                GROUP BY modmail_messageID
+            ) AS first_message
+            ON tickets.messageID = first_message.modmail_messageID
+            WHERE tickets.guildID = {guildID}
+            AND tickets.status = 'closed'
+            AND tickets.flag = 'good',
+            
+            (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg_first_response
+            FROM tickets
+            INNER JOIN (
+                SELECT modmail_messageID, MIN(date) AS date
+                FROM ticket_messages
+                WHERE type = 'Sent'
+                GROUP BY modmail_messageID
+            ) AS first_message
+            ON tickets.messageID = first_message.modmail_messageID
+            WHERE tickets.status = 'closed'
+            AND tickets.flag = 'good'
+            
+            
+            LAST ONE HERE!!;"""
+    else:
+        # Fixes possible dangling comma
+        query = query.rstrip(',') + ';'
+
+    print(query)
+    
+    return query    
+
+        
+            
+    
+
+
 # Generate query string and get results for the member_stats command
-def mod_data(guildID: discord.Guild, closeByID: int, intervals: List[str]):
+def mod_data(guildID: int, closeByID: int, intervals: List[str]):
     query = "SELECT"
     
     for span in intervals:
@@ -118,8 +230,7 @@ def mod_data(guildID: discord.Guild, closeByID: int, intervals: List[str]):
             INNER JOIN tickets 
             ON ticket_messages.modmail_messageID = tickets.messageID 
             WHERE tickets.guildID = {guildID}
-            AND ticket_messages.type = 'Discussion');
-            """
+            AND ticket_messages.type = 'Discussion');"""
     else:
         # Fixes possible dangling comma
         query = query.rstrip(',') + ';'

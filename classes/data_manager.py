@@ -75,61 +75,69 @@ class DataManager:
 
     # mySQL query executor
     async def execute_query(self, query: str, fetch_results: bool = True, execute_many: bool = False, content = None):
-        
         retry = 0
         max_retries = 3
 
-        while retry < max_retries:
-            try:
-                # Check if connection pool exists (again)
-                if self.db_pool is None:
-                    logger.warning("Connection pool not found: Reconnecting...")
-                    await self.connect_to_db()
+      
+        print("retried goodness me oh my!")
+        try:
+            # Check if connection pool exists (again)
+            if self.db_pool is None:
+                logger.warning("Connection pool not found: Reconnecting...")
+                await self.connect_to_db()
 
-                conn = None
+            conn = await self.db_pool.acquire()
+
+            if conn is None:
+                logger.warning("Connection not acquired from pool: Reconnecting...")
+                await self.connect_to_db()
                 conn = await self.db_pool.acquire()
-
-                if conn is None:
-                    logger.warning("Connection not acquired from pool: Reconnecting...")
-                    await self.connect_to_db()
-                    conn = await self.db_pool.acquire()
-                
-                async with conn.cursor() as cursor:
-                    if execute_many:
-                        if not content or not isinstance(content, list):
-                            raise ValueError("Content for 'execute_many' must be a non-empty list of tuples")
-                        
-                        # Begin a transaction
-                        await conn.begin()  
-                        try:
-                            await cursor.executemany(query, content)
-                            await conn.commit()
-
-                        except Exception as e:
-                            logger.exception(f"Error during transaction: {e}")
-                            await conn.rollback()
-                    else:
-                        await cursor.execute(query, content)
-                        if fetch_results:
-                            return await cursor.fetchall()
-                        return None
+            
+            print("passed connection tests, creating cursor")
+            async with conn.cursor() as cursor:
+                if execute_many:
+                    if not content or not isinstance(content, list):
+                        raise ValueError("Content for 'execute_many' must be a non-empty list of tuples")
                     
-            except OperationalError as e:
-                logger.exception(f"Operational error occurred, retrying connection: {e}")
-
-            finally:
-                if conn:
+                    # Begin a transaction
+                    await conn.begin()  
+                    print("started transaction")
                     try:
-                        self.db_pool.release(conn)
+                        await cursor.executemany(query, content)
+                        await conn.commit()
+                        print("transaction done and good")
 
                     except Exception as e:
-                        logger.exception(f"Failed to release connection: {e}")
+                        logger.exception(f"Error during transaction: {e}")
+                        await conn.rollback()
                         raise
-            
-            await asyncio.sleep(2)
-            retry += 1
+                else:
+                    await cursor.execute(query, content)
+                    if fetch_results:
+                        return await cursor.fetchall()
+                    return None
+                
+        except aiomysql.OperationalError as e:
+            logger.exception(f"Operational error occurred, retrying connection: {e}")
+
         
-        raise Exception("Query execution failed after all retry attempts")
+
+        except Exception as e:
+            logger.exception(f"Unhandled error during query execution: {e}")
+
+
+        finally:
+            print("running finally section")
+            if conn is not None:
+                print("conn is not none, so im releasing it just in case")
+                try:
+                    self.db_pool.release(conn)
+
+                except Exception as e:
+                    logger.exception(f"Failed to release connection: {e}")
+                    
+    
+        
 
 
     # Variably controlled cache updater
@@ -309,7 +317,7 @@ class DataManager:
             logger.debug(f"Added ticket message {message_id} to Redis")
 
             # Batch flush cache if 10 messages have collected
-            if (self.ticket_count > 9):
+            if (self.ticket_count > 2):
                 await self.flush_messages()
                 logger.info(f"Called flush tickets")
 
@@ -377,6 +385,7 @@ class DataManager:
     # Copies all ticket messages to DB, then deletes them
     # Uses asyncio.Lock() to ensure another flush cannot occur before the current flush is done
     async def flush_messages(self):
+        print("FLUSH CALLED OH MY GOD")
         # Get the lock
         async with self.flush_lock:
             try:
@@ -403,13 +412,13 @@ class DataManager:
                 # Attempt SQL transaction, roll back changes if any message fails to insert
                 query = """
                     INSERT INTO ticket_messages (modmail_messageID, messageID, channelID, authorID, date, type)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s) AS messages
                     ON DUPLICATE KEY UPDATE 
-                        modmail_messageID = VALUES(modmail_messageID),
-                        channelID = VALUES(channelID),
-                        authorID = VALUES(authorID),
-                        date = VALUES(date),
-                        type = VALUES(type); 
+                        modmail_messageID = messages.modmail_messageID,
+                        channelID = messages.channelID,
+                        authorID = messages.authorID,
+                        date = messages.date,
+                        type = messages.type; 
                         """
                 await self.execute_query(query, False, True, messages_to_insert)
 
