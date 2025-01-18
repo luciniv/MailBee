@@ -73,10 +73,14 @@ class Util(commands.Cog):
         print("flushed?")
         await ctx.send("Emptied messages cache")
 
+    
+    @commands.command()
+    async def error(self, ctx):
+        raise BotError("Example of an error occurring")
+
 
     @commands.command()
     async def ping(self, ctx):
-        raise BotError("Ping is currently broken (for testing purposes)")
         await ctx.send(f"{emojis.mantis} pong! {round(self.bot.latency * 1000,2)} ms")
 
 

@@ -77,64 +77,69 @@ class DataManager:
     async def execute_query(self, query: str, fetch_results: bool = True, execute_many: bool = False, content = None):
         retry = 0
         max_retries = 3
-
-      
-        print("retried goodness me oh my!")
-        try:
-            # Check if connection pool exists (again)
-            if self.db_pool is None:
-                logger.warning("Connection pool not found: Reconnecting...")
-                await self.connect_to_db()
-
-            conn = await self.db_pool.acquire()
-
-            if conn is None:
-                logger.warning("Connection not acquired from pool: Reconnecting...")
-                await self.connect_to_db()
-                conn = await self.db_pool.acquire()
-            
-            print("passed connection tests, creating cursor")
-            async with conn.cursor() as cursor:
-                if execute_many:
-                    if not content or not isinstance(content, list):
-                        raise ValueError("Content for 'execute_many' must be a non-empty list of tuples")
-                    
-                    # Begin a transaction
-                    await conn.begin()  
-                    print("started transaction")
-                    try:
-                        await cursor.executemany(query, content)
-                        await conn.commit()
-                        print("transaction done and good")
-
-                    except Exception as e:
-                        logger.exception(f"Error during transaction: {e}")
-                        await conn.rollback()
-                        raise
-                else:
-                    await cursor.execute(query, content)
-                    if fetch_results:
-                        return await cursor.fetchall()
-                    return None
-                
-        except aiomysql.OperationalError as e:
-            logger.exception(f"Operational error occurred, retrying connection: {e}")
+        result = None
+        retry = True
 
         
+        try:
+            while(retry):
+                print("retried goodness me oh my!")
+                # Check if connection pool exists (again)
+                if self.db_pool is None:
+                    logger.warning("Connection pool not found: Reconnecting...")
+                    await self.connect_to_db()
+
+                conn = await self.db_pool.acquire()
+
+                if conn is None:
+                    logger.warning("Connection not acquired from pool: Reconnecting...")
+                    await self.connect_to_db()
+                    conn = await self.db_pool.acquire()
+                
+                print("passed connection tests, creating cursor")
+                async with conn.cursor() as cursor:
+                    if execute_many:
+                        if not content or not isinstance(content, list):
+                            raise ValueError("Content for 'execute_many' must be a non-empty list of tuples")
+                        
+                        # Begin a transaction
+                        await conn.begin()  
+                        print("started transaction")
+                        try:
+                            await cursor.executemany(query, content)
+                            await conn.commit()
+                            print("transaction done and good")
+                            retry = False
+
+                        except Exception as e:
+                            logger.exception(f"Error during transaction: {e}")
+                            await conn.rollback()
+
+                    else:
+                        try:
+                            await cursor.execute(query, content)
+
+                        except Exception as e:
+                            logger.exception(f"Error during query: {e}")
+
+                        if fetch_results:
+                            result = await cursor.fetchall()
+                        retry = False
 
         except Exception as e:
             logger.exception(f"Unhandled error during query execution: {e}")
+            retry = False
 
+        print("running finally section")
+        if conn is not None:
+            print("conn is not none, so im releasing it just in case")
+            try:
+                self.db_pool.release(conn)
 
-        finally:
-            print("running finally section")
-            if conn is not None:
-                print("conn is not none, so im releasing it just in case")
-                try:
-                    self.db_pool.release(conn)
+            except Exception as e:
+                logger.exception(f"Failed to release connection: {e}")
 
-                except Exception as e:
-                    logger.exception(f"Failed to release connection: {e}")
+        return result
                     
     
         

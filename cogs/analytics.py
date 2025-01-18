@@ -236,8 +236,6 @@ class Analytics(commands.Cog):
         if (isinstance(message.channel, discord.DMChannel) or not message.guild):
             return
 
-        messageID = message.id
-        guild = message.guild
         this_channel = message.channel
         this_channelID = this_channel.id
         this_channel_catID = message.channel.category_id
@@ -248,10 +246,12 @@ class Analytics(commands.Cog):
             if (channelID == this_channelID or channelID == this_channel_catID)]
 
         if (len(search_monitor) == 0):
-            logger.debug(f"Message not within a monitored channel / category (Channel: {this_channel.name} | Guild: {guild.name})")
+            logger.debug(f"Message not within a monitored channel / category")
             return
 
         elif (len(search_monitor) == 1):
+            messageID = message.id
+            guild = message.guild
             this_authorID = message.author.id
             timestamp = message.created_at
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")

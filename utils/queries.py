@@ -2,22 +2,58 @@ import discord
 from typing import List
 
 
+# Formats time as 0h 00m
+def format_time(minutes) -> str:
+    hours = int(minutes // 60) 
+    remaining_minutes = int(minutes % 60)
+
+    return f"{hours}h {remaining_minutes}m"
+
+
+# Formats the data for each field, using two data items at a time
+def format_data(data: List[int], index: int, col_name) -> str:
+    field = "No Data"
+    cleaned_words = []
+    time_words = ["duration", "time"]
+
+    if col_name is not None:
+        words = col_name.split()
+        cleaned_words = [word.casefold() for word in words]
+
+    if (data[index] is None):
+        return field
+    
+    elif (data[index + 1] != 0):
+        local_data = data[index]
+        global_data = data[index + 1]
+        percentage = (local_data / global_data) * 100
+
+        if any(word in cleaned_words for word in time_words):
+            local_data = format_time(local_data)
+            global_data = format_time(global_data)
+
+        elif ("average" in cleaned_words):
+            local_data = f"{local_data:.2f}"
+            global_data = f"{global_data:.2f}"
+
+        field = f"{local_data} / {global_data}" + f" - {percentage:.0f}%"
+        return field
+    
+    else:
+        return field
+
+
 # Reads query data to create embed fields
 # Implemented to reduce code repeption
-def generate_fields(data: List[int], index: int) -> List[str]:
-    field = ""
+def generate_fields(data: List[int], index: int, columns: List[str]) -> List[str]:
     fields = []
     stop = index + 6
+    col = 0
     # Generate 3 at a time i have 3 name fields, so i need 3 corresponding values in a list
     # assume index is 0 to start, each time i loop add 2 to it (3 loops)
     while (index < stop):
-        if (data[index + 1] != 0):
-            percentage = (data[index] / data[index + 1]) * 100
-            field = f"{data[index]} / {data[index + 1]}" + f" - {percentage:.0f}%"
-        else:
-            field = "No Data"
-        fields.append(field)
-
+        fields.append(format_data(data, index, columns[col]))
+        col += 1
         index += 2
     
     return fields
@@ -82,18 +118,43 @@ def server_stats(guildID: int, intervals: List[str]):
                 ON tickets.messageID = first_message.modmail_messageID
                 WHERE tickets.status = 'closed'
                 AND tickets.flag = 'good'
-                AND tickets.dateClose >= NOW() - INTERVAL {span}),"""
+                AND tickets.dateClose >= NOW() - INTERVAL {span}),
+                
+                (SELECT AVG(message_count) AS average_messages_per_ticket
+                FROM (
+                    SELECT 
+                    COUNT(ticket_messages.messageID) AS message_count
+                    FROM tickets
+                    INNER JOIN ticket_messages 
+                    ON tickets.messageID = ticket_messages.modmail_messageID
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.status = 'closed'
+                    AND tickets.dateClose >= NOW() - INTERVAL {span}
+                    GROUP BY tickets.messageID
+                ) AS ticket_counts),
+                
+                (SELECT AVG(message_count) AS average_messages_per_ticket
+                FROM (
+                    SELECT 
+                    COUNT(ticket_messages.messageID) AS message_count
+                    FROM tickets
+                    INNER JOIN ticket_messages 
+                    ON tickets.messageID = ticket_messages.modmail_messageID
+                    WHERE tickets.guildID = tickets.status = 'closed'
+                    AND tickets.dateClose >= NOW() - INTERVAL {span}
+                    GROUP BY tickets.messageID
+                ) AS ticket_counts),"""
 
     if "TOTAL" in intervals:
         query += f"""
             (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg_duration
             FROM tickets
             WHERE guildID = {guildID}
-            AND status = 'closed',
+            AND status = 'closed'),
             
             (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg_duration
             FROM tickets
-            WHERE status = 'closed',
+            WHERE status = 'closed'),
                 
             (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg_first_response
             FROM tickets
@@ -106,7 +167,7 @@ def server_stats(guildID: int, intervals: List[str]):
             ON tickets.messageID = first_message.modmail_messageID
             WHERE tickets.guildID = {guildID}
             AND tickets.status = 'closed'
-            AND tickets.flag = 'good',
+            AND tickets.flag = 'good'),
             
             (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg_first_response
             FROM tickets
@@ -118,25 +179,39 @@ def server_stats(guildID: int, intervals: List[str]):
             ) AS first_message
             ON tickets.messageID = first_message.modmail_messageID
             WHERE tickets.status = 'closed'
-            AND tickets.flag = 'good'
+            AND tickets.flag = 'good'),
+
+            (SELECT AVG(message_count) AS average_messages_per_ticket
+            FROM (
+                SELECT 
+                COUNT(ticket_messages.messageID) AS message_count
+                FROM tickets
+                INNER JOIN ticket_messages 
+                ON tickets.messageID = ticket_messages.modmail_messageID
+                WHERE tickets.guildID = {guildID}
+                AND tickets.guildID = tickets.status = 'closed'
+                GROUP BY tickets.messageID
+            ) AS ticket_counts),
             
-            
-            LAST ONE HERE!!;"""
+            (SELECT AVG(message_count) AS average_messages_per_ticket
+            FROM (
+                SELECT 
+                COUNT(ticket_messages.messageID) AS message_count
+                FROM tickets
+                INNER JOIN ticket_messages 
+                ON tickets.messageID = ticket_messages.modmail_messageID
+                WHERE tickets.guildID = tickets.status = 'closed'
+                GROUP BY tickets.messageID
+            ) AS ticket_counts);"""
     else:
         # Fixes possible dangling comma
         query = query.rstrip(',') + ';'
-
-    print(query)
     
     return query    
 
-        
-            
-    
-
 
 # Generate query string and get results for the member_stats command
-def mod_data(guildID: int, closeByID: int, intervals: List[str]):
+def mod_activity(guildID: int, closeByID: int, intervals: List[str]):
     query = "SELECT"
     
     for span in intervals:
@@ -234,7 +309,5 @@ def mod_data(guildID: int, closeByID: int, intervals: List[str]):
     else:
         # Fixes possible dangling comma
         query = query.rstrip(',') + ';'
-
-    print(query)
     
     return query
