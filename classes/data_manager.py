@@ -80,7 +80,6 @@ class DataManager:
         result = None
         retry = True
 
-        
         try:
             while(retry):
                 print("retried goodness me oh my!")

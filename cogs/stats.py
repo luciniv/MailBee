@@ -14,12 +14,11 @@ def fill_embed(statsEmbed: discord.Embed,
                index: int, 
                rows: List[str], 
                columns: List[str]):
-    
     for row in rows:
         count = 0
         fields = queries.generate_fields(data, index, columns) 
         
-        statsEmbed.add_field(name=f"", value=f"**{row} {'-' * (78 - len(row))}**", inline=False)
+        statsEmbed.add_field(name=f"", value=f"**{'⎯' * 34} {row}**", inline=False)
 
         # Outputs the three fields from generate_fields
         for col, field in zip(columns, fields):
@@ -41,7 +40,7 @@ class Stats(commands.Cog):
 
   
     @commands.hybrid_command(name="server_stats", description="Display this server's statistics,"
-                            " includes current tickets open and response averages")
+                            " includes ticket counts and response averages")
     @checks.has_access()
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
@@ -76,7 +75,7 @@ class Stats(commands.Cog):
             format_time = time_now.strftime("Today at %-I:%M %p")
 
             statsEmbed = discord.Embed(title=f"Server Statistics {emojis.mantis}", 
-                                    description=f"Data formatted as **server's data** / **all server data**  - calculated percent", 
+                                    description=f"(selected server's data / all server data)", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
             statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
@@ -128,7 +127,9 @@ class Stats(commands.Cog):
 
             intervals = self.intervals
             rows = self.rows
-            columns = ["✅ Tickets Closed", "📤 Ticket Replies", "💬 Ticket Chats"]
+            columns = ["✅ Tickets Closed", 
+                       "📤 Ticket Replies", 
+                       "💬 Ticket Chats"]
 
             if (choice != "ALL"):
                 intervals = [f"{choice}"]
@@ -139,7 +140,7 @@ class Stats(commands.Cog):
             format_time = time_now.strftime("Today at %-I:%M %p")
 
             statsEmbed = discord.Embed(title=f"Moderator Activity {emojis.mantis}", 
-                                    description=f"Data formatted as **moderator's data** / **total data** - calculated percent", 
+                                    description=f"(selected mod's data / all mods in this server's data)", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=member.name, icon_url=member.avatar.url)
             statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
@@ -169,12 +170,12 @@ class Stats(commands.Cog):
     # average tickets closed, average ticket replies, average ticket chats
     # SAME FORMAT, just averages now
 
-    @commands.hybrid_command(name="mod_averages", description="Display moderator's ticketing averages"
-                             " over different time windows")
-    @checks.has_access()
-    @app_commands.describe(member="Selected member")
-    async def mod_averages(self, ctx, member: discord.Member):
-        pass
+    # @commands.hybrid_command(name="mod_averages", description="Display moderator's ticketing averages"
+    #                          " over different time windows")
+    # @checks.has_access()
+    # @app_commands.describe(member="Selected member")
+    # async def mod_averages(self, ctx, member: discord.Member):
+    #     pass
 
     
 
@@ -182,6 +183,86 @@ class Stats(commands.Cog):
     # essentially using the same queries, but just outputting the data (no formatting)
     # gives the option to output one person's data, or everyone's data, and then select the timeframe
     # might use the same query gen commands, not sure
+
+    @commands.hybrid_command(name="csv_server_stats", description="Output a CSV file of every server's statistics,"
+                            " includes ticket counts and response averages")
+    @checks.has_access()
+    @app_commands.describe(timeframe="Select a timeframe for the output data")
+    @app_commands.choices(timeframe=[
+        app_commands.Choice(name="Past Hour", value="1 HOUR"),
+        app_commands.Choice(name="Past Day", value="1 DAY"),
+        app_commands.Choice(name="Past Week", value="1 WEEK"),
+        app_commands.Choice(name="Past Month", value="1 MONTH"),
+        app_commands.Choice(name="All Time", value="TOTAL"),
+        app_commands.Choice(name="All of the above", value="ALL")])
+    async def csv_server_stats(self, ctx, timeframe: discord.app_commands.Choice[str]):
+        try:
+            # Allows command to take longer than 3 seconds
+            await ctx.defer()
+
+            guildIDs = []
+            choice = timeframe.value
+            name = timeframe.name
+            file = None
+
+            intervals = self.intervals
+            rows = self.rows
+            columns = ["Average Ticket Duration", 
+                       "Average First Response Time", 
+                       "Average Messages Per Ticket Resolved"]
+
+            if (choice != "ALL"):
+                intervals = [f"{choice}"]
+                rows = [f"{name}"]
+
+            for guild in self.bot.guilds:
+                if (guild.id != 12345):
+                    guildIDs.append(guild.id)
+
+            bot_user = self.bot.user
+            time_now = datetime.now()
+            format_time = time_now.strftime("Today at %-I:%M %p")
+
+            statsEmbed = discord.Embed(title=f"Server Statistics CSV {emojis.mantis}", 
+                                    description=f"Download the attatched CSV file to view data", 
+                                    color=0x3ad407)
+            statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
+            statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+            
+            result_list = []
+            query_list = queries.server_stats_CSV(guildIDs, intervals)
+
+            for query in query_list:
+                result = await self.bot.data_manager.execute_query(query)
+                if result is not None:
+                    result_list.append(result[0])
+
+            # Create CSV file from data
+            if (len(result_list) != 0):
+                header = ["Server ID", "Server Name", "Open Tickets", "All Tickets"]
+
+                for row in rows:
+                    for col in columns:
+                        header.append(f"{row} {col}")
+
+                write_list = []
+
+                for guildID, result in zip(guildIDs, result_list):
+                    guild = self.bot.get_guild(guildID)
+                    data = [guildID, guild.name]
+                    write_list.append((*data, *result))
+
+                file = csv_write.make_file(header, write_list)
+              
+            else:
+                statsEmbed.add_field(name="No data found", value="", inline=False)
+                
+            await ctx.send(embed=statsEmbed, file=file)
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/csv_server_stats sent an error: {e}")
+
 
     @commands.hybrid_command(name="csv_mod_activity", description="Output a CSV file of this server's moderators'"
                              " ticketing activity over the past X amount of time")
