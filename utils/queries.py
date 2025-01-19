@@ -44,7 +44,7 @@ def format_data(data: List[int], index: int, col_name) -> str:
 
 
 # Reads query data to create embed fields
-# Implemented to reduce code repeption
+# Implemented to reduce code repetition
 def generate_fields(data: List[int], index: int, columns: List[str]) -> List[str]:
     fields = []
     stop = index + 6
@@ -311,3 +311,67 @@ def mod_activity(guildID: int, closeByID: int, intervals: List[str]):
         query = query.rstrip(',') + ';'
     
     return query
+
+# Generate query string and get results for the member_stats command
+def mod_activity_CSV(guildID: int, modIDs: int, intervals: List[str]):
+    query_list = []
+
+    for modID in modIDs:
+        query = "SELECT"
+        for span in intervals:
+            if (span != "TOTAL"):
+                query += f"""
+                    (SELECT COUNT(*) 
+                    FROM tickets 
+                    WHERE guildID = {guildID}
+                    AND closeByID = {modID}
+                    AND status = 'closed' 
+                    AND dateClose >= NOW() - INTERVAL {span}),
+                    
+                    (SELECT COUNT(*) 
+                    FROM ticket_messages 
+                    INNER JOIN tickets 
+                    ON ticket_messages.modmail_messageID = tickets.messageID 
+                    WHERE tickets.guildID = {guildID}
+                    AND ticket_messages.authorID = {modID}
+                    AND ticket_messages.type = 'Sent'
+                    AND ticket_messages.date >= NOW() - INTERVAL {span}),
+                    
+                    (SELECT COUNT(*) 
+                    FROM ticket_messages 
+                    INNER JOIN tickets 
+                    ON ticket_messages.modmail_messageID = tickets.messageID 
+                    WHERE tickets.guildID = {guildID}
+                    AND ticket_messages.authorID = {modID}
+                    AND ticket_messages.type = 'Discussion'
+                    AND ticket_messages.date >= NOW() - INTERVAL {span}),"""
+                
+        if "TOTAL" in intervals:
+            query += f"""
+                (SELECT COUNT(*) 
+                FROM tickets 
+                WHERE guildID = {guildID}
+                AND closeByID = {modID} 
+                AND status = 'closed'),
+
+                (SELECT COUNT(*) 
+                FROM ticket_messages 
+                INNER JOIN tickets 
+                ON ticket_messages.modmail_messageID = tickets.messageID 
+                WHERE tickets.guildID = {guildID}
+                AND ticket_messages.authorID = {modID}
+                AND ticket_messages.type = 'Sent'),
+
+                (SELECT COUNT(*) 
+                FROM ticket_messages 
+                INNER JOIN tickets 
+                ON ticket_messages.modmail_messageID = tickets.messageID 
+                WHERE tickets.guildID = {guildID}
+                AND ticket_messages.authorID = {modID}
+                AND ticket_messages.type = 'Discussion');"""
+        else:
+            # Fixes possible dangling comma
+            query = query.rstrip(',') + ';'
+        query_list.append(query)
+    
+    return query_list

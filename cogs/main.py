@@ -163,7 +163,7 @@ class Main(commands.Cog):
 
     @commands.hybrid_command(name="show", description="List this server's role permissions or monitored channels and categories")
     @checks.has_access()
-    @app_commands.describe(selection="Select list to show (server role permissions or monitored channels)")
+    @app_commands.describe(selection="Select to show either server role permissions or monitored channels")
     @app_commands.choices(selection=[
         app_commands.Choice(name="role permissions", value="role permissions"),
         app_commands.Choice(name="monitored channels", value="monitored channels")])
