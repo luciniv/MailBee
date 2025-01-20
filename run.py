@@ -41,6 +41,8 @@ class Mantid(commands.Bot):
     async def on_ready(self):
         global ready
         global startup
+        print(os.getenv('REDIS_URL'))
+
         logger.log("SYSTEM", "------- STARTUP INITIATED ----------------")
 
         logger.log("SYSTEM", "------- FETCHING DATA --------------------")

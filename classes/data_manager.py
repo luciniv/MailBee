@@ -1,5 +1,4 @@
 import aiomysql
-from pymysql.err import OperationalError
 import asyncio
 import redis.asyncio as redis
 from dotenv import load_dotenv
@@ -140,9 +139,6 @@ class DataManager:
 
         return result
                     
-    
-        
-
 
     # Variably controlled cache updater
     # Handles roles given permission to use Mantid and the channels Mantid monitors
