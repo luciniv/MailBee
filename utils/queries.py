@@ -11,6 +11,7 @@ def format_time(minutes) -> str:
 
 
 # Formats the data for each field, using two data items at a time
+# Handles decimal and time results where needed
 def format_data(data: List[int], index: int, col_name) -> str:
     field = "No Data"
     cleaned_words = []
@@ -44,13 +45,11 @@ def format_data(data: List[int], index: int, col_name) -> str:
 
 
 # Reads query data to create embed fields
-# Implemented to reduce code repetition
 def generate_fields(data: List[int], index: int, columns: List[str]) -> List[str]:
     fields = []
     stop = index + 6
     col = 0
-    # Generate 3 at a time i have 3 name fields, so i need 3 corresponding values in a list
-    # assume index is 0 to start, each time i loop add 2 to it (3 loops)
+
     while (index < stop):
         fields.append(format_data(data, index, columns[col]))
         col += 1
@@ -59,6 +58,81 @@ def generate_fields(data: List[int], index: int, columns: List[str]) -> List[str
     return fields
 
 
+def leaderboard_queries(type: int, guildID: int, interval: str):
+    query = ""
+
+    if (type == 1):
+        if (interval != "TOTAL"):
+            query += f""" 
+                SELECT tickets.closeByID, COUNT(*)
+                FROM tickets
+                WHERE tickets.guildID = {guildID} 
+                AND tickets.status = 'closed'
+                AND tickets.dateClose >= NOW() - INTERVAL {interval}
+                GROUP BY tickets.closeByID;"""
+                
+        if (interval == "TOTAL"):
+            query += f"""       
+                SELECT tickets.closeByID, COUNT(*)
+                FROM tickets
+                WHERE tickets.guildID = {guildID} 
+                AND tickets.status = 'closed'
+                GROUP BY tickets.closeByID;"""
+            
+    elif (type == 2):
+        if (interval != "TOTAL"):
+            query += f""" 
+                SELECT tickets.guildID, COUNT(*)
+                FROM tickets
+                WHERE tickets.status = 'open'
+                AND tickets.dateClose >= NOW() - INTERVAL {interval}
+                GROUP BY tickets.guildID;"""
+                
+        if (interval == "TOTAL"):
+            query += f"""       
+                SELECT tickets.guildID, COUNT(*)
+                FROM tickets
+                WHERE tickets.status = 'open'
+                GROUP BY tickets.guildID;"""
+
+    elif (type == 3):
+        if (interval != "TOTAL"):
+            query += f""" 
+                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date))
+                FROM tickets
+                INNER JOIN (
+                    SELECT ticket_messages.modmail_messageID, MIN(date) AS date
+                    FROM ticket_messages
+                    WHERE type = 'Sent'
+                    GROUP BY ticket_messages.modmail_messageID
+                ) AS first_message
+                ON tickets.messageID = first_message.modmail_messageID
+                WHERE tickets.guildID = {guildID}
+                AND tickets.status = 'closed'
+                AND tickets.flag = 'good'
+                AND tickets.dateClose >= NOW() - INTERVAL {interval}
+                GROUP BY tickets.guildID;"""
+                
+        if (interval == "TOTAL"):
+            query += f"""       
+                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date))
+                    FROM tickets
+                    INNER JOIN (
+                        SELECT ticket_messages.modmail_messageID, MIN(date) AS date
+                        FROM ticket_messages
+                        WHERE type = 'Sent'
+                        GROUP BY ticket_messages.modmail_messageID
+                    ) AS first_message
+                    ON tickets.messageID = first_message.modmail_messageID
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.status = 'closed'
+                    AND tickets.flag = 'good'
+                    GROUP BY tickets.guildID;"""
+
+            
+
+
+# Query string for /server_stats
 def server_stats(guildID: int, intervals: List[str]):
     query = f"""
         SELECT 
@@ -210,7 +284,7 @@ def server_stats(guildID: int, intervals: List[str]):
     return query
 
 
-# Generate query string and get results for the member_stats command
+# Query string for /server_stats_CSV
 def server_stats_CSV(guildIDs: List[int], intervals: List[str]):
     query_list = []
 
@@ -302,7 +376,7 @@ def server_stats_CSV(guildIDs: List[int], intervals: List[str]):
     return query_list
 
 
-# Generate query string and get results for the member_stats command
+# Query string for /mod_activity
 def mod_activity(guildID: int, closeByID: int, intervals: List[str]):
     query = "SELECT"
     
@@ -404,7 +478,7 @@ def mod_activity(guildID: int, closeByID: int, intervals: List[str]):
     
     return query
 
-# Generate query string and get results for the member_stats command
+# Query string for /mod_activity_CSV
 def mod_activity_CSV(guildID: int, modIDs: int, intervals: List[str]):
     query_list = []
 

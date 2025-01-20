@@ -9,6 +9,7 @@ from utils import emojis, checks, queries, csv_write
 from utils.logger import *
 
 
+# Populate stats embed with fields from query data
 def fill_embed(statsEmbed: discord.Embed, 
                data: List[int], 
                index: int, 
@@ -38,7 +39,77 @@ class Stats(commands.Cog):
         self.rows = ["Past Hour", "Past Day", "Past Week", "Past Month", "All Time"]
         self.intervals = ["1 HOUR", "1 DAY", "1 WEEK", "1 MONTH", "TOTAL"]
 
+
+    # leaderboard commmand
+    @commands.hybrid_command(name="leaderboard", description="Display this server's statistics,"
+                            " includes ticket counts and response averages")
+    @checks.has_access()
+    @app_commands.describe(type="Select a data type to create a leaderboard for")
+    @app_commands.choices(type=[
+        app_commands.Choice(name="Tickets open (by server)", value="open"),
+        app_commands.Choice(name="Average response time (by server)", value="response"),
+        app_commands.Choice(name="Tickets closed (by moderator & server)", value="closed")])
+    @app_commands.describe(timeframe="Select a timeframe for the output data")
+    @app_commands.choices(timeframe=[
+        app_commands.Choice(name="Past Hour", value="1 HOUR"),
+        app_commands.Choice(name="Past Day", value="1 DAY"),
+        app_commands.Choice(name="Past Week", value="1 WEEK"),
+        app_commands.Choice(name="Past Month", value="1 MONTH"),
+        app_commands.Choice(name="All Time", value="TOTAL")])
+    async def leaderboard(self, ctx, type: discord.app_commands.Choice[str], timeframe: discord.app_commands.Choice[str]):
+        try:
+            # Allows command to take longer than 3 seconds
+            await ctx.defer()
+
+            query_type = type.value
+            time_choice = timeframe.value
+            name = timeframe.name
+            guild = ctx.guild
+            guildID = guild.id
+
+            intervals = self.intervals
+            rows = self.rows
+            columns = ["⏱️ Average Ticket Duration", 
+                       "⭐️ Average First Response Time", 
+                       "💬 Average Messages Per Ticket Resolved"]
+
+            if (time_choice != "ALL"):
+                intervals = [f"{time_choice}"]
+                rows = [f"{name}"]
+
+            bot_user = self.bot.user
+            time_now = datetime.now()
+            format_time = time_now.strftime("Today at %-I:%M %p")
+
+            statsEmbed = discord.Embed(title=f"Server Statistics {emojis.mantis}", 
+                                    description=f"(selected server's data / all server data)", 
+                                    color=0x3ad407)
+            statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
+            statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+
+            query = queries.server_stats(guildID, intervals)
+            result = await self.bot.data_manager.execute_query(query)
+
+            if result is not None: # Go ahead to build embed
+                index = 0
+                data = result[0]
+
+                statsEmbed.add_field(name="📬 Tickets Open", value=queries.format_data(data, index, None), inline=True)
+                index += 2
+                statsEmbed.add_field(name="📮 Total Tickets", value=queries.format_data(data, index, None), inline=True)
+                index += 2
+                fill_embed(statsEmbed, data, index, rows, columns)
+                
+            else:
+                statsEmbed.add_field(name="No data found", value="", inline=False)
+                
+            await ctx.send(embed=statsEmbed)
+            
+        except Exception as e:
+            raise BotError(f"/leaderboard sent an error: {e}")
+
   
+    
     @commands.hybrid_command(name="server_stats", description="Display this server's statistics,"
                             " includes ticket counts and response averages")
     @checks.has_access()
@@ -83,7 +154,7 @@ class Stats(commands.Cog):
             query = queries.server_stats(guildID, intervals)
             result = await self.bot.data_manager.execute_query(query)
 
-            if result is not None: # go ahead to build embed
+            if result is not None: # Go ahead to build embed
                 index = 0
                 data = result[0]
 
@@ -99,7 +170,6 @@ class Stats(commands.Cog):
             await ctx.send(embed=statsEmbed)
             
         except Exception as e:
-            logger.exception(e)
             raise BotError(f"/server_stats sent an error: {e}")
 
 
@@ -148,7 +218,7 @@ class Stats(commands.Cog):
             query = queries.mod_activity(guildID, closeByID, intervals)
             result = await self.bot.data_manager.execute_query(query)
 
-            if result is not None: # go ahead to build embed
+            if result is not None: # Go ahead to build embed
                 index = 0
                 data = result[0]
               
@@ -160,11 +230,9 @@ class Stats(commands.Cog):
             await ctx.send(embed=statsEmbed)
 
         except Exception as e:
-            logger.exception(e)
             raise BotError(f"/mod_activity sent an error: {e}")
             
-            
-        
+
     # member averages command next (queries are in mySQL)
     # same timeframes, use same code structure
     # average tickets closed, average ticket replies, average ticket chats
@@ -177,7 +245,6 @@ class Stats(commands.Cog):
     # async def mod_averages(self, ctx, member: discord.Member):
     #     pass
 
-    
 
     # CSVs
     # essentially using the same queries, but just outputting the data (no formatting)
@@ -260,7 +327,6 @@ class Stats(commands.Cog):
             await ctx.send(embed=statsEmbed, file=file)
 
         except Exception as e:
-            logger.exception(e)
             raise BotError(f"/csv_server_stats sent an error: {e}")
 
 
@@ -347,7 +413,6 @@ class Stats(commands.Cog):
             await ctx.send(embed=statsEmbed, file=file)
 
         except Exception as e:
-            logger.exception(e)
             raise BotError(f"/csv_mod_activity sent an error: {e}")
 
     # OTHER STATS

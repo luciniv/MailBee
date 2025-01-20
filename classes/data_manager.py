@@ -38,7 +38,7 @@ class DataManager:
 
     # mySQL DB connection function, creates a single connection pool where 
     # connections are open and closed from
-    @retry(wait=wait_random_exponential(multiplier=5, min=2, max=20), 
+    @retry(wait=wait_random_exponential(multiplier=6, min=2, max=20), 
            stop=stop_after_attempt(3), 
            before_sleep=log_retry)
     async def connect_to_db(self):
@@ -73,70 +73,64 @@ class DataManager:
         
 
     # mySQL query executor
+    @retry(wait=wait_random_exponential(multiplier=6, min=2, max=20), 
+           stop=stop_after_attempt(2), 
+           before_sleep=log_retry)
     async def execute_query(self, query: str, fetch_results: bool = True, execute_many: bool = False, content = None):
-        retry = 0
-        max_retries = 3
         result = None
-        retry = True
 
         try:
-            while(retry):
-                print("retried goodness me oh my!")
-                # Check if connection pool exists (again)
-                if self.db_pool is None:
-                    logger.warning("Connection pool not found: Reconnecting...")
-                    await self.connect_to_db()
+            # Check if connection pool exists (again)
+            if self.db_pool is None:
+                logger.warning("Connection pool not found: Reconnecting...")
+                await self.connect_to_db()
 
+            conn = await self.db_pool.acquire()
+
+            if conn is None:
+                logger.warning("Connection not acquired from pool: Reconnecting...")
+                await self.connect_to_db()
                 conn = await self.db_pool.acquire()
+            
+            async with conn.cursor() as cursor:
+                if execute_many:
+                    if not content or not isinstance(content, list):
+                        raise ValueError("Content for 'execute_many' must be a non-empty list of tuples")
+                    
+                    # Begin a transaction
+                    await conn.begin()  
+                    try:
+                        await cursor.executemany(query, content)
+                        await conn.commit()
+                        # 
 
-                if conn is None:
-                    logger.warning("Connection not acquired from pool: Reconnecting...")
-                    await self.connect_to_db()
-                    conn = await self.db_pool.acquire()
-                
-                print("passed connection tests, creating cursor")
-                async with conn.cursor() as cursor:
-                    if execute_many:
-                        if not content or not isinstance(content, list):
-                            raise ValueError("Content for 'execute_many' must be a non-empty list of tuples")
-                        
-                        # Begin a transaction
-                        await conn.begin()  
-                        print("started transaction")
-                        try:
-                            await cursor.executemany(query, content)
-                            await conn.commit()
-                            print("transaction done and good")
-                            retry = False
+                    except Exception as e:
+                        await conn.rollback()
+                        logger.error(f"Error during transaction: {e}")
+                        raise
 
-                        except Exception as e:
-                            logger.exception(f"Error during transaction: {e}")
-                            await conn.rollback()
+                else:
+                    try:
+                        await cursor.execute(query, content)
 
-                    else:
-                        try:
-                            await cursor.execute(query, content)
+                    except Exception as e:
+                        logger.error(f"Error during query: {e}")
+                        raise
 
-                        except Exception as e:
-                            logger.exception(f"Error during query: {e}")
-
-                        if fetch_results:
-                            result = await cursor.fetchall()
-                        retry = False
+                    if fetch_results:
+                        result = await cursor.fetchall()
 
         except Exception as e:
-            logger.exception(f"Unhandled error during query execution: {e}")
-            retry = False
+            logger.error(f"Unhandled error during query execution: {e}")
+            raise
 
-        print("running finally section")
-        if conn is not None:
-            print("conn is not none, so im releasing it just in case")
-            try:
-                self.db_pool.release(conn)
+        finally:
+            if conn is not None:
+                try:
+                    self.db_pool.release(conn)
 
-            except Exception as e:
-                logger.exception(f"Failed to release connection: {e}")
-
+                except Exception as e:
+                    logger.exception(f"Failed to release connection: {e}")
         return result
                     
 
@@ -317,7 +311,7 @@ class DataManager:
             logger.debug(f"Added ticket message {message_id} to Redis")
 
             # Batch flush cache if 10 messages have collected
-            if (self.ticket_count > 2):
+            if (self.ticket_count > 19):
                 await self.flush_messages()
                 logger.info(f"Called flush tickets")
 
@@ -385,7 +379,6 @@ class DataManager:
     # Copies all ticket messages to DB, then deletes them
     # Uses asyncio.Lock() to ensure another flush cannot occur before the current flush is done
     async def flush_messages(self):
-        print("FLUSH CALLED OH MY GOD")
         # Get the lock
         async with self.flush_lock:
             try:
@@ -422,11 +415,12 @@ class DataManager:
                         """
                 await self.execute_query(query, False, True, messages_to_insert)
 
+            except Exception as e:
+                logger.exception(f"Error during cache flush: {e}")
+            else:
                 # Delete only processed keys from Redis
                 for key in keys:
                     await self.redis.delete(key)
 
+                self.ticket_count = 0
                 logger.success(f"Flushed {len(messages_to_insert)} messages to DB")
-
-            except Exception as e:
-                logger.exception(f"Error during DB flush: {e}")

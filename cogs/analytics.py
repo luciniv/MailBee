@@ -82,11 +82,9 @@ class Analytics(commands.Cog):
 
         else:
             if (title == "New Ticket"):
-                logger.debug("Processing open ticket with good data")
                 await self.log_open_ticket(message, "good")
 
             if (title == "Ticket Closed"):
-                logger.debug("Processing closed ticket with good data")
                 await message.add_reaction(emojis.mantis)
 
 
@@ -223,7 +221,6 @@ class Analytics(commands.Cog):
             
                 # Remove from Redis 
                 await self.bot.data_manager.remove_ticket(this_channelID)
-                await message.add_reaction(emojis.mantis)
                 
         except Exception as e:
             logger.error(f"Error closing modmail ticket: {e}")

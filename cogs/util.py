@@ -10,6 +10,7 @@ class Util(commands.Cog):
         self.bot = bot
 
 
+    # Runs an SQL query from a message
     @commands.command()
     @checks.is_owner()
     async def sql(self, ctx, message: str):
@@ -24,6 +25,7 @@ class Util(commands.Cog):
         await ctx.send(f"{emojis.mantis} Results: {output}")
 
 
+    # Displays current tickets in cache
     @commands.command()
     @checks.is_owner()
     async def tickets(self, ctx):
@@ -37,6 +39,7 @@ class Util(commands.Cog):
             await ctx.send("No tickets found!")
 
 
+    # Displays current messages in cache
     @commands.command()
     @checks.is_owner()
     async def messages(self, ctx):
@@ -50,6 +53,7 @@ class Util(commands.Cog):
             await ctx.send("No ticket messages found!")
 
 
+    # Empties tickets cache
     @commands.command()
     @checks.is_owner()
     async def empty_tickets(self, ctx):
@@ -57,6 +61,7 @@ class Util(commands.Cog):
         await ctx.send("Emptied tickets cache")
 
 
+    # Empties messages cache
     @commands.command()
     @checks.is_owner()
     async def empty_messages(self, ctx):
@@ -64,21 +69,21 @@ class Util(commands.Cog):
         await ctx.send("Emptied messages cache")
 
 
+    # Flushes ticket messages to SQL
     @commands.command()
     @checks.is_owner()
     async def flush(self, ctx):
-        print("called flush")
-        
         await self.bot.data_manager.flush_messages()
-        print("flushed?")
         await ctx.send("Emptied messages cache")
 
     
+    # Example error
     @commands.command()
     async def error(self, ctx):
         raise BotError("Example of an error occurring")
 
 
+    # Ping for latency
     @commands.command()
     async def ping(self, ctx):
         await ctx.send(f"{emojis.mantis} pong! {round(self.bot.latency * 1000,2)} ms")

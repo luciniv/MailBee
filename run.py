@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 import os
 from classes.data_manager import DataManager
@@ -17,15 +17,6 @@ startup = True
 ready = True
 
 
-# TODO
-# ADD DATA ANALYSIS (PER SERVER, PER USER)
-# ADD CSV WRITING
-
-# LATER (QOL)
-# CATEGORY OVERFLOW HANDLING
-# TICKET STATUS LABELLING
-
-
 class Mantid(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
@@ -41,7 +32,6 @@ class Mantid(commands.Bot):
     async def on_ready(self):
         global ready
         global startup
-        print(os.getenv('REDIS_URL'))
 
         logger.log("SYSTEM", "------- STARTUP INITIATED ----------------")
 
@@ -56,6 +46,8 @@ class Mantid(commands.Bot):
             if self.data_manager.db_pool is not None:
                 await self.data_manager.update_cache()
                 await self.data_manager.connect_to_redis()
+                await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="for tickets!"))
+                heartbeat.start()
             startup = False
         
         logger.log("SYSTEM", "------- LOADING COGS ---------------------")
@@ -88,12 +80,20 @@ class Mantid(commands.Bot):
     # Close database and redis connections before shutdown
     async def on_close(self):
         logger.log("SYSTEM", "------- SHUTTING DOWN --------------------")
+        heartbeat.cancel()
         await self.data_manager.close_db()
         await self.data_manager.close_redis()
         await super().close()
 
-
 bot = Mantid()
+
+
+@tasks.loop(minutes=5)
+async def heartbeat():
+    status = await bot.data_manager.check_db_health()
+    if not status:
+        if bot.data_manager.db_pool is None:
+            await bot.data_manager.connect_to_db()
 
 
 # Hot-reload cogs command
@@ -163,6 +163,4 @@ async def on_command_error(ctx, error):
     except discord.errors.NotFound:
         logger.warning("Failed to send error message: Message context no longer exists")
 
-
-# Run the bot
 bot.run(bot_token)
