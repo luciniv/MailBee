@@ -23,7 +23,7 @@ class Mantid(commands.Bot):
         description = ""
 
         # Create bot instance with command prefix
-        super().__init__(command_prefix=commands.when_mentioned_or('t!'), intents=intents, description=description, help_command=None)
+        super().__init__(command_prefix=commands.when_mentioned_or('m!'), intents=intents, description=description, help_command=None)
         self.data_manager = DataManager()
         self.channel_status = ChannelStatus()
 
