@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from discord.ext.commands import Greedy
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from classes.error_handler import *
 from classes.paginator import *
@@ -184,14 +184,13 @@ class Stats(commands.Cog):
                 rows = [f"{time_name}"]
 
             bot_user = self.bot.user
-            time_now = datetime.now()
-            format_time = time_now.strftime("Today at %-I:%M %p")
 
             statsEmbed = discord.Embed(title=f"Server Statistics {emojis.mantis}", 
                                     description=f"(selected server's data / all server data)", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-            statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+            statsEmbed.timestamp = datetime.now(timezone.utc)
+            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
 
             query = queries.server_stats(guildID, intervals)
             result = await self.bot.data_manager.execute_query(query)
@@ -249,14 +248,13 @@ class Stats(commands.Cog):
                 rows = [f"{time_name}"]
 
             bot_user = self.bot.user
-            time_now = datetime.now()
-            format_time = time_now.strftime("Today at %-I:%M %p")
 
             statsEmbed = discord.Embed(title=f"Moderator Activity {emojis.mantis}", 
                                     description=f"(selected mod's data / all mods in this server's data)", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=member.name, icon_url=member.avatar.url)
-            statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+            statsEmbed.timestamp = datetime.now(timezone.utc)
+            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
             
             query = queries.mod_activity(guildID, closeByID, intervals)
             result = await self.bot.data_manager.execute_query(query)
@@ -331,14 +329,13 @@ class Stats(commands.Cog):
                     guildIDs.append(guild.id)
 
             bot_user = self.bot.user
-            time_now = datetime.now()
-            format_time = time_now.strftime("Today at %-I:%M %p")
 
             statsEmbed = discord.Embed(title=f"Server Statistics CSV {emojis.mantis}", 
                                     description=f"Download the attatched CSV file to view data", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
-            statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+            statsEmbed.timestamp = datetime.now(timezone.utc)
+            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
             
             result_list = []
             query_list = queries.server_stats_CSV(guildIDs, intervals)
@@ -418,14 +415,13 @@ class Stats(commands.Cog):
                         modIDs.append(member.id)
 
             bot_user = self.bot.user
-            time_now = datetime.now()
-            format_time = time_now.strftime("Today at %-I:%M %p")
 
             statsEmbed = discord.Embed(title=f"Moderator Activity CSV {emojis.mantis}", 
                                     description=f"Download the attatched CSV file to view data", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
-            statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+            statsEmbed.timestamp = datetime.now(timezone.utc)
+            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
             
             result_list = []
             query_list = queries.mod_activity_CSV(guildID, modIDs, intervals)

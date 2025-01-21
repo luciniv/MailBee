@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from datetime import datetime
+from datetime import datetime, timezone
 from classes.error_handler import *
 from classes.paginator import *
 from utils import emojis, checks
@@ -72,8 +72,6 @@ class Main(commands.Cog):
     async def setup(self, ctx):
         try:
             guild = ctx.guild
-            time_now = datetime.now()
-            format_time = time_now.strftime("Today at %-I:%M %p")
             bot_user = self.bot.user
             
             setupEmbed = discord.Embed(title=f"Bot Setup {emojis.mantis} ", 
@@ -93,7 +91,8 @@ class Main(commands.Cog):
                                                 " <@429711831695753237>.\n\n**", 
                                     color=0x3ad407)
             setupEmbed.add_field(name="Setup Output:", value=f"", inline=False)
-            setupEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+            setupEmbed.timestamp = datetime.now(timezone.utc)
+            setupEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
 
             for channel in guild.channels:
                 if (isinstance(channel, discord.DMChannel)):
@@ -185,8 +184,6 @@ class Main(commands.Cog):
             choice = selection.value
             this_guildID = ctx.guild.id
             guildName = (self.bot.get_guild(this_guildID)).name
-            time_now = datetime.now()
-            format_time = time_now.strftime("Today at %-I:%M %p")
             bot_user = self.bot.user
 
             if (choice == "role permissions"):
@@ -196,7 +193,8 @@ class Main(commands.Cog):
                 permsEmbed = discord.Embed(title=f"Server Role Permissions {emojis.mantis} ", 
                                         description=f"Roles with access to Mantid in: **{guildName}** ({this_guildID})", 
                                         color=0x3ad407)
-                permsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+                permsEmbed.timestamp = datetime.now(timezone.utc)
+                permsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
     
                 if not search_access:
                     permsEmbed.description=""
@@ -219,7 +217,8 @@ class Main(commands.Cog):
                 monitorEmbed = discord.Embed(title=f"Server Monitored Channels {emojis.mantis} ", 
                                             description=f"Channels monitored in: **{guildName}** ({this_guildID})", 
                                             color=0x3ad407)
-                monitorEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+                monitorEmbed.timestamp = datetime.now(timezone.utc)
+                monitorEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
                 
                 if not search_monitor:
                     monitorEmbed.description=""
@@ -253,14 +252,13 @@ class Main(commands.Cog):
             this_guildID = ctx.guild.id
             choice = action.value
             this_roleID = role.id
-            time_now = datetime.now()
-            format_time = time_now.strftime("Today at %-I:%M %p")
             bot_user = self.bot.user
 
             editEmbed = discord.Embed(title=f"Edit Results {emojis.mantis}", 
                                     description="", 
                                     color=0x3ad407)
-            editEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+            editEmbed.timestamp = datetime.now(timezone.utc)
+            editEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
 
             # Check if access is already given, if not add it
             if (choice == "add"):
@@ -323,15 +321,14 @@ class Main(commands.Cog):
             choice = action.value
             this_channelID = None
             this_categoryID = None
-            time_now = datetime.now()
-            format_time = time_now.strftime("Today at %-I:%M %p")
             bot_user = self.bot.user
 
             if channel is None and category is None:
                 errorEmbed = discord.Embed(title=f"", 
                                         description="❌ You must provide at least a channel or category", 
                                         color=0xFF0000)
-                errorEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+                errorEmbed.timestamp = datetime.now(timezone.utc)
+                errorEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
 
                 await ctx.send(embed=errorEmbed, ephemeral=True)
                 return
@@ -344,7 +341,8 @@ class Main(commands.Cog):
             editEmbed = discord.Embed(title=f"Edit Results {emojis.mantis}", 
                                     description="", 
                                     color=0x3ad407)
-            editEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+            editEmbed.timestamp = datetime.now(timezone.utc)
+            editEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
 
             # check if channel / category is already added or not
             if (choice == "add"):
@@ -370,7 +368,7 @@ class Main(commands.Cog):
                             """
                         await self.bot.data_manager.execute_query(query, False)
                         await self.bot.data_manager.update_cache(1)
-                        # await 
+                      
                         editEmbed.description=f"Set <#{this_channelID}> as **Modmail log** channel"
                     await ctx.send(embed=editEmbed)
 
@@ -393,7 +391,7 @@ class Main(commands.Cog):
                         editEmbed.description=f"Set **<#{this_categoryID}>** as a **Tickets category**"
                     await ctx.send(embed=editEmbed)
 
-            # check if channel / category is already removed or not
+            # Check if channel / category is already removed or not
             if (choice == "remove"):
                 if (this_channelID is not None):
                     search_monitor = [
