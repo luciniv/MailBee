@@ -73,11 +73,12 @@ class DataManager:
         
 
     # mySQL query executor
-    @retry(wait=wait_random_exponential(multiplier=6, min=2, max=20), 
-           stop=stop_after_attempt(2), 
+    @retry(wait=wait_random_exponential(multiplier=4, min=2, max=20), 
+           stop=stop_after_attempt(3), 
            before_sleep=log_retry)
     async def execute_query(self, query: str, fetch_results: bool = True, execute_many: bool = False, content = None):
         result = None
+        timeout = 6
 
         try:
             # Check if connection pool exists (again)
@@ -100,18 +101,26 @@ class DataManager:
                     # Begin a transaction
                     await conn.begin()  
                     try:
-                        await cursor.executemany(query, content)
+                        await asyncio.wait_for(cursor.executemany(query, content), timeout=timeout)
                         await conn.commit()
-                        # 
+
+                    except asyncio.TimeoutError:
+                        await conn.rollback()
+                        logger.error(f"Transaction execution timed out after {timeout} seconds")
+                        raise
 
                     except Exception as e:
                         await conn.rollback()
                         logger.error(f"Error during transaction: {e}")
                         raise
-
                 else:
                     try:
-                        await cursor.execute(query, content)
+                        await asyncio.wait_for(cursor.execute(query, content), timeout=timeout)
+
+                    except asyncio.TimeoutError:
+                        await conn.rollback()
+                        logger.error(f"Query execution timed out after {timeout} seconds")
+                        raise
 
                     except Exception as e:
                         logger.error(f"Error during query: {e}")

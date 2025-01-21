@@ -33,6 +33,7 @@ class Main(commands.Cog):
             helpEmbed.set_thumbnail(url=bot_user.avatar.url)
             pages.append(helpEmbed)
 
+            # Populate embed pages
             for cog_name in self.bot.cogs:
                 if cog_name in ["Admin", "Util", "Analytics"]:
                     continue
@@ -97,7 +98,7 @@ class Main(commands.Cog):
             for channel in guild.channels:
                 if (isinstance(channel, discord.DMChannel)):
                     pass
-
+                # 
                 if (isinstance(channel, discord.TextChannel)):
                     if (channel.name == "modmail-log"):
                         search_monitor = [
@@ -119,8 +120,8 @@ class Main(commands.Cog):
                             setupEmbed.add_field(name="", 
                                                 value=f"{emojis.mantis} Set <#{channel.id}> as this server's **Modmail log**", 
                                                 inline=False)
+                            
                     elif ((channel.name)[-2:] == "-0"):
-                        # Modmail format ticket channel (ensure the MODMAIL category check doesnt catch here)
                         this_category = channel.category
                         if ((this_category.name).casefold() == "modmail"):
                             pass

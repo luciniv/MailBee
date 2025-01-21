@@ -88,6 +88,7 @@ class Mantid(commands.Bot):
 bot = Mantid()
 
 
+# Sends a small query every 10 minutes to catch inactivity disconnects
 @tasks.loop(minutes=10)
 async def heartbeat():
     status = await bot.data_manager.check_db_health()

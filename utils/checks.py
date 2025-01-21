@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands
-from classes.data_manager import DataManager
 from classes.error_handler import *
 
 
@@ -18,9 +17,10 @@ def is_owner():
 # Checks if user has Admin permissions for that channel or their ID is in Mantid's permissions cache
 def has_access():
     def predicate(ctx):
-        data_manager = DataManager()
+        data_manager = ctx.bot.data_manager
         guildID = ctx.guild.id
         usrRoles = ctx.author.roles
+   
         search_access = [
             tup[1] for tup 
             in data_manager.access_roles
