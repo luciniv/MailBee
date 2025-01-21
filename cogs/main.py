@@ -78,7 +78,7 @@ class Main(commands.Cog):
             setupEmbed = discord.Embed(title=f"Bot Setup {emojis.mantis} ", 
                                     description="Run this command to setup or refresh Mantid's monitored channels\n\n"
                                                 "To properly record data on Modmail, Mantid requires channel monitors"
-                                                " for the #modmail-log channel and any categories used to store Modmail" 
+                                                " for the **modmail-log** channel and any categories used to store Modmail" 
                                                 " tickets. Channel monitors are set automatically upon running the"
                                                 " command `/setup` or when Mantid generates a category to handle ticket"
                                                 " overflow.\n\n- Use the `/edit_monitor` command and select **add** to"
@@ -87,8 +87,9 @@ class Main(commands.Cog):
                                                 " **monitored channels**\n- If Mantid incorrectly adds or is missing a"
                                                 " channel in the monitor, use `/edit_monitor` with **add** or **remove**"
                                                 f" as needed\n\n**Confirm correct setup by identifying a {emojis.mantis}"
-                                                " reaction underneath all new entries in #modmail-log. If this reaction"
-                                                " fails to appear, run `/setup` again or contact <@429711831695753237>.\n\n**", 
+                                                " reaction underneath all new entries in your server's **modmail-log**."
+                                                "If this reaction fails to appear, run `/setup` again or contact"
+                                                " <@429711831695753237>.\n\n**", 
                                     color=0x3ad407)
             setupEmbed.add_field(name="Setup Output:", value=f"", inline=False)
             setupEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
