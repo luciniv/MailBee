@@ -4,6 +4,7 @@ from utils.logger import *
 from utils.emojis import *
 
 
+# WIP automatic category overflow handler
 class Tools(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

@@ -58,47 +58,47 @@ def generate_fields(data: List[int], index: int, columns: List[str]) -> List[str
     return fields
 
 
-def leaderboard_queries(type: int, guildID: int, interval: str):
+def leaderboard_queries(type: str, guildID: int, interval: str):
     query = ""
 
-    if (type == 1):
+    if (type == "open"):
         if (interval != "TOTAL"):
             query += f""" 
-                SELECT tickets.closeByID, COUNT(*)
+                SELECT tickets.guildID, COUNT(*) AS count
                 FROM tickets
-                WHERE tickets.guildID = {guildID} 
-                AND tickets.status = 'closed'
+                WHERE tickets.status = 'open'
                 AND tickets.dateClose >= NOW() - INTERVAL {interval}
-                GROUP BY tickets.closeByID;"""
-                
-        if (interval == "TOTAL"):
+                GROUP BY tickets.guildID
+                ORDER BY count DESC;"""    
+        else:
             query += f"""       
-                SELECT tickets.closeByID, COUNT(*)
+                SELECT tickets.guildID, COUNT(*) AS count
                 FROM tickets
-                WHERE tickets.guildID = {guildID} 
-                AND tickets.status = 'closed'
-                GROUP BY tickets.closeByID;"""
+                WHERE tickets.status = 'open'
+                GROUP BY tickets.guildID
+                ORDER BY count DESC;"""
             
-    elif (type == 2):
+    elif (type == "duration"):
         if (interval != "TOTAL"):
             query += f""" 
-                SELECT tickets.guildID, COUNT(*)
+                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg
                 FROM tickets
-                WHERE tickets.status = 'open'
+                WHERE tickets.status = 'closed'
                 AND tickets.dateClose >= NOW() - INTERVAL {interval}
-                GROUP BY tickets.guildID;"""
-                
-        if (interval == "TOTAL"):
+                GROUP BY tickets.guildID
+                ORDER BY avg ASC;"""    
+        else:
             query += f"""       
-                SELECT tickets.guildID, COUNT(*)
+                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg
                 FROM tickets
-                WHERE tickets.status = 'open'
-                GROUP BY tickets.guildID;"""
-
-    elif (type == 3):
+                WHERE tickets.status = 'closed'
+                GROUP BY tickets.guildID
+                ORDER BY avg ASC;"""
+            
+    elif (type == "response"):
         if (interval != "TOTAL"):
             query += f""" 
-                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date))
+                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg
                 FROM tickets
                 INNER JOIN (
                     SELECT ticket_messages.modmail_messageID, MIN(date) AS date
@@ -107,29 +107,47 @@ def leaderboard_queries(type: int, guildID: int, interval: str):
                     GROUP BY ticket_messages.modmail_messageID
                 ) AS first_message
                 ON tickets.messageID = first_message.modmail_messageID
-                WHERE tickets.guildID = {guildID}
-                AND tickets.status = 'closed'
+                WHERE tickets.status = 'closed'
                 AND tickets.flag = 'good'
                 AND tickets.dateClose >= NOW() - INTERVAL {interval}
-                GROUP BY tickets.guildID;"""
-                
-        if (interval == "TOTAL"):
+                GROUP BY tickets.guildID
+                ORDER BY avg ASC;"""     
+        else:
             query += f"""       
-                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date))
-                    FROM tickets
-                    INNER JOIN (
-                        SELECT ticket_messages.modmail_messageID, MIN(date) AS date
-                        FROM ticket_messages
-                        WHERE type = 'Sent'
-                        GROUP BY ticket_messages.modmail_messageID
-                    ) AS first_message
-                    ON tickets.messageID = first_message.modmail_messageID
-                    WHERE tickets.guildID = {guildID}
-                    AND tickets.status = 'closed'
-                    AND tickets.flag = 'good'
-                    GROUP BY tickets.guildID;"""
-
+                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg
+                FROM tickets
+                INNER JOIN (
+                    SELECT ticket_messages.modmail_messageID, MIN(date) AS date
+                    FROM ticket_messages
+                    WHERE type = 'Sent'
+                    GROUP BY ticket_messages.modmail_messageID
+                ) AS first_message
+                ON tickets.messageID = first_message.modmail_messageID
+                WHERE tickets.status = 'closed'
+                AND tickets.flag = 'good'
+                GROUP BY tickets.guildID
+                ORDER BY avg ASC;"""
             
+    elif (type == "closed"):
+        if (interval != "TOTAL"):
+            query += f""" 
+                SELECT tickets.closeByID, COUNT(*) AS count
+                FROM tickets
+                WHERE tickets.guildID = {guildID} 
+                AND tickets.status = 'closed'
+                AND tickets.dateClose >= NOW() - INTERVAL {interval}
+                GROUP BY tickets.closeByID
+                ORDER BY count DESC;"""   
+        else:
+            query += f"""       
+                SELECT tickets.closeByID, COUNT(*) AS count
+                FROM tickets
+                WHERE tickets.guildID = {guildID} 
+                AND tickets.status = 'closed'
+                GROUP BY tickets.closeByID
+                ORDER BY count DESC;"""
+            
+    return query
 
 
 # Query string for /server_stats
@@ -280,7 +298,7 @@ def server_stats(guildID: int, intervals: List[str]):
     else:
         # Fixes possible dangling comma
         query = query.rstrip(',') + ';'
-    
+
     return query
 
 

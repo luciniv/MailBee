@@ -88,7 +88,7 @@ class Mantid(commands.Bot):
 bot = Mantid()
 
 
-@tasks.loop(minutes=5)
+@tasks.loop(minutes=10)
 async def heartbeat():
     status = await bot.data_manager.check_db_health()
     if not status:

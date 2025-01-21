@@ -5,8 +5,23 @@ from discord.ext.commands import Greedy
 from datetime import datetime
 from typing import List
 from classes.error_handler import *
+from classes.paginator import *
 from utils import emojis, checks, queries, csv_write
 from utils.logger import *
+
+
+# Subsects a number into a list of numbers that cap at max_size (for pagination)
+def build_subsections(size: int, max_size = 6) -> List[int]:
+    if size <= max_size:
+        return [size]
+    
+    subsections = [max_size] * (size // max_size)
+
+    remainder = size % max_size
+    if (remainder > 0):
+        subsections.append(remainder)
+
+    return subsections
 
 
 # Populate stats embed with fields from query data
@@ -19,7 +34,7 @@ def fill_embed(statsEmbed: discord.Embed,
         count = 0
         fields = queries.generate_fields(data, index, columns) 
         
-        statsEmbed.add_field(name=f"", value=f"**{'⎯' * 34} {row}**", inline=False)
+        statsEmbed.add_field(name=f"", value=f"**{'⎯' * 30}\r{row}**", inline=False)
 
         # Outputs the three fields from generate_fields
         for col, field in zip(columns, fields):
@@ -40,15 +55,15 @@ class Stats(commands.Cog):
         self.intervals = ["1 HOUR", "1 DAY", "1 WEEK", "1 MONTH", "TOTAL"]
 
 
-    # leaderboard commmand
-    @commands.hybrid_command(name="leaderboard", description="Display this server's statistics,"
-                            " includes ticket counts and response averages")
+    # Creates leaderboards for the selected data type
+    @commands.hybrid_command(name="leaderboard", description="View certain data types as a leaderboard")
     @checks.has_access()
     @app_commands.describe(type="Select a data type to create a leaderboard for")
     @app_commands.choices(type=[
-        app_commands.Choice(name="Tickets open (by server)", value="open"),
-        app_commands.Choice(name="Average response time (by server)", value="response"),
-        app_commands.Choice(name="Tickets closed (by moderator & server)", value="closed")])
+        app_commands.Choice(name="Current tickets open (server ranking)", value="open"),
+        app_commands.Choice(name="Average ticket duration (server ranking)", value="duration"),
+        app_commands.Choice(name="Average first response time (server ranking)", value="response"),
+        app_commands.Choice(name="Tickets closed by (moderator ranking)", value="closed")])
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
@@ -56,58 +71,84 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Past Week", value="1 WEEK"),
         app_commands.Choice(name="Past Month", value="1 MONTH"),
         app_commands.Choice(name="All Time", value="TOTAL")])
-    async def leaderboard(self, ctx, type: discord.app_commands.Choice[str], timeframe: discord.app_commands.Choice[str]):
+    @app_commands.describe(server_id="Server ID to display data from (defaults to current server)")
+    async def leaderboard(self, ctx, 
+                          type: discord.app_commands.Choice[str], 
+                          timeframe: discord.app_commands.Choice[str],  
+                          server_id: int = None):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
+            await self.bot.data_manager.flush_messages()
 
-            query_type = type.value
-            time_choice = timeframe.value
-            name = timeframe.name
+            pages = []
+            count = 0
+            limit = 0
+
+            type_name = type.name
+            type_value = type.value
+            time_name = timeframe.name
+            time_value = timeframe.value
             guild = ctx.guild
             guildID = guild.id
 
-            intervals = self.intervals
-            rows = self.rows
-            columns = ["⏱️ Average Ticket Duration", 
-                       "⭐️ Average First Response Time", 
-                       "💬 Average Messages Per Ticket Resolved"]
+            if server_id is not None:
+                guildID = server_id
 
-            if (time_choice != "ALL"):
-                intervals = [f"{time_choice}"]
-                rows = [f"{name}"]
-
-            bot_user = self.bot.user
-            time_now = datetime.now()
-            format_time = time_now.strftime("Today at %-I:%M %p")
-
-            statsEmbed = discord.Embed(title=f"Server Statistics {emojis.mantis}", 
-                                    description=f"(selected server's data / all server data)", 
+            statsEmbed = discord.Embed(title=f"Leaderboard {time_name} {emojis.mantis}", 
+                                    description=f"{type_name}\r{'⎯' * 18}", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-            statsEmbed.set_footer(text=f"Mantid · {format_time}", icon_url=bot_user.avatar.url)
+            statsEmbed.set_footer(text=f"")
 
-            query = queries.server_stats(guildID, intervals)
+            query = queries.leaderboard_queries(type_value, guildID, time_value)
             result = await self.bot.data_manager.execute_query(query)
 
             if result is not None: # Go ahead to build embed
-                index = 0
-                data = result[0]
+                if len(result) == 0:
+                    statsEmbed.add_field(name="No data found", value="", inline=False)
+                    await ctx.send(embed=statsEmbed)
+                    return
 
-                statsEmbed.add_field(name="📬 Tickets Open", value=queries.format_data(data, index, None), inline=True)
-                index += 2
-                statsEmbed.add_field(name="📮 Total Tickets", value=queries.format_data(data, index, None), inline=True)
-                index += 2
-                fill_embed(statsEmbed, data, index, rows, columns)
-                
-            else:
-                statsEmbed.add_field(name="No data found", value="", inline=False)
-                
-            await ctx.send(embed=statsEmbed)
+                else:
+                    page_counts = build_subsections(len(result)) 
+                    for page_count in page_counts: 
+                        limit += page_count 
+                        if count != 0:
+                            statsEmbed = discord.Embed(title=f"Leaderboard {time_name} {emojis.mantis}", 
+                                    description=type_name, 
+                                    color=0x3ad407)
+                            statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
+                            statsEmbed.set_footer(text=f"")
+
+                        while (count < limit): 
+                            row = result[count] 
+                            if (type_value == "open"):
+                                statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+                                                    f" - **{row[1]}** ticket(s)", inline=False) # added here
+
+                            elif (type_value == "duration"):
+                                statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+                                                    f" - **{queries.format_time(row[1])}**", inline=False)
+
+                            elif (type_value == "response"):
+                                statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+                                                    f" - **{queries.format_time(row[1])}**", inline=False)
+
+                            elif (type_value == "closed"):
+                                statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** ticket(s)", inline=False)
+                            count += 1 
+                    pages.append(statsEmbed) 
+
+            for page in range(len(pages)):
+                pages[page].set_footer(text=f"Use the buttons below to navigate (Page {page + 1}/{len(pages)})")
+
+            # Create an instance of the pagination view
+            view = Paginator(pages)
+            view.message = await ctx.send(embed=pages[0], view=view)
             
         except Exception as e:
             raise BotError(f"/leaderboard sent an error: {e}")
-
   
     
     @commands.hybrid_command(name="server_stats", description="Display this server's statistics,"
@@ -125,9 +166,10 @@ class Stats(commands.Cog):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
+            await self.bot.data_manager.flush_messages()
 
-            choice = timeframe.value
-            name = timeframe.name
+            time_value = timeframe.value
+            time_name = timeframe.name
             guild = ctx.guild
             guildID = guild.id
 
@@ -137,9 +179,9 @@ class Stats(commands.Cog):
                        "⭐️ Average First Response Time", 
                        "💬 Average Messages Per Ticket Resolved"]
 
-            if (choice != "ALL"):
-                intervals = [f"{choice}"]
-                rows = [f"{name}"]
+            if (time_value != "ALL"):
+                intervals = [f"{time_value}"]
+                rows = [f"{time_name}"]
 
             bot_user = self.bot.user
             time_now = datetime.now()
@@ -189,9 +231,10 @@ class Stats(commands.Cog):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
+            await self.bot.data_manager.flush_messages()
 
-            choice = timeframe.value
-            name = timeframe.name
+            time_value = timeframe.value
+            time_name = timeframe.name
             guildID = ctx.guild.id
             closeByID = member.id
 
@@ -201,9 +244,9 @@ class Stats(commands.Cog):
                        "📤 Ticket Replies", 
                        "💬 Ticket Chats"]
 
-            if (choice != "ALL"):
-                intervals = [f"{choice}"]
-                rows = [f"{name}"]
+            if (time_value != "ALL"):
+                intervals = [f"{time_value}"]
+                rows = [f"{time_name}"]
 
             bot_user = self.bot.user
             time_now = datetime.now()
@@ -266,10 +309,11 @@ class Stats(commands.Cog):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
+            await self.bot.data_manager.flush_messages()
 
             guildIDs = []
-            choice = timeframe.value
-            name = timeframe.name
+            time_value = timeframe.value
+            time_name = timeframe.name
             file = None
 
             intervals = self.intervals
@@ -278,9 +322,9 @@ class Stats(commands.Cog):
                        "Average First Response Time", 
                        "Average Messages Per Ticket Resolved"]
 
-            if (choice != "ALL"):
-                intervals = [f"{choice}"]
-                rows = [f"{name}"]
+            if (time_value != "ALL"):
+                intervals = [f"{time_value}"]
+                rows = [f"{time_name}"]
 
             for guild in self.bot.guilds:
                 if (guild.id != 12345):
@@ -346,11 +390,12 @@ class Stats(commands.Cog):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
+            await self.bot.data_manager.flush_messages()
 
             mod_roles = []
             modIDs = []
-            choice = timeframe.value
-            name = timeframe.name
+            time_value = timeframe.value
+            time_name = timeframe.name
             guild = ctx.guild
             guildID = guild.id
             file = None
@@ -359,9 +404,9 @@ class Stats(commands.Cog):
             rows = self.rows
             columns = ["Tickets Closed", "Ticket Replies", "Ticket Chats"]
 
-            if (choice != "ALL"):
-                intervals = [f"{choice}"]
-                rows = [f"{name}"]
+            if (time_value != "ALL"):
+                intervals = [f"{time_value}"]
+                rows = [f"{time_name}"]
 
             for role in roles:
                 if ("mod" in role.name.casefold()):

@@ -161,7 +161,7 @@ class Analytics(commands.Cog):
                 embed = message.embeds[0]
                 footer = embed.footer.text
                 openID = (footer.split())[-1]
-                author_name = (embed.author.name).split
+                author_name = (embed.author.name).split()
                 closeName = author_name[0][:-2]
                 closeID = guild.get_member_named(closeName).id
 
@@ -226,7 +226,7 @@ class Analytics(commands.Cog):
             logger.error(f"Error closing modmail ticket: {e}")
 
 
-    # TODO add this wherever it goes: await self.bot.process_commands(message)
+    # TODO add this: await self.bot.process_commands(message)
     # On-message event listener for messages in #modmail-log channels or modmail categories
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -287,8 +287,8 @@ class Analytics(commands.Cog):
 
                             # Store sent message (embed from the Modmail bot to DM)
                             elif (embed.title == "Message Sent"):
-                                author_name = embed.author.name
-                                author_username = author_name[:-2]
+                                author_name = (embed.author.name).split()
+                                author_username = (author_name[0])[:-2]
                                 authorID = guild.get_member_named(author_username).id
                                 logger.debug(f"Modmail bot sent message from {author_username}, {authorID}")
 
