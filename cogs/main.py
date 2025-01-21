@@ -87,7 +87,7 @@ class Main(commands.Cog):
                                                 " **monitored channels**\n- If Mantid incorrectly adds or is missing a"
                                                 " channel in the monitor, use `/edit_monitor` with **add** or **remove**"
                                                 f" as needed\n\n**Confirm correct setup by identifying a {emojis.mantis}"
-                                                " reaction underneath all new entries in your server's **modmail-log**."
+                                                " reaction underneath all new entries in your server's modmail-log."
                                                 " If this reaction fails to appear, run `/setup` again or contact"
                                                 " <@429711831695753237>.\n\n**", 
                                     color=0x3ad407)
