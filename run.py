@@ -148,7 +148,7 @@ async def on_command_error(ctx, error):
 
             if (ctx.author.id in owners):
                 errorMsg = f"❌ An error occurred: {error}"
-            logger.error(f"❌ General command error: {error}")
+            logger.exception(f"❌ General command error: {error}")
 
         elif isinstance(error, commands.CommandNotFound):
             errorMsg = "❌ This command does not exist, run /help to view a list of available commands"

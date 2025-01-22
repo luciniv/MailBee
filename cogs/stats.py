@@ -11,6 +11,7 @@ from utils.logger import *
 
 
 # TODO embed management class
+# TODO implement graphs
 
 
 # Subsects a number into a list of numbers that cap at max_size (for pagination)
@@ -58,93 +59,102 @@ class Stats(commands.Cog):
         self.intervals = ["1 HOUR", "1 DAY", "1 WEEK", "1 MONTH", "TOTAL"]
 
 
-    # @commands.hybrid_command(name="hourly_data", description="View certain data per hour from a selected day")
-    # @checks.has_access()
-    # @app_commands.describe(type="Select a data type to display hourly")
-    # @app_commands.choices(type=[
-    #     app_commands.Choice(name="Tickets opened & closed", value="open"),
-    #     app_commands.Choice(name="Average ticket duration", value="duration"),
-    #     app_commands.Choice(name="Average first response time", value="response")])
-    # @app_commands.describe(timezone="Select a timezone (Default is UTC)")
-    # @app_commands.choices(timezone=[
-    #     app_commands.Choice(name="UTC", value="UTC"),
-    #     app_commands.Choice(name="EST", value="EST"),
-    #     app_commands.Choice(name="PST", value="PST")])
-    # @app_commands.describe(day="Input a number for the day (1-31)")
-    # @app_commands.describe(month="Input a number for the month (1-12)")
-    # @app_commands.describe(year="Input a number for the year (2024-2025)")
-    # @app_commands.describe(all_servers="Display data for all servers? (False by default)")
-    # async def leaderboard(self, ctx, 
-    #                       type: discord.app_commands.Choice[str], 
-    #                       timezone: discord.app_commands.Choice[str],
-    #                       day: int,
-    #                       month: int,
-    #                       year: int, 
-    #                       all_servers: bool = False):
-    #     try:
-    #         # Allows command to take longer than 3 seconds
-    #         await ctx.defer()
-    #         await self.bot.data_manager.flush_messages()
+    @commands.hybrid_command(name="hourly_data", description="View certain data types per hour from a selected day")
+    @checks.has_access()
+    @app_commands.describe(type="Select a data type to display hourly")
+    @app_commands.choices(type=[
+        app_commands.Choice(name="Tickets opened & closed", value="open")])
+    @app_commands.describe(time_zone="Select a timezone (Default is UTC)")
+    @app_commands.choices(time_zone=[
+        app_commands.Choice(name="UTC", value="UTC"),
+        app_commands.Choice(name="EST", value="EST"),
+        app_commands.Choice(name="PST", value="PST")])
+    @app_commands.describe(day="Input a number for the day (1-31)")
+    @app_commands.describe(month="Input a number for the month (1-12)")
+    @app_commands.describe(year="Input a number for the year (2024-2025)")
+    @app_commands.describe(all_servers="Display data for all servers? (False by default)")
+    async def hourly_data(self, ctx, 
+                          type: discord.app_commands.Choice[str], 
+                          time_zone: discord.app_commands.Choice[str],
+                          day: int,
+                          month: int,
+                          year: int, 
+                          all_servers: bool = False):
+        try:
+            # Allows command to take longer than 3 seconds
+            await ctx.defer()
+            await self.bot.data_manager.flush_messages()
             
-    #         count = 0
+            count = 0
+            date_list = []
 
-    #         type_name = type.name
-    #         type_value = type.value
-    #         time_value = timezone.value
-    #         guild = ctx.guild
-    #         guildID = guild.id
+            type_name = type.name
+            type_value = type.value
+            time_value = time_zone.value
+            guild = ctx.guild
+            guildID = guild.id
+            bot_user = self.bot.user
+
+            servers = ""
+            if all_servers:
+                servers = " for all servers"
+                guildID = 0
+
+            # Catch parsing errors (aka invalid input)
+            parsed_date = date(year, month, day)
+            if parsed_date:
+                date_list = [year, month, day]
+
+            statsEmbed = discord.Embed(title=f"{time_value} Hourly Data: {day}-{month}-{year} {emojis.mantis}", 
+                                    description=f"{type_name}{servers}\r{'⎯' * 30}", 
+                                    color=0x3ad407)
+            statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
+            statsEmbed.timestamp = datetime.now(timezone.utc)
+            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+
+            query = queries.hourly_queries(type_value, guildID, date_list, time_value)
+            result = await self.bot.data_manager.execute_query(query)
+
+            if result is not None: # Go ahead to build embed
+                print(result)
+                if len(result) == 0:
+                    statsEmbed.add_field(name="No data found", value="", inline=False)
+                    await ctx.send(embed=statsEmbed)
+                    return
+
+                else:
+                    while (count < 24):
+                        loop = 0
+                        content = ""
+                        # Build fields with 8 hours each
+                        while (loop < 8): 
+                            data = [0,0]
+                            print(result[0][0])
+                            for row in result:
+                                if (row[0] == count):
+                                    data = [row[1], row[2]]
+
+                            if (type_value == "open"):
+                                content += f"**{count}:00**\nOpened: **{data[0]}**\nClosed: **{data[1]}**\n\n"
+
+                            loop += 1
+                            count += 1
+
+                        statsEmbed.add_field(name="", value=content, inline=True) 
+
+                        # elif (type_value == "duration"):
+                        #     statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+                        #                         f" - **{queries.format_time(row[1])}**", inline=False)
+
+            await ctx.send(embed=statsEmbed)
+
+        except ValueError as e:
+            logger.exception(e)
+            raise BotError(f"Input value error for date: {e}")
             
-    #         if all_servers:
-    #             guildID = 0
-
-    #         # Catch parsing errors (aka invalid input)
-    #         parsed_date = date(year, month, day)
-
-    #         statsEmbed = discord.Embed(title=f"Hourly Data: {day}-{month}-{year} {emojis.mantis}", 
-    #                                 description=f"{type_name}\r{'⎯' * 18}", 
-    #                                 color=0x3ad407)
-    #         statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-    #         statsEmbed.set_footer(text=f"")
-
-    #         query = queries.hourly_queries(type_value, guildID, date_list, time_value)
-    #         result = await self.bot.data_manager.execute_query(query)
-
-    #         if result is not None: # Go ahead to build embed
-    #             if len(result) == 0:
-    #                 statsEmbed.add_field(name="No data found", value="", inline=False)
-    #                 await ctx.send(embed=statsEmbed)
-    #                 return
-
-    #             else:
-    #                 for row in result: 
-    #                         if (type_value == "open"):
-    #                             statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
-    #                                                 f" - **{row[1]}** ticket(s)", inline=False) # added here
-
-    #                         elif (type_value == "duration"):
-    #                             statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
-    #                                                 f" - **{queries.format_time(row[1])}**", inline=False)
-
-    #                         elif (type_value == "response"):
-    #                             statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
-    #                                                 f" - **{queries.format_time(row[1])}**", inline=False)
-
-    #                         elif (type_value == "closed"):
-    #                             statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** ticket(s)", inline=False)
-    #                         count += 1 
-    #                 pages.append(statsEmbed) 
-
-    #         for page in range(len(pages)):
-    #             pages[page].set_footer(text=f"Use the buttons below to navigate (Page {page + 1}/{len(pages)})")
-
-    #         # Create an instance of the pagination view
-    #         view = Paginator(pages)
-    #         view.message = await ctx.send(embed=pages[0], view=view)
-            
-    #     except Exception as e:
-    #         raise BotError(f"/leaderboard sent an error: {e}")
-
-
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/hourly_data sent an error: {e}")
 
 
     # Creates leaderboards for the selected data type
@@ -163,11 +173,9 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Past Week", value="1 WEEK"),
         app_commands.Choice(name="Past Month", value="1 MONTH"),
         app_commands.Choice(name="All Time", value="TOTAL")])
-    @app_commands.describe(server_id="Server ID to display data from (defaults to current server)")
     async def leaderboard(self, ctx, 
                           type: discord.app_commands.Choice[str], 
-                          timeframe: discord.app_commands.Choice[str],  
-                          server_id: int = None):
+                          timeframe: discord.app_commands.Choice[str]):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
@@ -183,9 +191,6 @@ class Stats(commands.Cog):
             time_value = timeframe.value
             guild = ctx.guild
             guildID = guild.id
-
-            if server_id is not None:
-                guildID = server_id
 
             statsEmbed = discord.Embed(title=f"Leaderboard {time_name} {emojis.mantis}", 
                                     description=f"{type_name}\r{'⎯' * 18}", 
@@ -217,7 +222,7 @@ class Stats(commands.Cog):
                             row = result[count] 
                             if (type_value == "open"):
                                 statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
-                                                    f" - **{row[1]}** ticket(s)", inline=False) # added here
+                                                    f" - **{row[1]}** ticket(s)", inline=False)
 
                             elif (type_value == "duration"):
                                 statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
@@ -264,6 +269,7 @@ class Stats(commands.Cog):
             time_name = timeframe.name
             guild = ctx.guild
             guildID = guild.id
+            bot_user = self.bot.user
 
             intervals = self.intervals
             rows = self.rows
@@ -274,8 +280,6 @@ class Stats(commands.Cog):
             if (time_value != "ALL"):
                 intervals = [f"{time_value}"]
                 rows = [f"{time_name}"]
-
-            bot_user = self.bot.user
 
             statsEmbed = discord.Embed(title=f"Server Statistics {emojis.mantis}", 
                                     description=f"(selected server's data / all server data)", 
@@ -299,7 +303,6 @@ class Stats(commands.Cog):
                 
             else:
                 statsEmbed.add_field(name="No data found", value="", inline=False)
-                
             await ctx.send(embed=statsEmbed)
             
         except Exception as e:
@@ -328,6 +331,7 @@ class Stats(commands.Cog):
             time_name = timeframe.name
             guildID = ctx.guild.id
             closeByID = member.id
+            bot_user = self.bot.user
 
             intervals = self.intervals
             rows = self.rows
@@ -338,8 +342,6 @@ class Stats(commands.Cog):
             if (time_value != "ALL"):
                 intervals = [f"{time_value}"]
                 rows = [f"{time_name}"]
-
-            bot_user = self.bot.user
 
             statsEmbed = discord.Embed(title=f"Moderator Activity {emojis.mantis}", 
                                     description=f"(selected mod's data / all mods in this server's data)", 
@@ -359,7 +361,6 @@ class Stats(commands.Cog):
 
             else:
                 statsEmbed.add_field(name="No data found", value="", inline=False)
-                
             await ctx.send(embed=statsEmbed)
 
         except Exception as e:
@@ -404,6 +405,7 @@ class Stats(commands.Cog):
             guildIDs = []
             time_value = timeframe.value
             time_name = timeframe.name
+            bot_user = self.bot.user
             file = None
 
             intervals = self.intervals
@@ -420,10 +422,8 @@ class Stats(commands.Cog):
                 if (guild.id != 12345):
                     guildIDs.append(guild.id)
 
-            bot_user = self.bot.user
-
             statsEmbed = discord.Embed(title=f"Server Statistics Export {emojis.mantis}", 
-                                    description=f"Download the attatched CSV file to view data", 
+                                    description=f"Download the attached CSV file to view data", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
             statsEmbed.timestamp = datetime.now(timezone.utc)
@@ -456,7 +456,6 @@ class Stats(commands.Cog):
               
             else:
                 statsEmbed.add_field(name="No data found", value="", inline=False)
-                
             await ctx.send(embed=statsEmbed, file=file)
 
         except Exception as e:
@@ -466,7 +465,7 @@ class Stats(commands.Cog):
     @commands.hybrid_command(name="export_mod_activity", description="Output a CSV file of this server's moderators'"
                              " ticketing activity over the past X amount of time")
     @checks.has_access()
-    @app_commands.describe(roles="Input the moderator role(s) for this server")
+    @app_commands.describe(roles="Input the moderator role(s) for this server (their names must contain 'mod')")
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
@@ -487,6 +486,7 @@ class Stats(commands.Cog):
             time_name = timeframe.name
             guild = ctx.guild
             guildID = guild.id
+            bot_user = self.bot.user
             file = None
 
             intervals = self.intervals
@@ -506,10 +506,8 @@ class Stats(commands.Cog):
                     if (member.id not in modIDs):
                         modIDs.append(member.id)
 
-            bot_user = self.bot.user
-
             statsEmbed = discord.Embed(title=f"Moderator Activity Export {emojis.mantis}", 
-                                    description=f"Download the attatched CSV file to view data", 
+                                    description=f"Download the attached CSV file to view data", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
             statsEmbed.timestamp = datetime.now(timezone.utc)
@@ -542,7 +540,6 @@ class Stats(commands.Cog):
               
             else:
                 statsEmbed.add_field(name="No data found", value="", inline=False)
-                
             await ctx.send(embed=statsEmbed, file=file)
 
         except Exception as e:

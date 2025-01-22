@@ -75,24 +75,56 @@ def hourly_queries(type: str, guildID: int, date: List[int], timezone: str):
         if (timezone == "UTC"):
             query = f"""
                 SELECT 
-                HOUR(tickets.dateOpen) AS hour,
-                COUNT(*) AS tickets_opened
-                FROM tickets
-                WHERE DATE(tickets.dateOpen) = DATE(CONCAT_WS('-', {date[0]}, {date[1]}, {date[2]}))
-                {guild_str}
-                GROUP BY HOUR(tickets.dateOpen)
-                ORDER BY hour;"""
+                open_tickets.hour,
+                COALESCE(open_tickets.tickets_opened, 0) AS tickets_opened,
+                COALESCE(closed_tickets.tickets_closed, 0) AS tickets_closed
+                FROM (
+                    SELECT 
+                    HOUR(dateOpen) AS hour,
+                    COUNT(*) AS tickets_opened
+                    FROM tickets
+                    WHERE DATE(dateOpen) = DATE(CONCAT_WS('-', {date[0]}, {date[1]}, {date[2]}))
+                    {guild_str}
+                    GROUP BY HOUR(dateOpen)
+                ) AS open_tickets
+                LEFT JOIN (
+                    SELECT 
+                    HOUR(dateClose) AS hour,
+                    COUNT(*) AS tickets_closed
+                    FROM tickets
+                    WHERE DATE(dateClose) = DATE(CONCAT_WS('-', {date[0]}, {date[1]}, {date[2]}))
+                    {guild_str}
+                    GROUP BY HOUR(dateClose)
+                ) AS closed_tickets
+                ON open_tickets.hour = closed_tickets.hour
+                ORDER BY open_tickets.hour;"""
             
         else:
             query = f"""
                 SELECT 
-                HOUR(CONVERT_TZ(tickets.dateOpen, '+00:00', '{timezone_val}')) AS hour,
-                COUNT(*) AS tickets_opened
-                FROM tickets
-                WHERE DATE(CONVERT_TZ(tickets.dateOpen, '+00:00', '{timezone_val}')) = DATE(CONCAT_WS('-', {date[0]}, {date[1]}, {date[2]}))
-                {guild_str}
-                GROUP BY HOUR(CONVERT_TZ(tickets.dateOpen, '+00:00', '{timezone_val}'))
-                ORDER BY hour;"""
+                open_tickets.hour,
+                COALESCE(open_tickets.tickets_opened, 0) AS tickets_opened,
+                COALESCE(closed_tickets.tickets_closed, 0) AS tickets_closed
+                FROM (
+                    SELECT 
+                    HOUR(CONVERT_TZ(tickets.dateOpen, '+00:00', '{timezone_val}')) AS hour,
+                    COUNT(*) AS tickets_opened
+                    FROM tickets
+                    WHERE DATE(CONVERT_TZ(tickets.dateOpen, '+00:00', '{timezone_val}')) = DATE(CONCAT_WS('-', {date[0]}, {date[1]}, {date[2]}))
+                    {guild_str}
+                    GROUP BY HOUR(CONVERT_TZ(tickets.dateOpen, '+00:00', '{timezone_val}'))
+                ) AS open_tickets
+                LEFT JOIN (
+                    SELECT 
+                    HOUR(CONVERT_TZ(tickets.dateClose, '+00:00', '{timezone_val}')) AS hour,
+                    COUNT(*) AS tickets_closed
+                    FROM tickets
+                    WHERE DATE(CONVERT_TZ(tickets.dateClose, '+00:00', '{timezone_val}')) = DATE(CONCAT_WS('-', {date[0]}, {date[1]}, {date[2]}))
+                    {guild_str}
+                    GROUP BY HOUR(CONVERT_TZ(tickets.dateClose, '+00:00', '{timezone_val}'))
+                ) AS closed_tickets
+                ON open_tickets.hour = closed_tickets.hour
+                ORDER BY open_tickets.hour;"""
             
     return query
     
