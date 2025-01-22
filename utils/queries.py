@@ -58,6 +58,45 @@ def generate_fields(data: List[int], index: int, columns: List[str]) -> List[str
     return fields
 
 
+def hourly_queries(type: str, guildID: int, date: List[int], timezone: str):
+    query = ""
+    guild_str = ""
+    timezone_val = ""
+
+    if (timezone == "EST"):
+        timezone_val = "-05:00"
+    elif (timezone == "PST"):
+        timezone_val = "-08:00"
+
+    if (guildID != 0):
+        guild_str = f"AND tickets.guildID = {guildID}"
+
+    if (type == "open"):
+        if (timezone == "UTC"):
+            query = f"""
+                SELECT 
+                HOUR(tickets.dateOpen) AS hour,
+                COUNT(*) AS tickets_opened
+                FROM tickets
+                WHERE DATE(tickets.dateOpen) = DATE(CONCAT_WS('-', {date[0]}, {date[1]}, {date[2]}))
+                {guild_str}
+                GROUP BY HOUR(tickets.dateOpen)
+                ORDER BY hour;"""
+            
+        else:
+            query = f"""
+                SELECT 
+                HOUR(CONVERT_TZ(tickets.dateOpen, '+00:00', '{timezone_val}')) AS hour,
+                COUNT(*) AS tickets_opened
+                FROM tickets
+                WHERE DATE(CONVERT_TZ(tickets.dateOpen, '+00:00', '{timezone_val}')) = DATE(CONCAT_WS('-', {date[0]}, {date[1]}, {date[2]}))
+                {guild_str}
+                GROUP BY HOUR(CONVERT_TZ(tickets.dateOpen, '+00:00', '{timezone_val}'))
+                ORDER BY hour;"""
+            
+    return query
+    
+
 def leaderboard_queries(type: str, guildID: int, interval: str):
     query = ""
 

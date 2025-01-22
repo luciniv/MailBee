@@ -2,12 +2,15 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from discord.ext.commands import Greedy
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import List
 from classes.error_handler import *
 from classes.paginator import *
 from utils import emojis, checks, queries, csv_write
 from utils.logger import *
+
+
+# TODO embed management class
 
 
 # Subsects a number into a list of numbers that cap at max_size (for pagination)
@@ -53,6 +56,95 @@ class Stats(commands.Cog):
         self.bot = bot 
         self.rows = ["Past Hour", "Past Day", "Past Week", "Past Month", "All Time"]
         self.intervals = ["1 HOUR", "1 DAY", "1 WEEK", "1 MONTH", "TOTAL"]
+
+
+    # @commands.hybrid_command(name="hourly_data", description="View certain data per hour from a selected day")
+    # @checks.has_access()
+    # @app_commands.describe(type="Select a data type to display hourly")
+    # @app_commands.choices(type=[
+    #     app_commands.Choice(name="Tickets opened & closed", value="open"),
+    #     app_commands.Choice(name="Average ticket duration", value="duration"),
+    #     app_commands.Choice(name="Average first response time", value="response")])
+    # @app_commands.describe(timezone="Select a timezone (Default is UTC)")
+    # @app_commands.choices(timezone=[
+    #     app_commands.Choice(name="UTC", value="UTC"),
+    #     app_commands.Choice(name="EST", value="EST"),
+    #     app_commands.Choice(name="PST", value="PST")])
+    # @app_commands.describe(day="Input a number for the day (1-31)")
+    # @app_commands.describe(month="Input a number for the month (1-12)")
+    # @app_commands.describe(year="Input a number for the year (2024-2025)")
+    # @app_commands.describe(all_servers="Display data for all servers? (False by default)")
+    # async def leaderboard(self, ctx, 
+    #                       type: discord.app_commands.Choice[str], 
+    #                       timezone: discord.app_commands.Choice[str],
+    #                       day: int,
+    #                       month: int,
+    #                       year: int, 
+    #                       all_servers: bool = False):
+    #     try:
+    #         # Allows command to take longer than 3 seconds
+    #         await ctx.defer()
+    #         await self.bot.data_manager.flush_messages()
+            
+    #         count = 0
+
+    #         type_name = type.name
+    #         type_value = type.value
+    #         time_value = timezone.value
+    #         guild = ctx.guild
+    #         guildID = guild.id
+            
+    #         if all_servers:
+    #             guildID = 0
+
+    #         # Catch parsing errors (aka invalid input)
+    #         parsed_date = date(year, month, day)
+
+    #         statsEmbed = discord.Embed(title=f"Hourly Data: {day}-{month}-{year} {emojis.mantis}", 
+    #                                 description=f"{type_name}\r{'⎯' * 18}", 
+    #                                 color=0x3ad407)
+    #         statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
+    #         statsEmbed.set_footer(text=f"")
+
+    #         query = queries.hourly_queries(type_value, guildID, date_list, time_value)
+    #         result = await self.bot.data_manager.execute_query(query)
+
+    #         if result is not None: # Go ahead to build embed
+    #             if len(result) == 0:
+    #                 statsEmbed.add_field(name="No data found", value="", inline=False)
+    #                 await ctx.send(embed=statsEmbed)
+    #                 return
+
+    #             else:
+    #                 for row in result: 
+    #                         if (type_value == "open"):
+    #                             statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+    #                                                 f" - **{row[1]}** ticket(s)", inline=False) # added here
+
+    #                         elif (type_value == "duration"):
+    #                             statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+    #                                                 f" - **{queries.format_time(row[1])}**", inline=False)
+
+    #                         elif (type_value == "response"):
+    #                             statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+    #                                                 f" - **{queries.format_time(row[1])}**", inline=False)
+
+    #                         elif (type_value == "closed"):
+    #                             statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** ticket(s)", inline=False)
+    #                         count += 1 
+    #                 pages.append(statsEmbed) 
+
+    #         for page in range(len(pages)):
+    #             pages[page].set_footer(text=f"Use the buttons below to navigate (Page {page + 1}/{len(pages)})")
+
+    #         # Create an instance of the pagination view
+    #         view = Paginator(pages)
+    #         view.message = await ctx.send(embed=pages[0], view=view)
+            
+    #     except Exception as e:
+    #         raise BotError(f"/leaderboard sent an error: {e}")
+
+
 
 
     # Creates leaderboards for the selected data type
@@ -292,7 +384,7 @@ class Stats(commands.Cog):
     # gives the option to output one person's data, or everyone's data, and then select the timeframe
     # might use the same query gen commands, not sure
 
-    @commands.hybrid_command(name="csv_server_stats", description="Output a CSV file of every server's statistics,"
+    @commands.hybrid_command(name="export_server_stats", description="Output a CSV file of every server's statistics,"
                             " includes ticket counts and response averages")
     @checks.has_access()
     @app_commands.describe(timeframe="Select a timeframe for the output data")
@@ -303,7 +395,7 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Past Month", value="1 MONTH"),
         app_commands.Choice(name="All Time", value="TOTAL"),
         app_commands.Choice(name="All of the above", value="ALL")])
-    async def csv_server_stats(self, ctx, timeframe: discord.app_commands.Choice[str]):
+    async def export_server_stats(self, ctx, timeframe: discord.app_commands.Choice[str]):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
@@ -330,7 +422,7 @@ class Stats(commands.Cog):
 
             bot_user = self.bot.user
 
-            statsEmbed = discord.Embed(title=f"Server Statistics CSV {emojis.mantis}", 
+            statsEmbed = discord.Embed(title=f"Server Statistics Export {emojis.mantis}", 
                                     description=f"Download the attatched CSV file to view data", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
@@ -368,10 +460,10 @@ class Stats(commands.Cog):
             await ctx.send(embed=statsEmbed, file=file)
 
         except Exception as e:
-            raise BotError(f"/csv_server_stats sent an error: {e}")
+            raise BotError(f"/export_server_stats sent an error: {e}")
 
 
-    @commands.hybrid_command(name="csv_mod_activity", description="Output a CSV file of this server's moderators'"
+    @commands.hybrid_command(name="export_mod_activity", description="Output a CSV file of this server's moderators'"
                              " ticketing activity over the past X amount of time")
     @checks.has_access()
     @app_commands.describe(roles="Input the moderator role(s) for this server")
@@ -383,7 +475,7 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Past Month", value="1 MONTH"),
         app_commands.Choice(name="All Time", value="TOTAL"),
         app_commands.Choice(name="All of the above", value="ALL")])
-    async def csv_mod_activity(self, ctx, roles: Greedy[discord.Role], timeframe: discord.app_commands.Choice[str]):
+    async def export_mod_activity(self, ctx, roles: Greedy[discord.Role], timeframe: discord.app_commands.Choice[str]):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
@@ -416,7 +508,7 @@ class Stats(commands.Cog):
 
             bot_user = self.bot.user
 
-            statsEmbed = discord.Embed(title=f"Moderator Activity CSV {emojis.mantis}", 
+            statsEmbed = discord.Embed(title=f"Moderator Activity Export {emojis.mantis}", 
                                     description=f"Download the attatched CSV file to view data", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
@@ -454,7 +546,7 @@ class Stats(commands.Cog):
             await ctx.send(embed=statsEmbed, file=file)
 
         except Exception as e:
-            raise BotError(f"/csv_mod_activity sent an error: {e}")
+            raise BotError(f"/export_mod_activity sent an error: {e}")
 
     # OTHER STATS
     # close metric --> the % of discussion and ticket messages sent to the user in a ticket that this person also closed
