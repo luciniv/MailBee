@@ -1,72 +1,165 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
+from datetime import datetime, timezone
+from classes.error_handler import *
+from utils import emojis, checks
 from utils.logger import *
-from utils.emojis import *
 
 
-# WIP automatic category overflow handler
 class Tools(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
 
-    # @commands.Cog.listener()
-    # async def on_guild_channel_create(self, channel):
-    #     if (isinstance(channel, discord.TextChannel)):
-    #         guild = channel.guild
-    #         category = channel.category
-    #         open_overflow_cats = []
-    #         full_overflow_cats = []
+    # Manually update the status of a ticket channel
+    @commands.hybrid_command(name="status", description="Change the emoji status of a ticket")
+    @app_commands.describe(status="Select an emoji from the defined list, or add a custom one" 
+                                    " (Mantid only supports unicode emojis)")
+    @app_commands.choices(status=[
+        app_commands.Choice(name=f"👋 - new ticket", value="new"),
+        app_commands.Choice(name=f"❗️ - pending moderator response", value="alert"),
+        app_commands.Choice(name=f"⏳ - waiting for user response", value="wait")])
+    @app_commands.describe(emoji="Enter a default Discord emoji (only applied if you did not select an emoji from the status options)")
+    async def show(self, ctx, status: discord.app_commands.Choice[str] = None, emoji: str = None):
+        try: 
+            
+            status_flag = False
+            channel = ctx.channel
+            bot_user = self.bot.user
+            emoji_name = None
+            emoji_str = None
 
-    #         # Gets all monitored channels / categories and their types for the guild
-    #         search_monitor = [
-    #             (channelID) for guildID, channelID, monitorType 
-    #             in self.bot.data_manager.monitored_channels
-    #             if (guildID == guild.id)]
+            if status is None and emoji is None:
+                errorEmbed = discord.Embed(title=f"", 
+                                        description="❌ You must select a status or provide an emoji", 
+                                        color=0xFF0000)
+                errorEmbed.timestamp = datetime.now(timezone.utc)
+                errorEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
+
+                await ctx.send(embed=errorEmbed, ephemeral=True)
+                return
+
+            if status is not None:
+                status_flag = True
+                emoji_name = status.name
+                emoji_str = status.value
+
+            if emoji_str is None:
+                if (self.bot.channel_status.check_unicode(emoji)):
+                    emoji_str = emoji
+
+            await self.bot.channel_status.set_emoji(channel, emoji_str)
+            if status_flag:
+                emoji_str = emoji_name
+
+            statusEmbed = discord.Embed(title="", 
+                                    description=f"Channel status set to {emoji_str}", 
+                                    color=0x3ad407)
+            statusEmbed.timestamp = datetime.now(timezone.utc)
+            statusEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
+
+            await ctx.reply("=", embed=statusEmbed)
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/status sent an error: {e}")
+
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel):
+        if (isinstance(channel, discord.TextChannel)):
+            guild = channel.guild
+            category = channel.category
+            new_category = None
+            overflow_cats = []
+
+            # Gets all monitored channels / categories for the guild
+            search_monitor = [
+                (channelID) for guildID, channelID, monitorType 
+                in self.bot.data_manager.monitored_channels
+                if (guildID == guild.id)]
             
-    #         # Guild has no monitored channels
-    #         if (len(search_monitor) == 0):
-    #             return 
+            # Guild has no monitored channels
+            if (len(search_monitor) == 0):
+                print("no monitored channels / categories")
+                return 
             
-    #         # Category is monitored
-    #         if category.id in search_monitor:
-    #             for cat_channel in category.channels:
-    #                 # Category contains modmail channel
-    #                 if cat_channel in search_monitor:
-    #                     if (len(category.channels) == 5):
-    #                         # Scan for pre-exisitng non-full overflow categories
-    #                         categories = guild.categories
-    #                         for cat in categories:
-    #                             if ((cat.name)[:-2] == "OVERFLOW"):
-    #                                 if (len(cat.channels) < 5):
-    #                                     open_overflow_cats.append(cat)
-    #                                 else:
-    #                                     full_overflow_cats.append(cat)
+            # Category is monitored
+            if category.id in search_monitor:
+                for cat_channel in category.channels:
+
+                    # Category contains modmail channel
+                    if cat_channel.id in search_monitor:
+                        if (len(category.channels) >= 3):
                             
-    #                         # Determine if a new category needs made
-    #                         if (len(open_overflow_cats) == 0) and (len(full_overflow_cats) == 0):
-    #                             # Create OVERFLOW 1 category after MODMAIL, move channel there
-    #                             pass
-    #                         elif (len(open_overflow_cats) == 0):
-    #                             open_id = 1
-    #                             for cat in full_overflow_cats:
-    #                                 pass
-
-    #                             # All overflow cats are full vvv
-    #                             # Create smallest numbered new overflow cat possible
-    #                             pass
-    #                         else:
-    #                             open_id = 1
-    #                             # Insert ticket into lowest numbered overflow cat with space
-    #                             for cat in open_overflow_cats:
-    #                                 if (id == int(((cat.name).split())[1])):
-    #                                     pass
+                            # Scan for pre-exisitng non-full overflow categories
+                            categories = guild.categories
+                            for cat in categories:
+                                if (((cat.name).split())[0] == "Overflow"):
+                                    overflow_cats.append(cat)
+                            print("overflow cats:")
+                            print(overflow_cats)
+                            # Create OVERFLOW 1 category after MODMAIL, move channel there
+                            if (len(overflow_cats) == 0):
+                                print("no overflow cats, made first one")
+                                index = guild.categories.index(category) + 1
+                                new_category = await guild.create_category(name="Overflow 1", 
+                                                                        overwrites=category.overwrites,
+                                                                        position=index)
+                                await channel.edit(category=new_category)
+                                await self.bot.data_manager.add_monitor(guild.id, new_category.id, "Overflow category")
+                                return      
+                    
+                            else:
+                                cat_id = 1
+                                for cat in overflow_cats:
+                                    if (cat_id == int(((cat.name).split())[1])):
+                                        # if category has space, insert
+                                        if (len(cat.channels) < 4):
+                                            print("open overflow cat, moved channel")
+                                            await channel.edit(category=cat)
+                                            return
+                                        else:
+                                            cat_id += 1
+                                    else:
+                                        print("found gap in overflow cats, made new one")
+                                        # create new category, since there was a gap
+                                        index = guild.categories.index(cat) - 1
+                                        new_category = await guild.create_category(name=f"Overflow {cat_id}", 
+                                                                            overwrites=category.overwrites,
+                                                                            position=index)
+                                        await channel.edit(category=new_category)
+                                        await self.bot.data_manager.add_monitor(guild.id, new_category.id, "Overflow category")
+                                        return
                                     
-                            
-    #                         position = category.position
-    #                         overwrites = category.overwrites
-    #                         new_category = await guild.create_category(name=f"OVERFLOW {ID}", overwrites=overwrites, position=position + 1)
+                                print("found no gap in overflow cats, had to make new one at the end")
+                                # create new category, since there were no open categories
+                                index = guild.categories.index(overflow_cats[-1]) + 1
+                                new_category = await guild.create_category(name=f"Overflow {cat_id}", 
+                                                                        overwrites=category.overwrites,
+                                                                        position=index)
+                                await channel.edit(category=new_category)
+                                await self.bot.data_manager.add_monitor(guild.id, new_category.id, "Overflow category")
 
+                        else:
+                            # modmail cat isnt full yet
+                            print("modmail cat wasnt full on channel add")
+                            return
+                    
+                        
+    @commands.Cog.listener()
+    async def on_guild_channel_delete(self, channel):
+        if (isinstance(channel, discord.CategoryChannel)):
+            guild = channel.guild
+            search_monitor = [
+                (channelID) for guildID, channelID, monitorType 
+                in self.bot.data_manager.monitored_channels
+                if (channelID == channel.id)]
+            
+            if (len(search_monitor) != 0):
+                await self.bot.data_manager.remove_monitor(channel.id)
+                print(f"removed {channel.name} from monitor")
 
 async def setup(bot):
     await bot.add_cog(Tools(bot))

@@ -1,5 +1,7 @@
 # Holding place for emojis
-mantis = "<:mantis:1304887716370186330>"
-new = "👋"
-alert = "❗️"
-wait = "⏳"
+mantis = "<:creature:1333956210038149251>"
+emoji_map = {
+    "new": "🆕",
+    "alert": "❗️",
+    "wait": "⏳"
+}

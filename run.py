@@ -3,8 +3,8 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 import os
 from classes.data_manager import DataManager
+from classes.channel_status import ChannelStatus
 from classes.error_handler import *
-from utils.channel_status import ChannelStatus
 from utils import emojis, checks
 from utils.logger import *
 
@@ -12,10 +12,8 @@ from utils.logger import *
 bot_token = os.getenv("BOT_TOKEN")
 owners = list(map(int, os.getenv("OWNERS").split(",")))
 
-
 startup = True
 ready = True
-
 
 class Mantid(commands.Bot):
     def __init__(self):
@@ -23,7 +21,7 @@ class Mantid(commands.Bot):
         description = ""
 
         # Create bot instance with command prefix
-        super().__init__(command_prefix=commands.when_mentioned_or('m!'), intents=intents, description=description, help_command=None)
+        super().__init__(command_prefix=commands.when_mentioned_or('!'), intents=intents, description=description, help_command=None)
         self.data_manager = DataManager()
         self.channel_status = ChannelStatus()
 
@@ -46,6 +44,7 @@ class Mantid(commands.Bot):
             if self.data_manager.db_pool is not None:
                 await self.data_manager.update_cache()
                 await self.data_manager.connect_to_redis()
+                await self.channel_status.start_worker()
                 await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="for tickets!"))
                 heartbeat.start()
             startup = False
@@ -64,7 +63,7 @@ class Mantid(commands.Bot):
                         ready = False
                         logger.exception(f"Failed to load {filename}: {e}")
 
-        # Prints READY ASCII text           
+        # Prints READY ASCII text (duh)          
         if ready:
             logger.log("NOTIF", "\n  ___   ___     _     ___   __   __"
                                 "\n | _ \ | __|   /_\   |   \  \ \ / /"
@@ -77,12 +76,13 @@ class Mantid(commands.Bot):
             await super().close()
 
 
-    # Close database and redis connections before shutdown
+    # Shutdown database, redis, and workers before bot shutdown
     async def on_close(self):
         logger.log("SYSTEM", "------- SHUTTING DOWN --------------------")
         heartbeat.cancel()
         await self.data_manager.close_db()
         await self.data_manager.close_redis()
+        await self.channel_status.shutdown()
         await super().close()
 
 bot = Mantid()

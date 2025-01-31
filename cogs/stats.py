@@ -11,7 +11,9 @@ from utils.logger import *
 
 
 # TODO embed management class
-# TODO implement graphs
+# TODO ticket status labeling
+# TODO automatic category creation
+# TODO roblox integration 
 
 
 # Subsects a number into a list of numbers that cap at max_size (for pagination)
@@ -110,13 +112,12 @@ class Stats(commands.Cog):
                                     color=0x3ad407)
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
             statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
             query = queries.hourly_queries(type_value, guildID, date_list, time_value)
             result = await self.bot.data_manager.execute_query(query)
 
             if result is not None: # Go ahead to build embed
-                print(result)
                 if len(result) == 0:
                     statsEmbed.add_field(name="No data found", value="", inline=False)
                     await ctx.send(embed=statsEmbed)
@@ -129,7 +130,6 @@ class Stats(commands.Cog):
                         # Build fields with 8 hours each
                         while (loop < 8): 
                             data = [0,0]
-                            print(result[0][0])
                             for row in result:
                                 if (row[0] == count):
                                     data = [row[1], row[2]]
@@ -196,7 +196,7 @@ class Stats(commands.Cog):
                                     description=f"{type_name}\r{'⎯' * 18}", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-            statsEmbed.set_footer(text=f"")
+            statsEmbed.set_footer(text="")
 
             query = queries.leaderboard_queries(type_value, guildID, time_value)
             result = await self.bot.data_manager.execute_query(query)
@@ -216,7 +216,7 @@ class Stats(commands.Cog):
                                     description=type_name, 
                                     color=0x3ad407)
                             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-                            statsEmbed.set_footer(text=f"")
+                            statsEmbed.set_footer(text="")
 
                         while (count < limit): 
                             row = result[count] 
@@ -286,7 +286,7 @@ class Stats(commands.Cog):
                                     color=0x3ad407)
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
             statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
             query = queries.server_stats(guildID, intervals)
             result = await self.bot.data_manager.execute_query(query)
@@ -348,7 +348,7 @@ class Stats(commands.Cog):
                                     color=0x3ad407)
             statsEmbed.set_author(name=member.name, icon_url=member.avatar.url)
             statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
             
             query = queries.mod_activity(guildID, closeByID, intervals)
             result = await self.bot.data_manager.execute_query(query)
@@ -427,7 +427,7 @@ class Stats(commands.Cog):
                                     color=0x3ad407)
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
             statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
             
             result_list = []
             query_list = queries.server_stats_CSV(guildIDs, intervals)
@@ -511,7 +511,7 @@ class Stats(commands.Cog):
                                     color=0x3ad407)
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
             statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
             
             result_list = []
             query_list = queries.mod_activity_CSV(guildID, modIDs, intervals)

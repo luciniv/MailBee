@@ -13,8 +13,9 @@ class Analytics(commands.Cog):
 
     async def cog_load(self):
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        await self.catch_modmail_backlog()
-        await self.process_queue()
+        print("Backlog catching shut off")
+        # await self.catch_modmail_backlog()
+        # await self.process_queue()
 
 
     # Populate queue with unprocessed messages
@@ -101,7 +102,7 @@ class Analytics(commands.Cog):
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
             query = f"""
-                INSERT INTO tickets VALUES 
+                INSERT IGNORE INTO tickets VALUES 
                 ({message.id}, 
                 {guild.id}, 
                 {this_channelID}, 
@@ -116,17 +117,20 @@ class Analytics(commands.Cog):
             await self.bot.data_manager.execute_query(query, False)
 
             # Check if associated ticket channel exists, if not assume ticket has already closed
-            ticket_channel = discord.utils.get(guild.channels, name=f"{(guild.get_member(int(openID))).name}-0")
+            ticket_channel = None
+            for channel in guild.channels:
+                if ((guild.get_member(int(openID))).name in channel.name):
+                    ticket_channel = channel
+
             if ticket_channel is not None:
                 ticket_channelID = ticket_channel.id                         
                 ticket_channel_timestamp = ticket_channel.created_at
 
-                # Check that found channel shares creation time (within two minutes), if not assume this channel belongs to a different ticket
+                # Check that found channel shares creation time (within one minute), if not assume this channel belongs to a different ticket
                 difference = abs((timestamp - ticket_channel_timestamp).total_seconds())
-                if difference <= 120:
+                if difference <= 60:
                     await self.bot.data_manager.add_ticket(ticket_channelID, message.id)
-                    # TODO FOR TICKET CHANNEL STATUS
-                    # TICKET CHANNEL STATUS IS UPDATED VIA ON-MESSAGE EVENT (OR A COMMAND IN THE TOOLS.PY COG)
+                    await self.bot.channel_status.set_emoji(ticket_channel, "new")
                     await message.add_reaction(emojis.mantis)
 
                 else:
@@ -207,7 +211,6 @@ class Analytics(commands.Cog):
             else:
                 closeID = message.author.id
                 closeName = message.author.name
-                print(modmail_messageID)
                 query = f"""
                     UPDATE tickets SET 
                     dateClose = '{format_time}', 
@@ -231,6 +234,8 @@ class Analytics(commands.Cog):
     async def on_message(self, message):
         if (isinstance(message.channel, discord.DMChannel) or not message.guild):
             return
+        if (message.author.id == 1304609006379073628):
+            return
 
         this_channel = message.channel
         this_channelID = this_channel.id
@@ -246,6 +251,7 @@ class Analytics(commands.Cog):
             return
 
         elif (len(search_monitor) == 1):
+            channel = message.channel
             messageID = message.id
             guild = message.guild
             this_authorID = message.author.id
@@ -260,8 +266,8 @@ class Analytics(commands.Cog):
                     if message.embeds:
                         await self.process_modmail(message, False)
 
-            # Check if channel is in a tickets category
-            if (monitor_type == "Tickets category"):
+            # Check if channel is in a tickets or overflow category
+            if (monitor_type == "Tickets category" or monitor_type == "Overflow category"):
 
                 # Check if channel is cached as a ticket
                 modmail_messageID = (await self.bot.data_manager.get_ticket(this_channelID))
@@ -282,6 +288,7 @@ class Analytics(commands.Cog):
                                                                                authorID, 
                                                                                format_time, 
                                                                                "Received")
+                                await self.bot.channel_status.set_emoji(channel, "alert")
                                 await message.add_reaction(emojis.mantis)
 
                             # Store sent message (embed from the Modmail bot to DM)
@@ -297,6 +304,7 @@ class Analytics(commands.Cog):
                                                                                authorID, 
                                                                                format_time, 
                                                                                "Sent")
+                                await self.bot.channel_status.set_emoji(channel, "wait")
                                 await message.add_reaction(emojis.mantis)
                            
                             else:

@@ -92,7 +92,7 @@ class Main(commands.Cog):
                                     color=0x3ad407)
             setupEmbed.add_field(name="Setup Output:", value=f"", inline=False)
             setupEmbed.timestamp = datetime.now(timezone.utc)
-            setupEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+            setupEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
             for channel in guild.channels:
                 if (isinstance(channel, discord.DMChannel)):
@@ -194,9 +194,9 @@ class Main(commands.Cog):
                                         description=f"Roles with access to Mantid in: **{guildName}** ({this_guildID})", 
                                         color=0x3ad407)
                 permsEmbed.timestamp = datetime.now(timezone.utc)
-                permsEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+                permsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
     
-                if not search_access:
+                if (len(search_access) == 0):
                     permsEmbed.description=""
                     permsEmbed.color=0xFF0000
                     permsEmbed.add_field(name="", 
@@ -218,9 +218,9 @@ class Main(commands.Cog):
                                             description=f"Channels monitored in: **{guildName}** ({this_guildID})", 
                                             color=0x3ad407)
                 monitorEmbed.timestamp = datetime.now(timezone.utc)
-                monitorEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+                monitorEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
                 
-                if not search_monitor:
+                if (len(search_monitor) == 0):
                     monitorEmbed.description=""
                     monitorEmbed.color=0xFF0000
                     monitorEmbed.add_field(name="", 
@@ -258,14 +258,14 @@ class Main(commands.Cog):
                                     description="", 
                                     color=0x3ad407)
             editEmbed.timestamp = datetime.now(timezone.utc)
-            editEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+            editEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
             # Check if access is already given, if not add it
             if (choice == "add"):
                 search_access = [
                     (roleID, permLevel) for guildID, roleID, permLevel 
                     in self.bot.data_manager.access_roles if (roleID == this_roleID)]
-                if (search_access):
+                if (len(search_access) != 0):
                     perm = search_access[0][1]
                     editEmbed.description=f"Unable to add permissions, <@&{this_roleID}> already has **{perm}**"
                     editEmbed.color=0xFF0000
@@ -285,7 +285,7 @@ class Main(commands.Cog):
                 search_access = [
                     roleID for guildID, roleID, permLevel 
                     in self.bot.data_manager.access_roles if (roleID == this_roleID)]
-                if (search_access):
+                if (len(search_access) != 0):
                     query = f"""
                         DELETE FROM permissions WHERE 
                         (permissions.roleID = {this_roleID});
@@ -328,7 +328,7 @@ class Main(commands.Cog):
                                         description="❌ You must provide at least a channel or category", 
                                         color=0xFF0000)
                 errorEmbed.timestamp = datetime.now(timezone.utc)
-                errorEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+                errorEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
                 await ctx.send(embed=errorEmbed, ephemeral=True)
                 return
@@ -342,15 +342,17 @@ class Main(commands.Cog):
                                     description="", 
                                     color=0x3ad407)
             editEmbed.timestamp = datetime.now(timezone.utc)
-            editEmbed.set_footer(text=f"Mantid", icon_url=bot_user.avatar.url)
+            editEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
             # check if channel / category is already added or not
             if (choice == "add"):
                 if (this_channelID is not None):
                     search_monitor = [
                         (channelID) for guildID, channelID, monitorType 
-                        in self.bot.data_manager.monitored_channels if (guildID == this_guildID and monitorType == "Modmail log")]
-                    if (search_monitor):
+                        in self.bot.data_manager.monitored_channels 
+                        if (guildID == this_guildID and monitorType == "Modmail log")]
+                    
+                    if (len(search_monitor) != 0):
                         if (search_monitor[0] == this_channelID):
                             editEmbed.description=f"Unable to add channel, <#{this_channelID}> is already set as **Modmail log**"
                             editEmbed.color=0xFF0000
@@ -360,34 +362,21 @@ class Main(commands.Cog):
                                                 " channel before attempting to add a new one)")
                             editEmbed.color=0xFF0000
                     else:
-                        query = f"""
-                            INSERT INTO channel_monitor VALUES 
-                            ({this_guildID}, 
-                            {this_channelID}, 
-                            'Modmail log');
-                            """
-                        await self.bot.data_manager.execute_query(query, False)
-                        await self.bot.data_manager.update_cache(1)
-                      
+                        await self.bot.data_manager.add_monitor(this_guildID, this_channelID, "Modmail log")
                         editEmbed.description=f"Set <#{this_channelID}> as **Modmail log** channel"
                     await ctx.send(embed=editEmbed)
 
                 if (this_categoryID is not None):
                     search_monitor = [
-                        (channelID) for guildID, channelID, monitorType 
-                        in self.bot.data_manager.monitored_channels if (channelID == this_categoryID and monitorType == "Tickets category")]
-                    if (search_monitor):
-                        editEmbed.description=f"Unable to add category, **<#{this_categoryID}>** is already set as a **Tickets category**"
+                        (channelID, monitorType) for guildID, channelID, monitorType 
+                        in self.bot.data_manager.monitored_channels 
+                        if (channelID == this_categoryID)]
+                    
+                    if (len(search_monitor) != 0):
+                        editEmbed.description=f"Unable to add category, **<#{this_categoryID}>** is already set as a **{search_monitor[0][1]}**"
                         editEmbed.color=0xFF0000
                     else:
-                        query = f"""
-                            INSERT INTO channel_monitor VALUES 
-                            ({this_guildID}, 
-                            {this_categoryID}, 
-                            'Tickets category');
-                            """
-                        await self.bot.data_manager.execute_query(query, False)
-                        await self.bot.data_manager.update_cache(1)
+                        await self.bot.data_manager.add_monitor(this_guildID, this_categoryID, "Tickets category")
                         editEmbed.description=f"Set **<#{this_categoryID}>** as a **Tickets category**"
                     await ctx.send(embed=editEmbed)
 
@@ -396,15 +385,11 @@ class Main(commands.Cog):
                 if (this_channelID is not None):
                     search_monitor = [
                         (channelID) for guildID, channelID, monitorType 
-                        in self.bot.data_manager.monitored_channels if (channelID == this_channelID and monitorType == "Modmail log")]
-                    if (search_monitor):
-                        query = f"""
-                            DELETE FROM channel_monitor WHERE 
-                            ((channel_monitor.channelID = {this_channelID}) AND 
-                            (channel_monitor.monitorType = 'Modmail log'));
-                            """
-                        await self.bot.data_manager.execute_query(query, False)
-                        await self.bot.data_manager.update_cache(1)
+                        in self.bot.data_manager.monitored_channels 
+                        if (channelID == this_channelID and monitorType == "Modmail log")]
+                    
+                    if (len(search_monitor) != 0):
+                        await self.bot.data_manager.remove_monitor(this_channelID)
                         editEmbed.description=f"Removed **Modmail log** status from <#{this_channelID}>"
                     else:
                         editEmbed.description=f"Unable to remove channel, <#{this_channelID}> is not a **Modmail log** channel"
@@ -413,17 +398,17 @@ class Main(commands.Cog):
 
                 if (this_categoryID is not None):
                     search_monitor = [
-                        (channelID) for guildID, channelID, monitorType 
-                        in self.bot.data_manager.monitored_channels if (channelID == this_categoryID and monitorType == "Tickets category")]
-                    if (search_monitor):
-                        query = f"""
-                            DELETE FROM channel_monitor WHERE 
-                            ((channel_monitor.channelID = {this_categoryID}) AND 
-                            (channel_monitor.monitorType = 'Tickets category'));
-                            """
-                        await self.bot.data_manager.execute_query(query, False)
-                        await self.bot.data_manager.update_cache(1)
-                        editEmbed.description=f"Removed **Tickets category** status from **<#{this_categoryID}>**"
+                        (channelID, monitorType) for guildID, channelID, monitorType 
+                        in self.bot.data_manager.monitored_channels 
+                        if (channelID == this_categoryID)]
+                    
+                    if (len(search_monitor) != 0):
+                        if (search_monitor[0][1] == "Tickets category"):
+                            await self.bot.data_manager.remove_monitor(this_categoryID)
+                            editEmbed.description=f"Removed **Tickets category** status from **<#{this_categoryID}>**"
+                        else:
+                            editEmbed.description=(f"Removed **Overflow category** status from **<#{this_categoryID}>**\n\n"
+                                                   "**Remove the word 'Overflow' from this category's name if it is not being deleted**")
                     else:
                         editEmbed.description=f"Unable to remove category, **<#{this_categoryID}>** is not a **Tickets category**"
                         editEmbed.color=0xFF0000

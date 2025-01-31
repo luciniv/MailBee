@@ -143,7 +143,7 @@ class DataManager:
         return result
                     
 
-    # Variably controlled cache updater
+    # Variably controlled local cache updater
     # Handles roles given permission to use Mantid and the channels Mantid monitors
     async def update_cache(self, opt: int = 2):
         if opt in (0, 2):
@@ -155,6 +155,27 @@ class DataManager:
             query = "SELECT * FROM channel_monitor;"
             self.monitored_channels = await self.execute_query(query)
             logger.debug("'monitored_channels' cache updated from database")
+
+
+    # Adds monitored channels / categories to DB
+    async def add_monitor(self, guildID: int, channelID: int, type: str):
+        query = f"""
+            INSERT INTO channel_monitor VALUES 
+            ({guildID}, 
+            {channelID}, 
+            '{type}');
+            """
+        await self.execute_query(query, False)
+        await self.update_cache(1)
+
+
+    async def remove_monitor(self, channelID: int):
+        query = f"""
+            DELETE FROM channel_monitor WHERE 
+            channel_monitor.channelID = {channelID};
+            """
+        await self.execute_query(query, False)
+        await self.update_cache(1)
 
 
     # DB health check, not currently active
