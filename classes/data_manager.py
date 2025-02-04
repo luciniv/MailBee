@@ -49,13 +49,13 @@ class DataManager:
                     password=db_password, 
                     db=db_name,
                     host=db_host,
-                    port=3306,
+                    port=25060,
                     autocommit=True
                 )
                 logger.success("Database connection established")
 
             except Exception as e:
-                logger.error(f"Error connecting to database: {e}")
+                logger.exception(f"Error connecting to database: {e}")
                 raise
 
 

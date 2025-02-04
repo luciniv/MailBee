@@ -17,13 +17,12 @@ class Tools(commands.Cog):
     @app_commands.describe(status="Select an emoji from the defined list, or add a custom one" 
                                     " (Mantid only supports unicode emojis)")
     @app_commands.choices(status=[
-        app_commands.Choice(name=f"👋 - new ticket", value="new"),
+        app_commands.Choice(name=f"🆕 - new ticket", value="new"),
         app_commands.Choice(name=f"❗️ - pending moderator response", value="alert"),
         app_commands.Choice(name=f"⏳ - waiting for user response", value="wait")])
     @app_commands.describe(emoji="Enter a default Discord emoji (only applied if you did not select an emoji from the status options)")
     async def show(self, ctx, status: discord.app_commands.Choice[str] = None, emoji: str = None):
-        try: 
-            
+        try:    
             status_flag = False
             channel = ctx.channel
             bot_user = self.bot.user
@@ -40,6 +39,7 @@ class Tools(commands.Cog):
                 await ctx.send(embed=errorEmbed, ephemeral=True)
                 return
 
+            # Prioritizes status selection over custom emojis
             if status is not None:
                 status_flag = True
                 emoji_name = status.name
@@ -49,17 +49,23 @@ class Tools(commands.Cog):
                 if (self.bot.channel_status.check_unicode(emoji)):
                     emoji_str = emoji
 
-            await self.bot.channel_status.set_emoji(channel, emoji_str)
+            result = await self.bot.channel_status.set_emoji(channel, emoji_str)
+
+            # Fix for outputting readable explanation of what the emoji is for
             if status_flag:
                 emoji_str = emoji_name
 
             statusEmbed = discord.Embed(title="", 
-                                    description=f"Channel status set to {emoji_str}", 
+                                    description=f"Channel status set to {emoji_str}\n\n*Please wait up to 5 minutes for edits to appear*", 
                                     color=0x3ad407)
             statusEmbed.timestamp = datetime.now(timezone.utc)
             statusEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
-            await ctx.reply("=", embed=statusEmbed)
+            if not result:
+                statusEmbed.description=f"Failed to set channel status to {emoji_str}, did you try to set a 🆕 status to ❗️?"
+                statusEmbed.color=0xFF0000
+
+            await ctx.reply(embed=statusEmbed)
 
         except Exception as e:
             logger.exception(e)
@@ -82,7 +88,6 @@ class Tools(commands.Cog):
             
             # Guild has no monitored channels
             if (len(search_monitor) == 0):
-                print("no monitored channels / categories")
                 return 
             
             # Category is monitored
@@ -98,11 +103,9 @@ class Tools(commands.Cog):
                             for cat in categories:
                                 if (((cat.name).split())[0] == "Overflow"):
                                     overflow_cats.append(cat)
-                            print("overflow cats:")
-                            print(overflow_cats)
+        
                             # Create OVERFLOW 1 category after MODMAIL, move channel there
                             if (len(overflow_cats) == 0):
-                                print("no overflow cats, made first one")
                                 index = guild.categories.index(category) + 1
                                 new_category = await guild.create_category(name="Overflow 1", 
                                                                         overwrites=category.overwrites,
@@ -117,13 +120,11 @@ class Tools(commands.Cog):
                                     if (cat_id == int(((cat.name).split())[1])):
                                         # if category has space, insert
                                         if (len(cat.channels) < 4):
-                                            print("open overflow cat, moved channel")
                                             await channel.edit(category=cat)
                                             return
                                         else:
                                             cat_id += 1
                                     else:
-                                        print("found gap in overflow cats, made new one")
                                         # create new category, since there was a gap
                                         index = guild.categories.index(cat) - 1
                                         new_category = await guild.create_category(name=f"Overflow {cat_id}", 
@@ -133,7 +134,6 @@ class Tools(commands.Cog):
                                         await self.bot.data_manager.add_monitor(guild.id, new_category.id, "Overflow category")
                                         return
                                     
-                                print("found no gap in overflow cats, had to make new one at the end")
                                 # create new category, since there were no open categories
                                 index = guild.categories.index(overflow_cats[-1]) + 1
                                 new_category = await guild.create_category(name=f"Overflow {cat_id}", 
@@ -144,7 +144,6 @@ class Tools(commands.Cog):
 
                         else:
                             # modmail cat isnt full yet
-                            print("modmail cat wasnt full on channel add")
                             return
                     
                         

@@ -11,8 +11,6 @@ from utils.logger import *
 
 
 # TODO embed management class
-# TODO ticket status labeling
-# TODO automatic category creation
 # TODO roblox integration 
 
 

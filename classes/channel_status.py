@@ -22,6 +22,7 @@ class ChannelStatus:
         except Exception as e:
             logger.error(f"Error starting worker: {e}")
 
+
     # Shutdown worker gracefully
     async def shutdown(self):
         try:
@@ -36,6 +37,8 @@ class ChannelStatus:
             logger.error(f"Error shutting down worker: {e}")
 
 
+    # Worker, attempts to edit a channel's name in the queue after 5 minutes
+    # Cooldown is local to each channel, set by Discord's ratelimiting (oh well, what can one do)
     async def worker(self):
         while True:
             await asyncio.sleep(1)  # Prevents high CPU usage
@@ -68,17 +71,33 @@ class ChannelStatus:
 
     # Queues a channel name update, replacing any previous updates for that channel
     def queue_update(self, channel: discord.TextChannel, new_name: str) -> bool:
-        self.pending_updates[channel.id] = (channel, new_name)
-        logger.debug(f"Queued update for channel {channel.id}: {new_name}")
+        if new_name is None:
+            self.pending_updates.pop(channel.id, None)
+            return
+        try:
+            if self.pending_updates.get(channel.id):
+                if ((self.pending_updates[channel.id][1]).startswith(emojis.emoji_map.get("new", "")) and (new_name.startswith(emojis.emoji_map.get("alert", "")))):
+                    return False
+            else:
+                if ((channel.name).startswith(emojis.emoji_map.get("new", "")) and new_name.startswith(emojis.emoji_map.get("alert", ""))): 
+                    return False
+
+            self.pending_updates[channel.id] = (channel, new_name)
+            logger.debug(f"Queued update for channel {channel.id}: {new_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"queue_update sent an error: {e}")
 
 
     # Add emoji to the start of a channel's name
-    async def set_emoji(self, channel: discord.TextChannel, emoji_str: str):
+    async def set_emoji(self, channel: discord.TextChannel, emoji_str: str) -> bool:
+        if emoji_str is None:
+            self.queue_update(channel, None)
+            return True
+
         new_name = ""
         selected_emoji = emojis.emoji_map.get(emoji_str, "")
-
-        if ((channel.name).startswith(emojis.emoji_map.get("new", ""))) and (emoji_str == "alert"):
-            return False
 
         # Remove prefixed emoji if there is one
         if (channel.name)[0] in emoji.EMOJI_DATA:
@@ -86,8 +105,7 @@ class ChannelStatus:
         else:
             new_name = f"{selected_emoji}{channel.name}" if selected_emoji else f"{emoji_str}{channel.name}"
 
-        await self.queue_update(channel, new_name)
-        return True
+        return self.queue_update(channel, new_name)
 
 
     # Check if the input is a valid Unicode emoji

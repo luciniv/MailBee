@@ -234,6 +234,7 @@ class Analytics(commands.Cog):
     async def on_message(self, message):
         if (isinstance(message.channel, discord.DMChannel) or not message.guild):
             return
+        # Check to ensure Mantid doesnt store its own messages
         if (message.author.id == 1304609006379073628):
             return
 
@@ -247,7 +248,6 @@ class Analytics(commands.Cog):
             if (channelID == this_channelID or channelID == this_channel_catID)]
 
         if (len(search_monitor) == 0):
-            logger.debug(f"Message not within a monitored channel / category")
             return
 
         elif (len(search_monitor) == 1):
@@ -289,7 +289,7 @@ class Analytics(commands.Cog):
                                                                                format_time, 
                                                                                "Received")
                                 await self.bot.channel_status.set_emoji(channel, "alert")
-                                await message.add_reaction(emojis.mantis)
+                                # await message.add_reaction(emojis.mantis)
 
                             # Store sent message (embed from the Modmail bot to DM)
                             elif (embed.title == "Message Sent"):
@@ -305,7 +305,7 @@ class Analytics(commands.Cog):
                                                                                format_time, 
                                                                                "Sent")
                                 await self.bot.channel_status.set_emoji(channel, "wait")
-                                await message.add_reaction(emojis.mantis)
+                                # await message.add_reaction(emojis.mantis)
                            
                             else:
                                 pass
@@ -317,6 +317,8 @@ class Analytics(commands.Cog):
                             if (message.content.startswith("=close") or message.content.startswith("=aclose")):
                                 logger.debug(f"Modmail channel {this_channel.name} ({this_channelID}) closed")
                                 await self.log_closed_ticket(message, modmail_messageID)
+                                # None argument indicates deleting channel from status queue
+                                await self.bot.channel_status.set_emoji(channel, None)
 
                             else: 
                                 logger.debug(f"Chatting message in ticket {this_channel.name}")
