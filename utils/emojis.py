@@ -1,8 +1,5 @@
-from dotenv import load_dotenv
-import os
-
 # Holding place for emojis
-mantis = os.getenv("EMOJI")
+mantis = "<:mantis:1304887716370186330>"
 emoji_map = {
     "new": "🆕",
     "alert": "❗️",

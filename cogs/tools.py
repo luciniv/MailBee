@@ -14,6 +14,7 @@ class Tools(commands.Cog):
 
     # Manually update the status of a ticket channel
     @commands.hybrid_command(name="status", description="Change the emoji status of a ticket")
+    @checks.has_access()
     @app_commands.describe(status="Select an emoji from the defined list, or add a custom one" 
                                     " (Mantid only supports unicode emojis)")
     @app_commands.choices(status=[
