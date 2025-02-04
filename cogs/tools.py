@@ -97,7 +97,7 @@ class Tools(commands.Cog):
 
                     # Category contains modmail channel
                     if cat_channel.id in search_monitor:
-                        if (len(category.channels) >= 3):
+                        if (len(category.channels) >= 45):
                             
                             # Scan for pre-exisitng non-full overflow categories
                             categories = guild.categories
@@ -120,7 +120,7 @@ class Tools(commands.Cog):
                                 for cat in overflow_cats:
                                     if (cat_id == int(((cat.name).split())[1])):
                                         # if category has space, insert
-                                        if (len(cat.channels) < 4):
+                                        if (len(cat.channels) < 50):
                                             await channel.edit(category=cat)
                                             return
                                         else:
