@@ -114,11 +114,12 @@ class Analytics(commands.Cog):
                 '{status}');
                 """
             await self.bot.data_manager.execute_query(query, False)
+            await asyncio.sleep(0.5)
 
             # Check if associated ticket channel exists, if not assume ticket has already closed
             ticket_channel = None
             for channel in guild.channels:
-                if ((guild.get_member(int(openID))).name in channel.name):
+                if (((guild.get_member(int(openID))).name).replace("_", "").replace(".", "") in channel.name):
                     ticket_channel = channel
 
             if ticket_channel is not None:
