@@ -13,8 +13,8 @@ class Analytics(commands.Cog):
 
     async def cog_load(self):
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        # await self.catch_modmail_backlog()
-        # await self.process_queue()
+        await self.catch_modmail_backlog()
+        await self.process_queue()
 
 
     # Populate queue with unprocessed messages
@@ -313,13 +313,13 @@ class Analytics(commands.Cog):
                         # Chatting message, message to be sent by Modmail, OR =close 
                         if (message.content.startswith("=")):
                             # Chatting message or =close
-                            if (message.content.startswith("=close") or message.content.startswith("=aclose")):
+                            if (message.content.startswith("=c") or message.content.startswith("=ac")):
                                 logger.debug(f"Modmail channel {this_channel.name} ({this_channelID}) closed")
                                 await self.log_closed_ticket(message, modmail_messageID)
                                 # None argument indicates deleting channel from status queue
                                 await self.bot.channel_status.set_emoji(channel, None)
 
-                            elif (message.content.startswith("=areply") or message.content.startswith("=reply")):
+                            elif (message.content.startswith("=ar") or message.content.startswith("=r")):
                                 pass
 
                             else: 
