@@ -319,6 +319,9 @@ class Analytics(commands.Cog):
                                 # None argument indicates deleting channel from status queue
                                 await self.bot.channel_status.set_emoji(channel, None)
 
+                            elif (message.content.startswith("=areply") or message.content.startswith("=reply")):
+                                pass
+
                             else: 
                                 logger.debug(f"Chatting message in ticket {this_channel.name}")
                                 # Store chatting message, label it as such
