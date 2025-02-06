@@ -33,7 +33,7 @@ class Util(commands.Cog):
         message = "**Tickets**\n"
         if len(tickets) != 0:
             for key in tickets:
-                message += f"<#{key}>\n"
+                message += f"<#{key}> {key}\n"
             await ctx.send(f"{message}")
         else:
             await ctx.send("No tickets found!")
@@ -51,6 +51,14 @@ class Util(commands.Cog):
             await ctx.send(output)
         else:
             await ctx.send("No ticket messages found!")
+
+    
+    # Deletes one ticket
+    @commands.command()
+    @checks.is_owner()
+    async def del_ticket(self, ctx, channel: int):
+        await self.bot.data_manager.remove_ticket(channel)
+        await ctx.send(f"Deleted ticket channel {channel}")
 
 
     # Empties tickets cache

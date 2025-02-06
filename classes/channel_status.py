@@ -14,7 +14,7 @@ class ChannelStatus:
         self.worker_task = None
 
 
-    # Start worker
+    # Start worker 
     async def start_worker(self):
         try:
             self.worker_task = asyncio.create_task(self.worker())
@@ -26,20 +26,18 @@ class ChannelStatus:
     # Shutdown worker gracefully
     async def shutdown(self):
         try:
-            await self.worker_task.cancel()
-            await self.worker_task
-
-        except asyncio.CancelledError:
+            self.worker_task.cancel()
             logger.success("Worker shut down")
-            pass
 
         except Exception as e:
-            logger.error(f"Error shutting down worker: {e}")
+            logger.exception(f"Error shutting down worker: {e}")
 
 
     # Worker, attempts to edit a channel's name in the queue after 5 minutes
     # Cooldown is local to each channel, set by Discord's ratelimiting (oh well, what can one do)
     async def worker(self):
+        # Wait for 5 minutes before starting loop
+        await asyncio.sleep(300)
         while True:
             await asyncio.sleep(1)  # Prevents high CPU usage
 

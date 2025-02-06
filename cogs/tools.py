@@ -16,12 +16,12 @@ class Tools(commands.Cog):
     @commands.hybrid_command(name="status", description="Change the emoji status of a ticket")
     @checks.has_access()
     @app_commands.describe(status="Select an emoji from the defined list, or add a custom one" 
-                                    " (Mantid only supports unicode emojis)")
+                                    " (unicode only)")
     @app_commands.choices(status=[
         app_commands.Choice(name=f"🆕 - new ticket", value="new"),
         app_commands.Choice(name=f"❗️ - pending moderator response", value="alert"),
         app_commands.Choice(name=f"⏳ - waiting for user response", value="wait")])
-    @app_commands.describe(emoji="Enter a default Discord emoji (only applied if you did not select an emoji from the status options)")
+    @app_commands.describe(emoji="Enter a default Discord emoji (only works without status choice)")
     async def show(self, ctx, status: discord.app_commands.Choice[str] = None, emoji: str = None):
         try:    
             status_flag = False

@@ -314,13 +314,14 @@ class Analytics(commands.Cog):
                         # Chatting message, message to be sent by Modmail, OR =close 
                         if (message.content.startswith("=")):
                             # Chatting message or =close
-                            if (message.content.startswith("=c") or message.content.startswith("=ac")):
+                            if (message.content.startswith(("=c", "=ac"))):
                                 logger.debug(f"Modmail channel {this_channel.name} ({this_channelID}) closed")
                                 await self.log_closed_ticket(message, modmail_messageID)
                                 # None argument indicates deleting channel from status queue
                                 await self.bot.channel_status.set_emoji(channel, None)
 
-                            elif (message.content.startswith("=ar") or message.content.startswith("=r")):
+                            elif (message.content.startswith(("=r ", "=reply ", "=ar ", "=areply ", "=air", "=aireply", 
+                                                             "=s ", "=snippet ", "=as ", "=asnippet "))):
                                 pass
 
                             else: 

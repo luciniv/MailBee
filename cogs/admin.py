@@ -9,9 +9,9 @@ class Admin(commands.Cog):
 
 
     # Restarts the bot
-    @commands.command(name='restart')
+    @commands.command(name="old_restart")
     @commands.is_owner()
-    async def shutdown(self, ctx):
+    async def restart(self, ctx):
         await ctx.send("Restarting the bot...")
         await self.bot.data_manager.close_db()
         await self.bot.data_manager.close_redis()

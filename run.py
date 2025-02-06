@@ -76,9 +76,10 @@ class Mantid(commands.Bot):
             await super().close()
 
 
-    # Shutdown database, redis, and workers before bot shutdown
+    # Shuts down database, redis, and workers before bot shutdown
     async def on_close(self):
         logger.log("SYSTEM", "------- SHUTTING DOWN --------------------")
+        
         heartbeat.cancel()
         await self.data_manager.close_db()
         await self.data_manager.close_redis()
@@ -95,6 +96,20 @@ async def heartbeat():
     if not status:
         if bot.data_manager.db_pool is None:
             await bot.data_manager.connect_to_db()
+
+
+# Shuts down the bot (and all workers )
+@bot.command(name="shutdown", aliases=["sh"])
+@checks.is_owner()
+async def shutdown(ctx):
+    await ctx.send("Shutting down...")
+    logger.log("SYSTEM", "------- SHUTTING DOWN --------------------")
+
+    heartbeat.cancel()
+    await bot.data_manager.close_db()
+    await bot.data_manager.close_redis()
+    await bot.channel_status.shutdown()
+    await bot.close()
 
 
 # Hot-reload cogs command
