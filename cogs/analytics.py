@@ -13,8 +13,8 @@ class Analytics(commands.Cog):
 
     async def cog_load(self):
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        # await self.catch_modmail_backlog()
-        # await self.process_queue()
+        await self.catch_modmail_backlog()
+        await self.process_queue()
 
 
     # Populate queue with unprocessed messages
