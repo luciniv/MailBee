@@ -68,18 +68,29 @@ class ChannelStatus:
 
 
     # Queues a channel name update, replacing any previous updates for that channel
-    def queue_update(self, channel: discord.TextChannel, new_name: str) -> bool:
-        if new_name is None:
-            self.pending_updates.pop(channel.id, None)
-            return
+    def queue_update(self, channel: discord.TextChannel, new_name: str, manual: bool) -> bool:
         try:
+            if new_name is None:
+                self.pending_updates.pop(channel.id, None)
+                return
+            
+            # Automatic updates, do not allow "new" overwrites by "alert"
+            if not manual:
+                if self.pending_updates.get(channel.id):
+                    if ((self.pending_updates[channel.id][1]).startswith(emojis.emoji_map.get("new", "")) and (new_name.startswith(emojis.emoji_map.get("alert", "")))):
+                        return False
+                else:
+                    if ((channel.name).startswith(emojis.emoji_map.get("new", "")) and new_name.startswith(emojis.emoji_map.get("alert", ""))): 
+                        return False
+                    
+            # Manual updates, allow "new" overwrites
             if self.pending_updates.get(channel.id):
-                if ((self.pending_updates[channel.id][1]).startswith(emojis.emoji_map.get("new", "")) and (new_name.startswith(emojis.emoji_map.get("alert", "")))):
+                if ((self.pending_updates[channel.id][1]) == new_name):
                     return False
             else:
-                if ((channel.name).startswith(emojis.emoji_map.get("new", "")) and new_name.startswith(emojis.emoji_map.get("alert", ""))): 
+                if (channel.name == new_name):
                     return False
-
+                
             self.pending_updates[channel.id] = (channel, new_name)
             logger.debug(f"Queued update for channel {channel.id}: {new_name}")
             return True
@@ -89,7 +100,7 @@ class ChannelStatus:
 
 
     # Add emoji to the start of a channel's name
-    async def set_emoji(self, channel: discord.TextChannel, emoji_str: str) -> bool:
+    async def set_emoji(self, channel: discord.TextChannel, emoji_str: str, manual: bool = False) -> bool:
         if emoji_str is None:
             self.queue_update(channel, None)
             return True
@@ -103,7 +114,7 @@ class ChannelStatus:
         else:
             new_name = f"{selected_emoji}{channel.name}" if selected_emoji else f"{emoji_str}{channel.name}"
 
-        return self.queue_update(channel, new_name)
+        return self.queue_update(channel, new_name, manual)
 
 
     # Check if the input is a valid Unicode emoji

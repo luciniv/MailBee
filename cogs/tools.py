@@ -2,7 +2,9 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from datetime import datetime, timezone
+from typing import List
 from classes.error_handler import *
+from classes.embeds import *
 from utils import emojis, checks
 from utils.logger import *
 
@@ -12,9 +14,170 @@ class Tools(commands.Cog):
         self.bot = bot
 
 
+    # Send a snip from the database
+    @app_commands.command(name="snip", description="Send a snip")
+    @checks.is_user_app()
+    @app_commands.describe(snip="Selected snip")
+    async def snip(self, interaction: discord.Interaction, snip: str):
+        try:
+            snip_content = ""
+            guild = interaction.guild
+            snips = [
+                f"{abbrev}: {summary}" for guildID, abbrev, summary 
+                in self.bot.data_manager.snip_list
+                if (guildID == guild.id)]
+            
+            snipEmbed = discord.Embed(title="", description="", color=0x3ad407)
+
+            if snip not in snips:
+                snipEmbed.description=f"❌ Snip **`{snip}`** not found"
+                snipEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=snipEmbed)
+                return
+            
+            abbrev = snip[:(snip.index(":"))]
+            
+            content = await self.bot.data_manager.get_snip(guild.id, abbrev)
+            if (len(content) != 0):
+                snip_content = content[0][0]
+            await interaction.response.send_message(snip_content)
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/snip sent an error: {e}")
+
+
+    @snip.autocomplete('snip')
+    async def snip_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        if not guild:
+            return [] 
+
+        # Get snips for the specific guild
+        snips = [
+            f"{abbrev}: {summary}" for guildID, abbrev, summary 
+            in self.bot.data_manager.snip_list 
+            if (guildID == guild.id)]
+
+        matches = [
+            app_commands.Choice(name=snip, value=snip)
+            for snip in snips
+            if current.lower() in snip.lower()]
+        
+        return matches[:25]
+
+
+    # Add a snip to the database
+    @app_commands.command(name="snip_add", description="Use the ID of a message to create a snip with its contents")
+    @checks.is_user_app()
+    @app_commands.describe(abbreviation="Short-form name for the snip (24 char max)")
+    @app_commands.describe(summary="Summary of the snip's purpose (100 char max)")
+    @app_commands.describe(message_id="ID of the message to use as the snip (1800 char max)")
+    async def snip_add(self, interaction: discord.Interaction, abbreviation: str, summary: str, message_id: str):
+        try:
+            guild = interaction.guild
+            snips = [
+                abbrev for guildID, abbrev, summary 
+                in self.bot.data_manager.snip_list
+                if ((guildID == guild.id) and (abbrev == abbreviation.lower()))]
+
+            snipEmbed = discord.Embed(title="",
+                                    description=f"✅ Added snip **`{abbreviation.lower()}`**",
+                                    color=0x3ad407)
+
+            if (len(snips) != 0):
+                snipEmbed.description=f"❌ **`{abbreviation.lower()}`** already exists, remove or edit this snip instead"
+                snipEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                return
+            if (len(abbreviation) > 24):
+                snipEmbed.description="❌ Your abbreviation is too many characters long (max is 24)"
+                snipEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                return
+            if (len(summary) > 100):
+                snipEmbed.description="❌ Your summary is too many characters long (max is 100)"
+                snipEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                return
+            
+            try:
+                message = await interaction.channel.fetch_message(int(message_id))
+
+            except discord.NotFound:
+                raise BotError(f"/snip_add sent an error: Message not found")
+            
+            except discord.HTTPException:
+                raise BotError(f"/snip_add sent an error: Invalid message ID")
+            
+            if (len(message.content) > 1800):
+                snipEmbed.description="❌ Your snip message is too many characters long (max is 1800)"
+                snipEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                return
+
+            await self.bot.data_manager.add_snip(guild.id, interaction.user.id, abbreviation.lower(), summary, message.content)
+            await interaction.response.send_message(embed=snipEmbed)
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/snip_add sent an error: {e}")
+
+
+    # Delete a snip from the database
+    @app_commands.command(name="snip_remove", description="Remove a snip")
+    @checks.is_user_app()
+    @app_commands.describe(snip="Selected snip to remove")
+    async def snip_remove(self, interaction: discord.Interaction, snip: str):
+        try:
+            guild = interaction.guild
+            snips = [
+                f"{abbrev}: {summary}" for guildID, abbrev, summary 
+                in self.bot.data_manager.snip_list
+                if (guildID == guild.id)]
+            
+            snipEmbed = discord.Embed(title="", description="", color=0x3ad407)
+            
+            if snip not in snips:
+                snipEmbed.description=f"❌ Snip **`{snip}`** not found"
+                snipEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=snipEmbed)
+                return
+            
+            abbrev = snip[:(snip.index(":"))]
+            
+            snipEmbed.description=f"✅ Removed snip **`{abbrev}`**"
+
+            await self.bot.data_manager.remove_snip(guild.id, abbrev)
+            await interaction.response.send_message(embed=snipEmbed)
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/snip_remove sent an error: {e}")
+
+
+    @snip_remove.autocomplete('snip')
+    async def snip_remove_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        if not guild:
+            return [] 
+
+        # Get snips for the specific guild
+        snips = [
+            f"{abbrev}: {summary}" for guildID, abbrev, summary 
+            in self.bot.data_manager.snip_list 
+            if (guildID == guild.id)]
+
+        matches = [
+            app_commands.Choice(name=snip, value=snip)
+            for snip in snips
+            if current.lower() in snip.lower()]
+        
+        return matches[:25]
+
+
     # Manually update the status of a ticket channel
     @commands.hybrid_command(name="status", description="Change the emoji status of a ticket")
-    @checks.has_access()
+    @checks.is_user()
     @app_commands.describe(status="Select an emoji from the defined list, or add a custom one" 
                                     " (unicode only)")
     @app_commands.choices(status=[
@@ -26,16 +189,13 @@ class Tools(commands.Cog):
         try:    
             status_flag = False
             channel = ctx.channel
-            bot_user = self.bot.user
             emoji_name = None
             emoji_str = None
 
             if status is None and emoji is None:
                 errorEmbed = discord.Embed(title=f"", 
-                                        description="❌ You must select a status or provide an emoji", 
-                                        color=0xFF0000)
-                errorEmbed.timestamp = datetime.now(timezone.utc)
-                errorEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
+                                    description="❌ You must select a status or provide an emoji", 
+                                    color=0xFF0000)
 
                 await ctx.send(embed=errorEmbed, ephemeral=True)
                 return
@@ -50,20 +210,17 @@ class Tools(commands.Cog):
                 if (self.bot.channel_status.check_unicode(emoji)):
                     emoji_str = emoji
 
-            result = await self.bot.channel_status.set_emoji(channel, emoji_str)
+            result = await self.bot.channel_status.set_emoji(channel, emoji_str, True)
 
             # Fix for outputting readable explanation of what the emoji is for
             if status_flag:
                 emoji_str = emoji_name
 
-            statusEmbed = discord.Embed(title="", 
-                                    description=f"Channel status set to {emoji_str}\n\n*Please wait up to 5 minutes for edits to appear*", 
-                                    color=0x3ad407)
-            statusEmbed.timestamp = datetime.now(timezone.utc)
-            statusEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
+            statusEmbed = Embeds(self.bot, title="", 
+                                description=f"Channel status set to {emoji_str}\n*Please wait up to 5 minutes for edits to appear*")
 
             if not result:
-                statusEmbed.description=f"Failed to set channel status to {emoji_str}, did you try to set a 🆕 status to ❗️?"
+                statusEmbed.description=f"Failed to set channel status to {emoji_str}, current or pending status is already set as this"
                 statusEmbed.color=0xFF0000
 
             await ctx.reply(embed=statusEmbed)

@@ -6,12 +6,9 @@ from datetime import datetime, timezone, date
 from typing import List
 from classes.error_handler import *
 from classes.paginator import *
-from utils import emojis, checks, queries, csv_write
+from classes.embeds import *
+from utils import checks, queries, csv_write
 from utils.logger import *
-
-
-# TODO embed management class
-# TODO roblox integration 
 
 
 # Subsects a number into a list of numbers that cap at max_size (for pagination)
@@ -60,7 +57,7 @@ class Stats(commands.Cog):
 
 
     @commands.hybrid_command(name="hourly_data", description="View certain data types per hour from a selected day")
-    @checks.has_access()
+    @checks.is_admin()
     @app_commands.describe(type="Select a data type to display hourly")
     @app_commands.choices(type=[
         app_commands.Choice(name="Tickets opened & closed", value="open")])
@@ -105,12 +102,9 @@ class Stats(commands.Cog):
             if parsed_date:
                 date_list = [year, month, day]
 
-            statsEmbed = discord.Embed(title=f"{time_value} Hourly Data: {day}-{month}-{year} {emojis.mantis}", 
-                                    description=f"{type_name}{servers}\r{'⎯' * 30}", 
-                                    color=0x3ad407)
+            statsEmbed = Embeds(self.bot, title=f"{time_value} Hourly Data: {day}-{month}-{year}", 
+                                description=f"{type_name}{servers}\r{'⎯' * 30}")
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-            statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
             query = queries.hourly_queries(type_value, guildID, date_list, time_value)
             result = await self.bot.data_manager.execute_query(query)
@@ -157,7 +151,7 @@ class Stats(commands.Cog):
 
     # Creates leaderboards for the selected data type
     @commands.hybrid_command(name="leaderboard", description="View certain data types as a leaderboard")
-    @checks.has_access()
+    @checks.is_admin()
     @app_commands.describe(type="Select a data type to create a leaderboard for")
     @app_commands.choices(type=[
         app_commands.Choice(name="Current tickets open (server ranking)", value="open"),
@@ -190,7 +184,7 @@ class Stats(commands.Cog):
             guild = ctx.guild
             guildID = guild.id
 
-            statsEmbed = discord.Embed(title=f"Leaderboard {time_name} {emojis.mantis}", 
+            statsEmbed = discord.Embed(title=f"Leaderboard {time_name}", 
                                     description=f"{type_name}\r{'⎯' * 18}", 
                                     color=0x3ad407)
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
@@ -210,7 +204,7 @@ class Stats(commands.Cog):
                     for page_count in page_counts: 
                         limit += page_count 
                         if count != 0:
-                            statsEmbed = discord.Embed(title=f"Leaderboard {time_name} {emojis.mantis}", 
+                            statsEmbed = discord.Embed(title=f"Leaderboard {time_name}", 
                                     description=type_name, 
                                     color=0x3ad407)
                             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
@@ -248,7 +242,7 @@ class Stats(commands.Cog):
     
     @commands.hybrid_command(name="server_stats", description="Display this server's statistics,"
                             " includes ticket counts and response averages")
-    @checks.has_access()
+    @checks.is_admin()
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
@@ -267,7 +261,6 @@ class Stats(commands.Cog):
             time_name = timeframe.name
             guild = ctx.guild
             guildID = guild.id
-            bot_user = self.bot.user
 
             intervals = self.intervals
             rows = self.rows
@@ -279,12 +272,9 @@ class Stats(commands.Cog):
                 intervals = [f"{time_value}"]
                 rows = [f"{time_name}"]
 
-            statsEmbed = discord.Embed(title=f"Server Statistics {emojis.mantis}", 
-                                    description=f"(selected server's data / all server data)", 
-                                    color=0x3ad407)
+            statsEmbed = Embeds(self.bot, title=f"Server Statistics", 
+                                description=f"(selected server's data / all server data)")
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-            statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
             query = queries.server_stats(guildID, intervals)
             result = await self.bot.data_manager.execute_query(query)
@@ -309,7 +299,7 @@ class Stats(commands.Cog):
 
     @commands.hybrid_command(name="mod_activity", description="Display a moderator's ticketing activity" 
                              " over the past X amount of time")
-    @checks.has_access()
+    @checks.is_admin()
     @app_commands.describe(member="Selected moderator")
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
@@ -329,7 +319,6 @@ class Stats(commands.Cog):
             time_name = timeframe.name
             guildID = ctx.guild.id
             closeByID = member.id
-            bot_user = self.bot.user
 
             intervals = self.intervals
             rows = self.rows
@@ -341,12 +330,9 @@ class Stats(commands.Cog):
                 intervals = [f"{time_value}"]
                 rows = [f"{time_name}"]
 
-            statsEmbed = discord.Embed(title=f"Moderator Activity {emojis.mantis}", 
-                                    description=f"(selected mod's data / all mods in this server's data)", 
-                                    color=0x3ad407)
+            statsEmbed = Embeds(self.bot, title=f"Moderator Activity", 
+                                description=f"(selected mod's data / all mods in this server's data)")
             statsEmbed.set_author(name=member.name, icon_url=member.avatar.url)
-            statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
             
             query = queries.mod_activity(guildID, closeByID, intervals)
             result = await self.bot.data_manager.execute_query(query)
@@ -385,7 +371,7 @@ class Stats(commands.Cog):
 
     @commands.hybrid_command(name="export_server_stats", description="Output a CSV file of every server's statistics,"
                             " includes ticket counts and response averages")
-    @checks.has_access()
+    @checks.is_admin()
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
@@ -403,7 +389,6 @@ class Stats(commands.Cog):
             guildIDs = []
             time_value = timeframe.value
             time_name = timeframe.name
-            bot_user = self.bot.user
             file = None
 
             intervals = self.intervals
@@ -420,12 +405,9 @@ class Stats(commands.Cog):
                 if (guild.id != 12345):
                     guildIDs.append(guild.id)
 
-            statsEmbed = discord.Embed(title=f"Server Statistics Export {emojis.mantis}", 
-                                    description=f"Download the attached CSV file to view data", 
-                                    color=0x3ad407)
+            statsEmbed = Embeds(self.bot, title=f"Server Statistics Export", 
+                                description=f"Download the attached CSV file to view data")
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
-            statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
             
             result_list = []
             query_list = queries.server_stats_CSV(guildIDs, intervals)
@@ -462,7 +444,7 @@ class Stats(commands.Cog):
 
     @commands.hybrid_command(name="export_mod_activity", description="Output a CSV file of this server's moderators'"
                              " ticketing activity over the past X amount of time")
-    @checks.has_access()
+    @checks.is_admin()
     @app_commands.describe(roles="Input the moderator role(s) for this server (their names must contain 'mod')")
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
@@ -504,12 +486,9 @@ class Stats(commands.Cog):
                     if (member.id not in modIDs):
                         modIDs.append(member.id)
 
-            statsEmbed = discord.Embed(title=f"Moderator Activity Export {emojis.mantis}", 
-                                    description=f"Download the attached CSV file to view data", 
-                                    color=0x3ad407)
+            statsEmbed = Embeds(self.bot, title=f"Moderator Activity Export", 
+                                description=f"Download the attached CSV file to view data")
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
-            statsEmbed.timestamp = datetime.now(timezone.utc)
-            statsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
             
             result_list = []
             query_list = queries.mod_activity_CSV(guildID, modIDs, intervals)

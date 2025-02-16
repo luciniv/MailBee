@@ -20,6 +20,7 @@ class DataManager:
         self.db_pool = None
         self.monitored_channels = []      # Cache for monitored channels
         self.access_roles = []            # Cache for access roles
+        self.snip_list = []               # Cache for snip guildIDs, abbreviations, and summaries
         self.redis_url = redis_url
         self.redis = None
         self.ticket_count = 0
@@ -145,16 +146,21 @@ class DataManager:
 
     # Variably controlled local cache updater
     # Handles roles given permission to use Mantid and the channels Mantid monitors
-    async def update_cache(self, opt: int = 2):
-        if opt in (0, 2):
+    async def update_cache(self, opt: int = 3):
+        if opt in (0, 3):
             query = "SELECT * FROM permissions;"
             self.access_roles = await self.execute_query(query)
             logger.debug("'access_roles' cache updated from database")
 
-        if opt in (1, 2):
+        if opt in (1, 3):
             query = "SELECT * FROM channel_monitor;"
             self.monitored_channels = await self.execute_query(query)
             logger.debug("'monitored_channels' cache updated from database")
+
+        if opt in (2, 3):
+            query = "SELECT guildID, abbrev, summary FROM snips;"
+            self.snip_list = await self.execute_query(query)
+            logger.debug("'snip_list' cache updated from database")
 
 
     # Adds monitored channels / categories to DB
@@ -169,6 +175,7 @@ class DataManager:
         await self.update_cache(1)
 
 
+    # Removes monitored channels / categories from DB
     async def remove_monitor(self, channelID: int):
         query = f"""
             DELETE FROM channel_monitor WHERE 
@@ -176,6 +183,41 @@ class DataManager:
             """
         await self.execute_query(query, False)
         await self.update_cache(1)
+
+
+    # Adds snip to DB
+    async def add_snip(self, guildID: int, authorID: int, abbrev: str, summary: str, content: str):
+        query = f"""
+            INSERT INTO snips VALUES 
+            ({guildID}, 
+            {authorID}, 
+            '{abbrev}',
+            '{summary}',
+            '{content}');
+            """
+        await self.execute_query(query, False)
+        await self.update_cache(2)
+
+
+    # Removes snip from DB
+    async def remove_snip(self, guildID: int, abbrev: str):
+        query = f"""
+            DELETE FROM snips WHERE 
+            snips.guildID = {guildID} AND snips.abbrev = '{abbrev}';
+            """
+        await self.execute_query(query, False)
+        await self.update_cache(2)
+
+
+    # Removes snip from DB
+    async def get_snip(self, guildID: int, abbrev: str):
+        query = f"""
+            SELECT snips.content FROM snips WHERE
+            snips.guildID = {guildID} AND snips.abbrev = '{abbrev}';
+            """
+        
+        content = await self.execute_query(query)
+        return content
 
 
     # DB health check, not currently active

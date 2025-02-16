@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands, tasks
-from dotenv import load_dotenv
 import os
 from classes.data_manager import DataManager
 from classes.channel_status import ChannelStatus

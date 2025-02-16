@@ -1,9 +1,9 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from datetime import datetime, timezone
 from classes.error_handler import *
 from classes.paginator import *
+from classes.embeds import *
 from utils import emojis, checks
 from utils.logger import *
 
@@ -15,12 +15,12 @@ class Main(commands.Cog):
 
     # Send embed of help guide + server commands
     @commands.hybrid_command(name="help", description="Display Mantid's bio, setup guide, and all commands")
-    @checks.has_access()
+    @checks.is_user()
     async def help(self, ctx):
         try:
             pages = []
             bot_user = self.bot.user
-            helpEmbed = discord.Embed(title=f"Mantid Help Menu {emojis.mantis}", 
+            helpEmbed = discord.Embed(title=f"Mantid Help Menu", 
                                             description=f"Mantid is a complimentary analytics bot to Modmail with the long-term"
                                             " goal of replicating and enhancing Modmail's functionality. Use the buttons below"
                                             " to navigate through Mantid's help pages.\n\nTo setup Mantid, run `/setup`"
@@ -50,8 +50,8 @@ class Main(commands.Cog):
                 page.set_thumbnail(url=bot_user.avatar.url)
 
                 for command in cog_commands:
-                    page.add_field(name=f"/{command.name}", 
-                                    value=command.description, 
+                    page.add_field(name=f"**`/{command.name}`**", 
+                                    value=f"{emojis.mantis} {command.description}", 
                                     inline=False)
                 pages.append(page)
 
@@ -68,31 +68,27 @@ class Main(commands.Cog):
 
     # Send setup steps and attempt to automatically configure channel monitor
     @commands.hybrid_command(name="setup", description="Setup the bot (with steps)")
-    @checks.has_access()
+    @checks.is_admin()
     async def setup(self, ctx):
         try:
             guild = ctx.guild
-            bot_user = self.bot.user
             
-            setupEmbed = discord.Embed(title=f"Bot Setup {emojis.mantis} ", 
-                                    description="Run this command to setup or refresh Mantid's monitored channels\n\n"
-                                                "To properly record data on Modmail, Mantid requires channel monitors"
-                                                " for the **modmail-log** channel and any categories used to store Modmail" 
-                                                " tickets. Channel monitors are set automatically upon running the"
-                                                " command `/setup` or when Mantid generates a category to handle ticket"
-                                                " overflow.\n\n- Use the `/edit_monitor` command and select **add** to"
-                                                " assign Mantid additional ticket categories to monitor after setup\n"
-                                                "- View current monitored channels and categories with `/show`, then select"
-                                                " **monitored channels**\n- If Mantid incorrectly adds or is missing a"
-                                                " channel in the monitor, use `/edit_monitor` with **add** or **remove**"
-                                                f" as needed\n\n**Confirm correct setup by identifying a {emojis.mantis}"
-                                                " reaction underneath all new entries in your server's modmail-log."
-                                                " If this reaction fails to appear, run `/setup` again or contact"
-                                                " <@429711831695753237>.\n\n**", 
-                                    color=0x3ad407)
+            setupEmbed = Embeds(self.bot, title=f"Bot Setup", 
+                                description="Run this command to setup or refresh Mantid's monitored channels\n\n"
+                                            "To properly record data on Modmail, Mantid requires channel monitors"
+                                            " for the **modmail-log** channel and any categories used to store Modmail" 
+                                            " tickets. Channel monitors are set automatically upon running the"
+                                            " command `/setup` or when Mantid generates a category to handle ticket"
+                                            " overflow.\n\n- Use the `/edit_monitor` command and select **add** to"
+                                            " assign Mantid additional ticket categories to monitor after setup\n"
+                                            "- View current monitored channels and categories with `/show`, then select"
+                                            " **monitored channels**\n- If Mantid incorrectly adds or is missing a"
+                                            " channel in the monitor, use `/edit_monitor` with **add** or **remove**"
+                                            f" as needed\n\n**Confirm correct setup by identifying a {emojis.mantis}"
+                                            " reaction underneath all new entries in your server's modmail-log."
+                                            " If this reaction fails to appear, run `/setup` again or contact"
+                                            " <@429711831695753237>.\n\n**")
             setupEmbed.add_field(name="Setup Output:", value=f"", inline=False)
-            setupEmbed.timestamp = datetime.now(timezone.utc)
-            setupEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
 
             for channel in guild.channels:
                 if (isinstance(channel, discord.DMChannel)):
@@ -108,14 +104,7 @@ class Main(commands.Cog):
                                                 value=f"{emojis.mantis} <#{channel.id}> is already set as this server's **Modmail log**", 
                                                 inline=False)
                         else:
-                            query = f"""
-                                INSERT INTO channel_monitor VALUES 
-                                ({guild.id}, 
-                                {channel.id}, 
-                                'Modmail log');
-                                """
-                            await self.bot.data_manager.execute_query(query, False)
-                            await self.bot.data_manager.update_cache(1)
+                            await self.bot.data_manager.add_monitor(guild.id, channel.id, "Modmail log")
                             setupEmbed.add_field(name="", 
                                                 value=f"{emojis.mantis} Set <#{channel.id}> as this server's **Modmail log**", 
                                                 inline=False)
@@ -133,14 +122,7 @@ class Main(commands.Cog):
                                                     value=f"{emojis.mantis} **<#{this_category.id}>** is already set as a **Tickets Category**", 
                                                     inline=False)
                             else:
-                                query = f"""
-                                    INSERT INTO channel_monitor VALUES 
-                                    ({guild.id}, 
-                                    {this_category.id}, 
-                                    'Tickets category');
-                                    """
-                                await self.bot.data_manager.execute_query(query, False)
-                                await self.bot.data_manager.update_cache(1)
+                                await self.bot.data_manager.add_monitor(guild.id, this_category.id, "Tickets category")
                                 setupEmbed.add_field(name="", 
                                                     value=f"{emojis.mantis} Set **<#{this_category.id}>** as a **Tickets Category**", 
                                                     inline=False)
@@ -155,14 +137,7 @@ class Main(commands.Cog):
                                                 value=f"{emojis.mantis} **<#{channel.id}>** is already set as a **Tickets Category**", 
                                                 inline=False)
                         else:
-                            query = f"""
-                                INSERT INTO channel_monitor VALUES 
-                                ({guild.id}, 
-                                {channel.id}, 
-                                'Tickets category');
-                                """
-                            await self.bot.data_manager.execute_query(query, False)
-                            await self.bot.data_manager.update_cache(1)
+                            await self.bot.data_manager.add_monitor(guild.id, channel.id, "Tickets category")
                             setupEmbed.add_field(name="", 
                                                 value=f"{emojis.mantis} Set **<#{channel.id}>** as a **Tickets Category**", 
                                                 inline=False)
@@ -174,7 +149,7 @@ class Main(commands.Cog):
 
     # Show roles with the 'Bot Admin' permission or all monitored channels / categories
     @commands.hybrid_command(name="show", description="List this server's role permissions or monitored channels and categories")
-    @checks.has_access()
+    @checks.is_admin()
     @app_commands.describe(selection="Select to show either server role permissions or monitored channels")
     @app_commands.choices(selection=[
         app_commands.Choice(name="role permissions", value="role permissions"),
@@ -184,17 +159,13 @@ class Main(commands.Cog):
             choice = selection.value
             this_guildID = ctx.guild.id
             guildName = (self.bot.get_guild(this_guildID)).name
-            bot_user = self.bot.user
 
             if (choice == "role permissions"):
                 search_access = [
                     (roleID, permLevel) for guildID, roleID, permLevel 
                     in self.bot.data_manager.access_roles if guildID == this_guildID]
-                permsEmbed = discord.Embed(title=f"Server Role Permissions {emojis.mantis} ", 
-                                        description=f"Roles with access to Mantid in: **{guildName}** ({this_guildID})", 
-                                        color=0x3ad407)
-                permsEmbed.timestamp = datetime.now(timezone.utc)
-                permsEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
+                permsEmbed = Embeds(self.bot, title=f"Server Role Permissions", 
+                                    description=f"Roles with access to Mantid in: **{guildName}** ({this_guildID})")
     
                 if (len(search_access) == 0):
                     permsEmbed.description=""
@@ -214,11 +185,8 @@ class Main(commands.Cog):
                 search_monitor = [
                     (channelID, monitorType) for guildID, channelID, monitorType 
                     in self.bot.data_manager.monitored_channels if guildID == this_guildID]
-                monitorEmbed = discord.Embed(title=f"Server Monitored Channels {emojis.mantis} ", 
-                                            description=f"Channels monitored in: **{guildName}** ({this_guildID})", 
-                                            color=0x3ad407)
-                monitorEmbed.timestamp = datetime.now(timezone.utc)
-                monitorEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
+                monitorEmbed = Embeds(self.bot, title=f"Server Monitored Channels", 
+                                        description=f"Channels monitored in: **{guildName}** ({this_guildID})")
                 
                 if (len(search_monitor) == 0):
                     monitorEmbed.description=""
@@ -239,26 +207,29 @@ class Main(commands.Cog):
 
 
     # Edit roles with the 'Bot Admin' permission
-    @commands.hybrid_command(name="edit_permissions", description="Add or remove roles that can use Mantid in this"
-                                                                  " server (toggles the Bot Admin permission)")
-    @checks.has_access()
+    @commands.hybrid_command(name="edit_permissions", description="Add or remove roles that can use Mantid in this server")
+    @checks.is_admin()
     @app_commands.describe(action="Desired edit action. Use 'add' to grant permissions and 'remove' to delete them")
     @app_commands.choices(action=[
         app_commands.Choice(name="add", value="add"),
         app_commands.Choice(name="remove", value="remove")])
     @app_commands.describe(role="Selected role")
-    async def edit_permissions(self, ctx, action: discord.app_commands.Choice[str], role: discord.Role):
+    @app_commands.describe(level="Permission level. Bot users can only use moderation-specific commands")
+    @app_commands.choices(level=[
+        app_commands.Choice(name="Bot User", value="user"),
+        app_commands.Choice(name="Bot Admin", value="admin")])
+    async def edit_permissions(self, ctx, 
+                               action: discord.app_commands.Choice[str], 
+                               role: discord.Role, 
+                               level: discord.app_commands.Choice[str]):
         try:
             this_guildID = ctx.guild.id
             choice = action.value
+            level_name = level.name
+            level_value = level.value
             this_roleID = role.id
-            bot_user = self.bot.user
 
-            editEmbed = discord.Embed(title=f"Edit Results {emojis.mantis}", 
-                                    description="", 
-                                    color=0x3ad407)
-            editEmbed.timestamp = datetime.now(timezone.utc)
-            editEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
+            editEmbed = Embeds(self.bot, title=f"Edit Results", description="")
 
             # Check if access is already given, if not add it
             if (choice == "add"):
@@ -267,34 +238,46 @@ class Main(commands.Cog):
                     in self.bot.data_manager.access_roles if (roleID == this_roleID)]
                 if (len(search_access) != 0):
                     perm = search_access[0][1]
-                    editEmbed.description=f"Unable to add permissions, <@&{this_roleID}> already has **{perm}**"
-                    editEmbed.color=0xFF0000
+                    if (perm == level_name):
+                        editEmbed.description=f"Unable to add permissions, <@&{this_roleID}> already has **{perm}**"
+                        editEmbed.color=0xFF0000
+                    else:
+                        query = f"""
+                        UPDATE permissions 
+                        SET permissions.permLevel = '{level_name}'
+                        WHERE (permissions.roleID = {this_roleID});
+                        """
+                        await self.bot.data_manager.execute_query(query, False)
+                        await self.bot.data_manager.update_cache(0)
+                        editEmbed.description=f"Updated permissions to **{level_name}** for <@&{this_roleID}>"
                 else:
                     query = f"""
                         INSERT INTO permissions VALUES 
                         ({this_guildID}, 
                         {this_roleID}, 
-                        'Bot Admin');
+                        '{level_name}');
                         """
                     await self.bot.data_manager.execute_query(query, False)
                     await self.bot.data_manager.update_cache(0)
-                    editEmbed.description=f"Added **Bot Admin** permissions to <@&{this_roleID}>"
+                    editEmbed.description=f"Added **{level_name}** permissions to <@&{this_roleID}>"
 
             # Check if user has access, if not do nothing
             if (choice == "remove"):
                 search_access = [
-                    roleID for guildID, roleID, permLevel 
+                    (roleID, permLevel) for guildID, roleID, permLevel 
                     in self.bot.data_manager.access_roles if (roleID == this_roleID)]
                 if (len(search_access) != 0):
-                    query = f"""
-                        DELETE FROM permissions WHERE 
-                        (permissions.roleID = {this_roleID});
-                        """
-                    await self.bot.data_manager.execute_query(query, False)
-                    await self.bot.data_manager.update_cache(0)
-                    editEmbed.description=f"Removed **Bot Admin** permissions from <@&{this_roleID}>"
+                    perm = search_access[0][1]
+                    if (perm == level_name):
+                        query = f"""
+                            DELETE FROM permissions WHERE 
+                            (permissions.roleID = {this_roleID});
+                            """
+                        await self.bot.data_manager.execute_query(query, False)
+                        await self.bot.data_manager.update_cache(0)
+                        editEmbed.description=f"Removed **{level_name}** permissions from <@&{this_roleID}>"
                 else:
-                    editEmbed.description=f"Unable to remove permissions, <@&{this_roleID}> does not have access"
+                    editEmbed.description=f"Unable to remove permissions, <@&{this_roleID}> does not have this permission"
                     editEmbed.color=0xFF0000
 
             await ctx.send(embed=editEmbed)
@@ -306,7 +289,7 @@ class Main(commands.Cog):
     # Edit monitored channels / categories
     @commands.hybrid_command(name="edit_monitor", description="Add or remove monitored modmail-log"
                                                               " channels and tickets categories in this server")
-    @checks.has_access()
+    @checks.is_admin()
     @app_commands.describe(action="Desired edit action. Use 'add' to add channels / categories and 'remove' to remove them")
     @app_commands.choices(action=[
         app_commands.Choice(name="add", value="add"),
@@ -321,14 +304,11 @@ class Main(commands.Cog):
             choice = action.value
             this_channelID = None
             this_categoryID = None
-            bot_user = self.bot.user
 
             if channel is None and category is None:
-                errorEmbed = discord.Embed(title=f"", 
-                                        description="❌ You must provide at least a channel or category", 
-                                        color=0xFF0000)
-                errorEmbed.timestamp = datetime.now(timezone.utc)
-                errorEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
+                errorEmbed = discord.Embed(self.bot, title=f"", 
+                                    description="❌ You must provide at least a channel or category", 
+                                    color=0xFF0000)
 
                 await ctx.send(embed=errorEmbed, ephemeral=True)
                 return
@@ -338,11 +318,7 @@ class Main(commands.Cog):
             if category is not None:
                 this_categoryID = category.id
 
-            editEmbed = discord.Embed(title=f"Edit Results {emojis.mantis}", 
-                                    description="", 
-                                    color=0x3ad407)
-            editEmbed.timestamp = datetime.now(timezone.utc)
-            editEmbed.set_footer(text="Mantid", icon_url=bot_user.avatar.url)
+            editEmbed = Embeds(self.bot, title=f"Edit Results", description="")
 
             # check if channel / category is already added or not
             if (choice == "add"):

@@ -13,17 +13,17 @@ class Analytics(commands.Cog):
 
     async def cog_load(self):
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        await self.catch_modmail_backlog()
-        await self.process_queue()
+        # await self.catch_modmail_backlog()
+        # await self.process_queue()
 
 
     # Populate queue with unprocessed messages
     async def catch_modmail_backlog(self):
         for guild in self.bot.guilds:
             search_monitor = [
-            (channelID) for guildID, channelID, monitorType 
-            in self.bot.data_manager.monitored_channels
-            if (guildID == guild.id and monitorType == "Modmail log")]
+                (channelID) for guildID, channelID, monitorType 
+                in self.bot.data_manager.monitored_channels
+                if (guildID == guild.id and monitorType == "Modmail log")]
 
             if (len(search_monitor) == 1):
                 channel = guild.get_channel(int(search_monitor[0]))
@@ -206,7 +206,8 @@ class Analytics(commands.Cog):
                     await message.add_reaction(emojis.mantis)
                     
                 else:
-                    logger.error(f"Close embed not logged properly")
+                    logger.error(f"Close embed not loggable")
+                    await message.add_reaction(emojis.mantis)
             
             else:
                 closeID = message.author.id
@@ -289,7 +290,6 @@ class Analytics(commands.Cog):
                                                                                format_time, 
                                                                                "Received")
                                 await self.bot.channel_status.set_emoji(channel, "alert")
-                                # await message.add_reaction(emojis.mantis)
 
                             # Store sent message (embed from the Modmail bot to DM)
                             elif (embed.title == "Message Sent"):
@@ -305,7 +305,6 @@ class Analytics(commands.Cog):
                                                                                format_time, 
                                                                                "Sent")
                                 await self.bot.channel_status.set_emoji(channel, "wait")
-                                # await message.add_reaction(emojis.mantis)
                            
                             else:
                                 pass
