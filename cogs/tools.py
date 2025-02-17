@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List
 from classes.error_handler import *
 from classes.embeds import *
-from utils import emojis, checks
+from utils import checks
 from utils.logger import *
 
 

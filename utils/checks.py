@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 from classes.error_handler import *
 
 
@@ -62,7 +63,7 @@ def is_user():
 # Checks if user has Admin permissions for that channel or their ID is in Mantid's permissions cache at all
 def is_user_app():
     def predicate(interaction: discord.Interaction):
-        data_manager = interaction.bot.data_manager
+        data_manager = interaction.client.data_manager
         guildID = interaction.guild.id
         usrRoles = interaction.user.roles
    
@@ -76,6 +77,7 @@ def is_user_app():
         
         for role in usrRoles:
             if role.id in search_access:
+                print("User was in search access")
                 return True
         raise AccessError(f"You do not have access to use the **{interaction.command.name}** command", required_permission="Bot User or Bot Admin")
-    return commands.check(predicate)
+    return app_commands.check(predicate)

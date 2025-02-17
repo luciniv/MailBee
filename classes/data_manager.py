@@ -188,14 +188,11 @@ class DataManager:
     # Adds snip to DB
     async def add_snip(self, guildID: int, authorID: int, abbrev: str, summary: str, content: str):
         query = f"""
-            INSERT INTO snips VALUES 
-            ({guildID}, 
-            {authorID}, 
-            '{abbrev}',
-            '{summary}',
-            '{content}');
+            INSERT INTO snips (guildID, authorID, abbrev, summary, content)
+            VALUES (%s, %s, %s, %s, %s);
             """
-        await self.execute_query(query, False)
+        values = (guildID, authorID, abbrev, summary, content)
+        await self.execute_query(query, False, False, values)
         await self.update_cache(2)
 
 

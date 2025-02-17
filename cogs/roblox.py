@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 from roblox_data.helpers import *
 from utils.logger import *
+from utils import checks
 
 
 GAME_TYPE_CHOICES = [
@@ -16,6 +17,7 @@ class Roblox(commands.Cog):
 
 
     @app_commands.command(name="engagement", description="Get Roblox engagement data for a user")
+    @checks.is_user_app()
     @app_commands.describe(username="Roblox username")
     @app_commands.describe(game_type="Select the game")
     @app_commands.choices(game_type=GAME_TYPE_CHOICES)
@@ -38,6 +40,7 @@ class Roblox(commands.Cog):
 
 
     @app_commands.command(name="getdata", description="Get player data file")
+    @checks.is_user_app()
     @app_commands.describe(username="Roblox username")
     @app_commands.describe(game_type="Select the game")
     @app_commands.choices(game_type=GAME_TYPE_CHOICES)
