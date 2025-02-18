@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 import os
 from classes.data_manager import DataManager
@@ -142,7 +143,7 @@ async def sync_commands(ctx):
         await message.edit(content=f"{emojis.mantis} Main tree globally synced {len(synced)} commands.") 
 
 
-# Centralized error handling event
+# Centralized prefix / hybrid error handling event
 @bot.event
 async def on_command_error(ctx, error):
     try:
@@ -165,7 +166,7 @@ async def on_command_error(ctx, error):
             logger.exception(f"❌ General command error: {error}")
 
         elif isinstance(error, commands.CommandNotFound):
-            errorMsg = "❌ This command does not exist, run /help to view a list of available commands"
+            errorMsg = "❌ This command does not exist, run /help to view available commands"
         
         else:
             logger.error(f"❌ Unexpected command error: {error}")
@@ -177,5 +178,55 @@ async def on_command_error(ctx, error):
 
     except discord.errors.NotFound:
         logger.warning("Failed to send error message: Message context no longer exists")
+
+
+# Centralized application error handling event
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error):
+    try:
+        errorMsg = "❌ An unexpected error occurred. Please try again later"
+
+        if interaction.user.id in owners:
+            errorMsg = f"❌ An unexpected error occurred: {error}"
+
+        if isinstance(error, app_commands.errors.MissingPermissions):
+            errorMsg = "❌ You do not have the required permissions to use this command"
+
+        elif isinstance(error, app_commands.errors.CommandNotFound):
+            errorMsg = "❌ This command does not exist, run /help to view available commands"
+
+        elif isinstance(error, app_commands.errors.CommandOnCooldown):
+            errorMsg = f"❌ This command is on cooldown. Try again in {error.retry_after:.2f} seconds"
+
+        elif isinstance(error, commands.NotOwner):
+            errorMsg = "❌ Ownership error: You need ownership of Mantid to use this command"
+
+        elif isinstance(error, AppAccessError):
+            errorMsg = f"❌ Access error: {error}"
+
+        elif isinstance(error, BotError):
+            errorMsg = "❌ An error occurred. Please try again later"
+
+            if interaction.user.id in owners:
+                errorMsg = f"❌ An error occurred: {error}"
+            logger.exception(f"❌ General command error: {error}")
+
+        else:
+            logger.error(f"❌ Unexpected command error: {error}")
+
+        errorEmbed = discord.Embed(title="", description=errorMsg, color=0xFF0000)
+
+        # Ensure the interaction is still valid before responding
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=errorEmbed, ephemeral=True)
+
+    except discord.errors.NotFound:
+        logger.warning("Failed to send error message: Interaction no longer exists.")
+
+    except Exception as e:
+        logger.error(f"Unexpected error in on_app_command_error: {e}")
+
 
 bot.run(bot_token)

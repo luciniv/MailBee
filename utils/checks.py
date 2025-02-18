@@ -79,5 +79,5 @@ def is_user_app():
             if role.id in search_access:
                 print("User was in search access")
                 return True
-        raise AccessError(f"You do not have access to use the **{interaction.command.name}** command", required_permission="Bot User or Bot Admin")
+        raise AppAccessError(f"You do not have access to use the **{interaction.command.name}** command", required_permission="Bot User or Bot Admin")
     return app_commands.check(predicate)

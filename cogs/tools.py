@@ -105,10 +105,16 @@ class Tools(commands.Cog):
                 message = await interaction.channel.fetch_message(int(message_id))
 
             except discord.NotFound:
-                raise BotError(f"/snip_add sent an error: Message not found")
+                snipEmbed.description="❌ Message not found, try re-entering the ID"
+                snipEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                return
             
             except discord.HTTPException:
-                raise BotError(f"/snip_add sent an error: Invalid message ID")
+                snipEmbed.description="❌ Message not found, try re-entering the ID"
+                snipEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                return
             
             if (len(message.content) > 1800):
                 snipEmbed.description="❌ Your snip message is too many characters long (max is 1800)"
