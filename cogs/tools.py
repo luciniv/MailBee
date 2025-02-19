@@ -75,6 +75,8 @@ class Tools(commands.Cog):
     @app_commands.describe(message_id="ID of the message to use as the snip (1800 char max)")
     async def snip_add(self, interaction: discord.Interaction, abbreviation: str, summary: str, message_id: str):
         try:
+            await interaction.response.defer()
+            message = None
             guild = interaction.guild
             snips = [
                 abbrev for guildID, abbrev, summary 
@@ -88,42 +90,52 @@ class Tools(commands.Cog):
             if (len(snips) != 0):
                 snipEmbed.description=f"❌ **`{abbreviation.lower()}`** already exists, remove or edit this snip instead"
                 snipEmbed.color=0xFF0000
-                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                await interaction.followup.send(embed=snipEmbed, ephemeral=True)
                 return
             if (len(abbreviation) > 24):
                 snipEmbed.description="❌ Your abbreviation is too many characters long (max is 24)"
                 snipEmbed.color=0xFF0000
-                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                await interaction.followup.send(embed=snipEmbed, ephemeral=True)
                 return
             if (len(summary) > 100):
                 snipEmbed.description="❌ Your summary is too many characters long (max is 100)"
                 snipEmbed.color=0xFF0000
-                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                await interaction.followup.send(embed=snipEmbed, ephemeral=True)
                 return
             
             try:
                 message = await interaction.channel.fetch_message(int(message_id))
-
             except discord.NotFound:
-                snipEmbed.description="❌ Message not found, try re-entering the ID"
-                snipEmbed.color=0xFF0000
-                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
-                return
-            
+                
+                # Check all channels if message wasnt in the first
+                for channel in interaction.guild.text_channels:
+                    try:
+                        message = await channel.fetch_message(int(message_id))  
+                    except discord.NotFound:
+                        continue 
+                    except discord.HTTPException:
+                        continue 
+
             except discord.HTTPException:
                 snipEmbed.description="❌ Message not found, try re-entering the ID"
                 snipEmbed.color=0xFF0000
-                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                await interaction.followup.send(embed=snipEmbed, ephemeral=True)
+                return
+
+            if (message is None):
+                snipEmbed.description="❌ Message not found, try re-entering the ID"
+                snipEmbed.color=0xFF0000
+                await interaction.followup.send(embed=snipEmbed, ephemeral=True)
                 return
             
             if (len(message.content) > 1800):
                 snipEmbed.description="❌ Your snip message is too many characters long (max is 1800)"
                 snipEmbed.color=0xFF0000
-                await interaction.response.send_message(embed=snipEmbed, ephemeral=True)
+                await interaction.followup.send(embed=snipEmbed, ephemeral=True)
                 return
 
             await self.bot.data_manager.add_snip(guild.id, interaction.user.id, abbreviation.lower(), summary, message.content)
-            await interaction.response.send_message(embed=snipEmbed)
+            await interaction.followup.send(embed=snipEmbed)
 
         except Exception as e:
             logger.exception(e)
