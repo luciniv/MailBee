@@ -12,7 +12,7 @@ from utils.logger import *
 
 
 # Subsects a number into a list of numbers that cap at max_size (for pagination)
-def build_subsections(size: int, max_size = 6) -> List[int]:
+def build_subsections(size: int, max_size = 10) -> List[int]:
     if size <= max_size:
         return [size]
     
@@ -192,7 +192,7 @@ class Stats(commands.Cog):
 
             query = queries.leaderboard_queries(type_value, guildID, time_value)
             result = await self.bot.data_manager.execute_query(query)
-
+            
             if result is not None: # Go ahead to build embed
                 if len(result) == 0:
                     statsEmbed.add_field(name="No data found", value="", inline=False)
@@ -205,7 +205,7 @@ class Stats(commands.Cog):
                         limit += page_count 
                         if count != 0:
                             statsEmbed = discord.Embed(title=f"Leaderboard {time_name}", 
-                                    description=type_name, 
+                                    description=f"{type_name}\r{'⎯' * 18}", 
                                     color=0x3ad407)
                             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
                             statsEmbed.set_footer(text="")
@@ -227,7 +227,7 @@ class Stats(commands.Cog):
                             elif (type_value == "closed"):
                                 statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** ticket(s)", inline=False)
                             count += 1 
-                    pages.append(statsEmbed) 
+                        pages.append(statsEmbed) 
 
             for page in range(len(pages)):
                 pages[page].set_footer(text=f"Use the buttons below to navigate (Page {page + 1}/{len(pages)})")
@@ -237,6 +237,7 @@ class Stats(commands.Cog):
             view.message = await ctx.send(embed=pages[0], view=view)
             
         except Exception as e:
+            logger.exception(e)
             raise BotError(f"/leaderboard sent an error: {e}")
   
     
@@ -368,6 +369,89 @@ class Stats(commands.Cog):
     # essentially using the same queries, but just outputting the data (no formatting)
     # gives the option to output one person's data, or everyone's data, and then select the timeframe
     # might use the same query gen commands, not sure
+
+    @commands.hybrid_command(name="export_week", description="Output a CSV file of one week's data")
+    @checks.is_admin()
+    @app_commands.describe(year="Select the year")
+    @app_commands.choices(year=[
+        app_commands.Choice(name="2024", value="2024"),
+        app_commands.Choice(name="2025", value="2025")])
+    @app_commands.describe(week="Enter a week number (ISO 8601)")
+    async def export_week(self, ctx, year: discord.app_commands.Choice[str], week: int):
+        try:
+            # Allows command to take longer than 3 seconds
+            await ctx.defer()
+            await self.bot.data_manager.flush_messages()
+
+            weekISO = ""
+            guildIDs = []
+            file = None
+            
+            if (week < 1 or week > 53):
+                errorEmbed = discord.Embed(title=f"", 
+                                    description="❌ Week number must be in the range 1-53", 
+                                    color=0xFF0000)
+
+                await ctx.send(embed=errorEmbed, ephemeral=True)
+                return
+            
+            if (week < 10):
+                weekISO = f"{year.value}0{week}"
+            else:
+                weekISO = f"{year.value}{week}"
+
+            for guild in self.bot.guilds:
+                if (guild.id != 12345):
+                    guildIDs.append(guild.id)
+
+            statsEmbed = Embeds(self.bot, title=f"Weekly Statistics Export", 
+                                description=f"Download the attached CSV file to view data")
+            statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
+            
+            result_list = []
+            query_list = queries.week_CSV(guildIDs, weekISO)
+
+            for query in query_list:
+                result = await self.bot.data_manager.execute_query(query)
+                if result is not None:
+                    result_list.append(result[0])
+
+            # Create CSV file from data
+            if (len(result_list) != 0):
+                header = ["Server ID", 
+                          "Server Name"
+                          "Total Tickets Open",
+                          "Total Tickets Closed",
+                          "Num Tickets Opened This Week",
+                          "Num Tickets Still Open From This Week",
+                          "Num Tickets Closed From This Week",
+                          "Total Tickets Closed This Week",
+                          "Day Most Tickets Opened",
+                          "Day Most Tickets Closed",
+                          "Average Ticket Duration",
+                          "Average First Response Time",
+                          "Average Messages Per Ticket Resolved",
+                          "Mod: Closed The Most Tickets",
+                          "Mod: Sent The Most Replies",
+                          "Mod: Sent The Most Discussions",
+                          "Num Mods Answering Tickets"]
+
+                write_list = []
+
+                for guildID, result in zip(guildIDs, result_list):
+                    guild = self.bot.get_guild(guildID)
+                    data = [guildID, guild.name]
+                    write_list.append((*data, *result))
+
+                file = csv_write.make_file(header, write_list)
+              
+            else:
+                statsEmbed.add_field(name="No data found", value="", inline=False)
+            await ctx.send(embed=statsEmbed, file=file)
+
+        except Exception as e:
+            raise BotError(f"/export_week sent an error: {e}")
+
 
     @commands.hybrid_command(name="export_server_stats", description="Output a CSV file of every server's statistics,"
                             " includes ticket counts and response averages")

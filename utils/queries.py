@@ -373,6 +373,159 @@ def server_stats(guildID: int, intervals: List[str]):
     return query
 
 
+# Query string for /export_week
+def week_CSV(guildIDs: List[int], weekISO: int):
+    query_list = []
+
+    for guildID in guildIDs:
+        query = f"""
+            SELECT
+                (SELECT COUNT(*)
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.status = 'open'),
+                    
+                (SELECT COUNT(*)
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.status = 'closed'),
+                    
+                (SELECT COUNT(*)
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}),
+                
+                (SELECT COUNT(*)
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.status = 'open'
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}),
+                    
+                (SELECT COUNT(*)
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.status = 'closed'
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}),
+                    
+                (SELECT COUNT(*)
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.status = 'closed'
+                    AND YEARWEEK(tickets.dateClose, 3) = {weekISO}),  
+                    
+                (SELECT 
+                    DATE(dateOpen) AS open_day
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}
+                    GROUP BY open_day
+                    ORDER BY COUNT(*) DESC
+                    LIMIT 1),
+
+                (SELECT 
+                    DATE(dateClose) AS close_day
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}
+                    GROUP BY close_day
+                    ORDER BY COUNT(*) DESC
+                    LIMIT 1),
+
+                (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, tickets.dateClose))
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.status = 'closed'
+                    AND YEARWEEK(tickets.dateClose, 3) = {weekISO}),
+                    
+                (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date))
+                    FROM tickets
+                    INNER JOIN (
+                        SELECT modmail_messageID, MIN(date) AS date
+                        FROM ticket_messages
+                        WHERE type = 'Sent'
+                        GROUP BY modmail_messageID
+                    ) AS first_message
+                    ON tickets.messageID = first_message.modmail_messageID
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.flag = 'good'
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}),
+                    
+                (SELECT AVG(message_count)
+                    FROM (
+                    SELECT 
+                        COUNT(ticket_messages.messageID) AS message_count
+                        FROM tickets
+                        INNER JOIN ticket_messages 
+                        ON tickets.messageID = ticket_messages.modmail_messageID
+                        WHERE tickets.guildID = {guildID}
+                        AND tickets.status = 'closed'
+                        AND YEARWEEK(tickets.dateClose, 3) = {weekISO}
+                        GROUP BY tickets.messageID
+                    ) AS ticket_counts),
+                    
+                (SELECT tickets.closeByUN
+                    FROM tickets
+                    WHERE tickets.closeByID = (
+                        SELECT tickets.closeByID
+                        FROM tickets
+                        WHERE tickets.guildID = {guildID}
+                        AND YEARWEEK(tickets.dateClose, 3) = {weekISO}
+                        AND tickets.closeByID IS NOT NULL
+                        GROUP BY tickets.closeByID
+                        ORDER BY COUNT(*) DESC
+                        LIMIT 1)
+                    LIMIT 1),
+                    
+                (SELECT tickets.closeByUN
+                    FROM tickets
+                    WHERE tickets.closeByID = (
+                        SELECT authorID
+                        FROM tickets
+                        INNER JOIN ticket_messages 
+                        ON tickets.messageID = ticket_messages.modmail_messageID
+                        WHERE tickets.guildID = {guildID}
+                        AND ticket_messages.type = 'Sent'
+                        AND YEARWEEK(date, 3) = {weekISO}
+                        GROUP BY authorID
+                        ORDER BY COUNT(*) DESC
+                        LIMIT 1)
+                    LIMIT 1),
+                    
+                (SELECT tickets.closeByUN
+                    FROM tickets
+                    WHERE tickets.closeByID = (
+                        SELECT authorID
+                        FROM tickets
+                        INNER JOIN ticket_messages 
+                        ON tickets.messageID = ticket_messages.modmail_messageID
+                        WHERE tickets.guildID = {guildID}
+                        AND ticket_messages.type = 'Discussion'
+                        AND YEARWEEK(date, 3) = {weekISO}
+                        GROUP BY authorID
+                        ORDER BY COUNT(*) DESC
+                        LIMIT 1)
+                    LIMIT 1),
+                    
+                (SELECT COUNT(DISTINCT authorID) AS total_mods
+                    FROM (
+                    SELECT closeByID AS authorID 
+                    FROM tickets 
+                    WHERE tickets.guildID = {guildID}
+                    AND YEARWEEK(tickets.dateClose, 3) = {weekISO}
+                    UNION
+                    SELECT authorID 
+                    FROM tickets
+                    INNER JOIN ticket_messages 
+                    ON tickets.messageID = ticket_messages.modmail_messageID
+                    WHERE tickets.guildID = {guildID}
+                    AND (ticket_messages.type = 'Sent' OR ticket_messages.type = 'Discussion') 
+                    AND YEARWEEK(ticket_messages.date, 3) = {weekISO}
+                    ) AS unique_mods);"""
+        query_list.append(query)
+    
+    return query_list
+
+
 # Query string for /server_stats_CSV
 def server_stats_CSV(guildIDs: List[int], intervals: List[str]):
     query_list = []

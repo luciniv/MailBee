@@ -102,7 +102,7 @@ class ChannelStatus:
     # Add emoji to the start of a channel's name
     async def set_emoji(self, channel: discord.TextChannel, emoji_str: str, manual: bool = False) -> bool:
         if emoji_str is None:
-            self.queue_update(channel, None)
+            self.queue_update(channel, None, manual)
             return True
 
         new_name = ""
