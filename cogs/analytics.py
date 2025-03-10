@@ -111,7 +111,9 @@ class Analytics(commands.Cog):
                 NULL, 
                 NULL, 
                 'open',
-                '{status}');
+                '{status}',
+                'false',
+                NULL);
                 """
             await self.bot.data_manager.execute_query(query, False)
             await asyncio.sleep(0.5)
