@@ -26,7 +26,7 @@ class Roblox(commands.Cog):
 
         try:
             print("entered try loop")
-            message, file_path, error = await get_user_and_player_data(username, game_type)
+            message, values, file_path, error = await get_user_and_player_data(username, game_type)
             print("got message and everything, all done in theory")
             if isinstance(error, str):
                 await interaction.followup.send(error)
