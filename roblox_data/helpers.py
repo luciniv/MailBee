@@ -13,7 +13,7 @@ hl_key = os.getenv("HL_KEY")
 
 from roblox_data.decoder import CONFIG
 HEADERS = {'x-api-key': hl_key}
-MAX_RETRIES = 5
+MAX_RETRIES = 3
 
 
 def get_roblox_user_info(username):
@@ -36,8 +36,12 @@ def get_datastore_entry(universe_id, datastore_name, entry_key, scope='global'):
     params = {'datastoreName': datastore_name, 'entryKey': entry_key, 'scope': scope}
     # print(url, params, HEADERS)
     response = requests.get(url, params=params, headers=HEADERS)
-    print("got the response")
-    return response.text  # Return as text
+
+    if response.status_code == 200:
+        print("got the response")
+        return response.text  # Successful response
+    else:
+        return None
 
 def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
     print("entered ordered data store entires")
@@ -45,8 +49,12 @@ def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='globa
     url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
     params = {'max_page_size': 1, 'order_by': 'desc'}
     response = requests.get(url, headers=HEADERS, params=params)
-    print("got the response")
-    return response.json()
+
+    if response.status_code == 200:
+        print("got the response")
+        return response.json()
+    else:
+        return None
 
 def get_player_data(game_type, game_id, user_id):
     print("hl_key is",hl_key)
@@ -57,6 +65,8 @@ def get_player_data(game_type, game_id, user_id):
     if 'keys_prefix' in game_config:
         print("running api call for ordered data store entries")
         key_data = list_ordered_data_store_entries(game_id, f"{game_config['keys_prefix']}{user_id}")
+        if key_data is None:
+            return None
         time_key = key_data.get('entries', [{}])[0].get('value')
     else:
         time_key = None
@@ -73,7 +83,10 @@ def get_player_data(game_type, game_id, user_id):
         player_data = get_datastore_entry(game_id, user_key, time_key)
 
     print(player_data)
-    return player_data
+    if player_data is None:
+        return None
+    else:
+        return player_data
 
 
 async def get_user_and_player_data(user: str, game_type: discord.app_commands.Choice[int]):
@@ -98,11 +111,15 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
         if "NOT_FOUND" in player_data:
             return None, None, "User has no data"
+        
+        if player_data is not None:
+            retries = MAX_RETRIES
+            continue
 
         retries += 1
         if retries < MAX_RETRIES:
             await asyncio.sleep(3 * retries)
-            # why does this just run 3 times? i have no clue, lets ignore it since it works it seems
+            
     print("loop for getting the data is done")
     print("THIS IS THE PLAYER DATA", player_data)
 
@@ -122,6 +139,9 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
     try:
         robux_spent = game_config['robux_parser'](result_dict)
         time_played = game_config['time_parser'](result_dict)
+
+        # Adds robux spent + hours converted to robux (1hr = 100 rbx)
+        priority_value = robux_spent + (100 * time_played)
         message = f'{game_type.name} - {username} - R${robux_spent} - {time_played}hrs'
     except Exception:
         message = "Error retriving engagement statistics"
