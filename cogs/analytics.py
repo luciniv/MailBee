@@ -1,9 +1,13 @@
 import discord
 import asyncio
 from discord.ext import commands
+from roblox_data.helpers import *
 from utils import emojis, checks
 from utils.logger import *
 
+SERVER_TO_GAME_ID = {
+    1196293227976863806: 5422546686
+}
 
 class Analytics(commands.Cog):
     def __init__(self, bot):
@@ -100,6 +104,15 @@ class Analytics(commands.Cog):
             timestamp = message.created_at
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
+            priority_values = [-1,-1]
+            game_type = SERVER_TO_GAME_ID.get(guild.id, 0)
+
+            if (game_type != 0):
+                priority_values = await get_priority(game_type, guild.id, openID)
+
+            if not priority_values:
+                priority_values = [-1,-1]
+
             query = f"""
                 INSERT IGNORE INTO tickets VALUES 
                 ({message.id}, 
@@ -113,7 +126,9 @@ class Analytics(commands.Cog):
                 'open',
                 '{status}',
                 'false',
-                NULL);
+                NULL,
+                {priority_values[0]},
+                {priority_values[1]});
                 """
             await self.bot.data_manager.execute_query(query, False)
             await asyncio.sleep(0.5)
