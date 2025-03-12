@@ -184,7 +184,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
         time_played = game_config['time_parser'](result_dict)
         
         values.append(int(robux_spent.replace(",", "")))
-        values.append(int(time_played.replace(",", "")))
+        values.append(time_played)
         print(values)
 
         message = f'{game_type.name} - {username} - R${robux_spent} - {time_played}hrs'

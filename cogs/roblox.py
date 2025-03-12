@@ -48,7 +48,7 @@ class Roblox(commands.Cog):
         await interaction.response.defer()
 
         try:
-            _, file_path, error = await get_user_and_player_data(username, game_type)
+            _, values, file_path, error = await get_user_and_player_data(username, game_type)
 
             if isinstance(error, str):
                 await interaction.followup.send(error)
