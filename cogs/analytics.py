@@ -109,9 +109,13 @@ class Analytics(commands.Cog):
 
             if (game_type != 0):
                 priority_values = await get_priority(game_type, guild.id, openID)
+                print(f"priority values: {priority_values}")
 
             if not priority_values:
                 priority_values = [-1,-1]
+                print("priority values set to default")
+
+            print(f"ending priority values: {priority_values}")
 
             query = f"""
                 INSERT IGNORE INTO tickets VALUES 
