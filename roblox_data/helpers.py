@@ -109,16 +109,20 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
         print("called get_player_data")
         player_data = get_player_data(game_type.name, game_type.value, user_id)
 
-        if "NOT_FOUND" in player_data:
-            return None, None, "User has no data"
-        
         if player_data is not None:
             retries = MAX_RETRIES
             continue
+        elif player_data is None:
+            pass
+        elif "NOT_FOUND" in player_data:
+            return None, None, "User has no data"
 
         retries += 1
         if retries < MAX_RETRIES:
             await asyncio.sleep(3 * retries)
+
+    if player_data is None:
+        return None, None, "User has no data"
             
     print("loop for getting the data is done")
     print("THIS IS THE PLAYER DATA", player_data)
