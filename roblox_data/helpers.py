@@ -143,7 +143,8 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
         # Adds robux spent + hours converted to robux (1hr = 100 rbx)
         priority_value = robux_spent + (100 * time_played)
         message = f'{game_type.name} - {username} - R${robux_spent} - {time_played}hrs'
-    except Exception:
+    except Exception as e:
+        print(e)
         message = "Error retriving engagement statistics"
 
     return message, 'output.json', user_info
