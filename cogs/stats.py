@@ -419,7 +419,7 @@ class Stats(commands.Cog):
             # Create CSV file from data
             if (len(result_list) != 0):
                 header = ["Server ID", 
-                          "Server Name"
+                          "Server Name",
                           "Total Tickets Open",
                           "Total Tickets Closed",
                           "Num Tickets Opened This Week",

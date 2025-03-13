@@ -120,7 +120,6 @@ def get_player_data(game_type, game_id, user_id):
         print(2)
         player_data = get_datastore_entry(game_id, user_key, time_key)
 
-    print(player_data)
     if player_data is None:
         return None
     else:
@@ -196,8 +195,10 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
 async def get_priority(game_type: int, guildID: int, openID: int):
     roblox_username = await get_roblox_username(guildID, openID)
+    print(roblox_username)
 
     if roblox_username:
         message, values, file_path, error = await get_user_and_player_data(roblox_username, game_type)
+        print(values)
         return values
     return None

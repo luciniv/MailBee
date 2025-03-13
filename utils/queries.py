@@ -463,47 +463,35 @@ def week_CSV(guildIDs: List[int], weekISO: int):
                         GROUP BY tickets.messageID
                     ) AS ticket_counts),
                     
-                (SELECT tickets.closeByUN
+                (SELECT tickets.closeByID
                     FROM tickets
-                    WHERE tickets.closeByID = (
-                        SELECT tickets.closeByID
-                        FROM tickets
-                        WHERE tickets.guildID = {guildID}
-                        AND YEARWEEK(tickets.dateClose, 3) = {weekISO}
-                        AND tickets.closeByID IS NOT NULL
-                        GROUP BY tickets.closeByID
-                        ORDER BY COUNT(*) DESC
-                        LIMIT 1)
+                    WHERE tickets.guildID = {guildID}
+                    AND YEARWEEK(tickets.dateClose, 3) = {weekISO}
+                    AND tickets.closeByID IS NOT NULL
+                    GROUP BY tickets.closeByID
+                    ORDER BY COUNT(*) DESC
                     LIMIT 1),
                     
-                (SELECT tickets.closeByUN
+                (SELECT authorID
                     FROM tickets
-                    WHERE tickets.closeByID = (
-                        SELECT authorID
-                        FROM tickets
-                        INNER JOIN ticket_messages 
-                        ON tickets.messageID = ticket_messages.modmail_messageID
-                        WHERE tickets.guildID = {guildID}
-                        AND ticket_messages.type = 'Sent'
-                        AND YEARWEEK(date, 3) = {weekISO}
-                        GROUP BY authorID
-                        ORDER BY COUNT(*) DESC
-                        LIMIT 1)
+                    INNER JOIN ticket_messages 
+                    ON tickets.messageID = ticket_messages.modmail_messageID
+                    WHERE tickets.guildID = {guildID}
+                    AND ticket_messages.type = 'Sent'
+                    AND YEARWEEK(date, 3) = {weekISO}
+                    GROUP BY authorID
+                    ORDER BY COUNT(*) DESC
                     LIMIT 1),
                     
-                (SELECT tickets.closeByUN
+                (SELECT authorID
                     FROM tickets
-                    WHERE tickets.closeByID = (
-                        SELECT authorID
-                        FROM tickets
-                        INNER JOIN ticket_messages 
-                        ON tickets.messageID = ticket_messages.modmail_messageID
-                        WHERE tickets.guildID = {guildID}
-                        AND ticket_messages.type = 'Discussion'
-                        AND YEARWEEK(date, 3) = {weekISO}
-                        GROUP BY authorID
-                        ORDER BY COUNT(*) DESC
-                        LIMIT 1)
+                    INNER JOIN ticket_messages 
+                    ON tickets.messageID = ticket_messages.modmail_messageID
+                    WHERE tickets.guildID = {guildID}
+                    AND ticket_messages.type = 'Discussion'
+                    AND YEARWEEK(date, 3) = {weekISO}
+                    GROUP BY authorID
+                    ORDER BY COUNT(*) DESC
                     LIMIT 1),
                     
                 (SELECT COUNT(DISTINCT authorID) AS total_mods
