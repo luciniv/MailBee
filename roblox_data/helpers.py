@@ -18,20 +18,26 @@ MAX_RETRIES = 3
 
 
 async def get_roblox_username(guild_id, discord_id):
+    print("entered get roblox username")
     # Get Roblox ID from Bloxlink API
     url = f"https://api.blox.link/v4/public/guilds/{guild_id}/discord-to-roblox/{discord_id}"
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             if response.status == 200:
+                print("got response id")
                 data = await response.json()
                 roblox_id = data.get("robloxID")
+                print(f"roblox id: {roblox_id}")
                 if roblox_id:
+                    print("getting username from id")
                     # Get Roblox username from Roblox API using Roblox ID
                     url = f"https://users.roblox.com/v1/users/{roblox_id}"
                     async with aiohttp.ClientSession() as session:
                         async with session.get(url) as response:
                             if response.status == 200:
+                                print("got response username")
                                 data = await response.json()
+                                print(data.get("name"))
                                 return data.get("name")  # Get the Roblox username
                     return None
     return None
@@ -198,6 +204,7 @@ async def get_priority(game_type: int, guildID: int, openID: int):
     print(roblox_username)
 
     if roblox_username:
+        print("roblox_username was not none")
         message, values, file_path, error = await get_user_and_player_data(roblox_username, game_type)
         print(values)
         return values

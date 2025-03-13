@@ -106,6 +106,7 @@ class Analytics(commands.Cog):
 
             priority_values = [-1,-1]
             game_type = SERVER_TO_GAME_ID.get(guild.id, 0)
+            print(game_type)
 
             if (game_type != 0):
                 priority_values = await get_priority(game_type, guild.id, openID)
