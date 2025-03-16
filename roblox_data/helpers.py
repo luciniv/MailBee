@@ -50,37 +50,26 @@ async def get_roblox_username(guild_id, discord_id, api_key):
             return data.get("name")
 
 
-def get_roblox_user_info(username):
+async def get_roblox_user_info(username):
     print("entered get_roblox_user_info")
     url = "https://users.roblox.com/v1/usernames/users"
     print("trying for a response")
 
-    response = requests.post(url, json={"usernames": [username]})
-    if response.status_code == 200:
-        print("response good!")
-        data = response.json().get('data')
-        if data:
-            print("there was data!")
-            return data[0]
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json={"usernames": [username]}) as response:
+            print(f"Roblox API Status: {response.status}")
+
+            if response.status == 200:
+                data = await response.json()
+                user_data = data.get('data')
+                
+                if user_data:
+                    print("there was data!")
+                    return user_data[0]  # Return first result
+
     print("response bad")
     return None
 
-# async def get_roblox_user_info(username):
-#     print("entered get_roblox_user_info")
-#     url = "https://users.roblox.com/v1/usernames/users"
-#     print("trying for a response")
-    
-#     async with aiohttp.ClientSession() as session:
-#         async with session.post(url, json={"usernames": [username]}) as response:
-#             if response.status == 200:
-#                 print("response good!")
-#                 data = await response.json()
-#                 if data.get('data'):
-#                     print("there was data!")
-#                     return data['data'][0]
-    
-#     print("response bad")
-#     return None
 
 def get_datastore_entry(universe_id, datastore_name, entry_key, scope='global'):
     print("entered get data store entry")
@@ -142,7 +131,7 @@ def get_player_data(game_type, game_id, user_id):
 async def get_user_and_player_data(user: str, game_type: discord.app_commands.Choice[int]):
     print("entered get user and player data")
     game_config = CONFIG[game_type.name]
-    user_info = get_roblox_user_info(user)
+    user_info = await get_roblox_user_info(user)
     
     if user_info is None:
         return None, None, "User account does not exist on Roblox"
@@ -210,7 +199,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: int):
     print("entered get user and player data")
     game_config = CONFIG[game_name]
-    user_info = get_roblox_user_info(user)
+    user_info = await get_roblox_user_info(user)
     
     if user_info is None:
         return None, None, "User account does not exist on Roblox"
