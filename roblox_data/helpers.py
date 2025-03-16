@@ -17,13 +17,13 @@ HEADERS = {'x-api-key': hl_key}
 MAX_RETRIES = 3
 
 
-async def get_roblox_username(guild_id, discord_id):
+async def get_roblox_username(guild_id, discord_id, api_key):
     print("entered get roblox username")
     print(guild_id, discord_id)
     async with aiohttp.ClientSession() as session:
         # Get Roblox ID from Bloxlink API
         bloxlink_url = f"https://api.blox.link/v4/public/guilds/{guild_id}/discord-to-roblox/{discord_id}"
-        headers = {"Authorization": "a9e6fd2c-72dc-48c9-8fdd-558b81c936c0"}
+        headers = {"Authorization": api_key}
         async with session.get(bloxlink_url, headers=headers) as response:
             print(f"Bloxlink API Status: {response.status}")
             if response.status != 200:
@@ -274,7 +274,7 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
 
 
 async def get_priority(game_type: tuple, guildID: int, openID: int):
-    roblox_username = await get_roblox_username(guildID, openID)
+    roblox_username = await get_roblox_username(guildID, openID, game_type[2])
     print(roblox_username)
 
     if roblox_username:
