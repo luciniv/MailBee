@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from classes.error_handler import *
+from roblox_data.helpers import *
 from utils import emojis, checks
 from utils.logger import *
 
@@ -8,6 +9,13 @@ from utils.logger import *
 class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    
+    @commands.command()
+    @checks.is_owner()
+    async def roblox(self, ctx, id: int):
+        roblox_id = await get_roblox_username(ctx.guild.id, id)
+        await ctx.send(roblox_id)
 
 
     # Runs an SQL query from a message

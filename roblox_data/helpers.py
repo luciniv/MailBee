@@ -19,28 +19,35 @@ MAX_RETRIES = 3
 
 async def get_roblox_username(guild_id, discord_id):
     print("entered get roblox username")
-    # Get Roblox ID from Bloxlink API
-    url = f"https://api.blox.link/v4/public/guilds/{guild_id}/discord-to-roblox/{discord_id}"
+    print(guild_id, discord_id)
     async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                print("got response id")
-                data = await response.json()
-                roblox_id = data.get("robloxID")
-                print(f"roblox id: {roblox_id}")
-                if roblox_id:
-                    print("getting username from id")
-                    # Get Roblox username from Roblox API using Roblox ID
-                    url = f"https://users.roblox.com/v1/users/{roblox_id}"
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(url) as response:
-                            if response.status == 200:
-                                print("got response username")
-                                data = await response.json()
-                                print(data.get("name"))
-                                return data.get("name")  # Get the Roblox username
-                    return None
-    return None
+        # Get Roblox ID from Bloxlink API
+        bloxlink_url = f"https://api.blox.link/v4/public/guilds/{guild_id}/discord-to-roblox/{discord_id}"
+        headers = {"Authorization": "a9e6fd2c-72dc-48c9-8fdd-558b81c936c0"}
+        async with session.get(bloxlink_url, headers=headers) as response:
+            print(f"Bloxlink API Status: {response.status}")
+            if response.status != 200:
+                print("Failed to fetch Roblox ID")
+                return None
+            
+            data = await response.json()
+            print("Bloxlink Response:", data)  # Debugging
+            roblox_id = data.get("robloxID")
+            if not roblox_id:
+                print("No linked Roblox ID found")
+                return None
+
+        # Get Roblox username from Roblox API
+        roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
+        async with session.get(roblox_url) as response:
+            print(f"Roblox API Status: {response.status}")
+            if response.status != 200:
+                print("Failed to fetch Roblox username")
+                return None
+
+            data = await response.json()
+            print("Roblox Response:", data)  # Debugging
+            return data.get("name")
 
 
 def get_roblox_user_info(username):
@@ -138,7 +145,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
     user_info = get_roblox_user_info(user)
     
     if user_info is None:
-        return None, None, None, "User account does not exist on Roblox"
+        return None, None, "User account does not exist on Roblox"
     
     print("Got user info", user_info)
 
@@ -158,14 +165,14 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
         elif player_data is None:
             pass
         elif "NOT_FOUND" in player_data:
-            return None, None, None, "User has no data"
+            return None, None, "User has no data"
 
         retries += 1
         if retries < MAX_RETRIES:
             await asyncio.sleep(3 * retries)
 
     if player_data is None:
-        return None, None, None, "User has no data"
+        return None, None, "User has no data"
             
     print("loop for getting the data is done")
     print("THIS IS THE PLAYER DATA", player_data)
@@ -197,15 +204,82 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
         print(e)
         message = "Error retriving engagement statistics"
 
-    return message, values, 'output.json', user_info
+    return message, 'output.json', user_info
 
-async def get_priority(game_type: int, guildID: int, openID: int):
+
+async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: int):
+    print("entered get user and player data")
+    game_config = CONFIG[game_name]
+    user_info = get_roblox_user_info(user)
+    
+    if user_info is None:
+        return None, None, "User account does not exist on Roblox"
+    
+    print("Got user info", user_info)
+
+    user_id = user_info['id']
+    username = user_info['name']
+    display_name = user_info['displayName']
+
+    print("starting loop to get_player_data")
+    retries = 0
+    while retries < MAX_RETRIES:
+        print("called get_player_data")
+        player_data = get_player_data(game_name, game_id, user_id)
+
+        if player_data is not None:
+            retries = MAX_RETRIES
+            continue
+        elif player_data is None:
+            pass
+        elif "NOT_FOUND" in player_data:
+            return None, None, "User has no data"
+
+        retries += 1
+        if retries < MAX_RETRIES:
+            await asyncio.sleep(3 * retries)
+
+    if player_data is None:
+        return None, None, "User has no data"
+            
+    print("loop for getting the data is done")
+    print("THIS IS THE PLAYER DATA", player_data)
+
+    print("starting the json_decoder section")
+    if 'json_decoder' in game_config:
+        result = game_config['json_decoder'](player_data)
+    else:
+        result = player_data
+
+    with open("output.json", "w") as file:
+        file.write(result)
+
+    result_dict = json.loads(result)
+    print("left the json_decoder section")
+
+    print("parsing specific data to return")
+    values = []
+    try:
+        robux_spent = game_config['robux_parser'](result_dict)
+        time_played = game_config['time_parser'](result_dict)
+        
+        values.append(int(robux_spent.replace(",", "")))
+        values.append(time_played)
+        print(values)
+
+    except Exception as e:
+        values = None
+
+    return values, 'output.json', user_info
+
+
+async def get_priority(game_type: tuple, guildID: int, openID: int):
     roblox_username = await get_roblox_username(guildID, openID)
     print(roblox_username)
 
     if roblox_username:
         print("roblox_username was not none")
-        message, values, file_path, error = await get_user_and_player_data(roblox_username, game_type)
+        values, file_path, error = await ticket_get_user_and_player_data(roblox_username, game_type[0], game_type[1])
         print(values)
         return values
     return None

@@ -6,7 +6,7 @@ from utils import emojis, checks
 from utils.logger import *
 
 SERVER_TO_GAME_ID = {
-    1196293227976863806: 5422546686
+    1196293227976863806: ("Horse Life", 5422546686)
 }
 
 class Analytics(commands.Cog):
@@ -105,10 +105,10 @@ class Analytics(commands.Cog):
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
             priority_values = [-1,-1]
-            game_type = SERVER_TO_GAME_ID.get(guild.id, 0)
+            game_type = SERVER_TO_GAME_ID.get(guild.id, None)
             print(game_type)
 
-            if (game_type != 0):
+            if game_type is not None:
                 priority_values = await get_priority(game_type, guild.id, openID)
                 print(f"priority values: {priority_values}")
 
