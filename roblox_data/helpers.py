@@ -71,40 +71,46 @@ async def get_roblox_user_info(username):
     return None
 
 
-def get_datastore_entry(universe_id, datastore_name, entry_key, scope='global'):
-    print("entered get data store entry")
+async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='global'):
+    print("entered get_datastore_entry")
     url = f'https://apis.roblox.com/datastores/v1/universes/{universe_id}/standard-datastores/datastore/entries/entry'
     params = {'datastoreName': datastore_name, 'entryKey': entry_key, 'scope': scope}
-    # print(url, params, HEADERS)
-    response = requests.get(url, params=params, headers=HEADERS)
 
-    if response.status_code == 200:
-        print("got the response")
-        return response.text  # Successful response
-    else:
-        return None
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, params=params, headers=HEADERS) as response:
+            print(f"Datastore API Status: {response.status}")
 
-def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
-    print("entered ordered data store entires")
+            if response.status == 200:
+                print("got the response")
+                return await response.text()  # Successful response
+
+    return None
+
+
+async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
+    print("entered list_ordered_data_store_entries")
     ordered_datastore = urllib.parse.quote(ordered_datastore, safe='')
     url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
     params = {'max_page_size': 1, 'order_by': 'desc'}
-    response = requests.get(url, headers=HEADERS, params=params)
 
-    if response.status_code == 200:
-        print("got the response")
-        return response.json()
-    else:
-        return None
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=HEADERS, params=params) as response:
+            print(f"Ordered Datastore API Status: {response.status}")
 
-def get_player_data(game_type, game_id, user_id):
+            if response.status == 200:
+                print("got the response")
+                return await response.json()  # Parse JSON response
+
+    return None
+
+async def get_player_data(game_type, game_id, user_id):
     print("entered get_player_data")
     game_config = CONFIG[game_type]
 
     print("section checking if keys prefix is in game config")
     if 'keys_prefix' in game_config:
         print("running api call for ordered data store entries")
-        key_data = list_ordered_data_store_entries(game_id, f"{game_config['keys_prefix']}{user_id}")
+        key_data = await list_ordered_data_store_entries(game_id, f"{game_config['keys_prefix']}{user_id}")
         if key_data is None:
             return None
         time_key = key_data.get('entries', [{}])[0].get('value')
@@ -117,10 +123,10 @@ def get_player_data(game_type, game_id, user_id):
     print("running api call for get data store entry")
     if 'data_store_name' in game_config:
         print(1)
-        player_data = get_datastore_entry(game_id, game_config['data_store_name'], user_key)
+        player_data = await get_datastore_entry(game_id, game_config['data_store_name'], user_key)
     else:
         print(2)
-        player_data = get_datastore_entry(game_id, user_key, time_key)
+        player_data = await get_datastore_entry(game_id, user_key, time_key)
 
     if player_data is None:
         return None
@@ -146,7 +152,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
     retries = 0
     while retries < MAX_RETRIES:
         print("called get_player_data")
-        player_data = get_player_data(game_type.name, game_type.value, user_id)
+        player_data = await get_player_data(game_type.name, game_type.value, user_id)
 
         if player_data is not None:
             retries = MAX_RETRIES
@@ -164,7 +170,6 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
         return None, None, "User has no data"
             
     print("loop for getting the data is done")
-    print("THIS IS THE PLAYER DATA", player_data)
 
     print("starting the json_decoder section")
     if 'json_decoder' in game_config:
@@ -214,7 +219,7 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
     retries = 0
     while retries < MAX_RETRIES:
         print("called get_player_data")
-        player_data = get_player_data(game_name, game_id, user_id)
+        player_data = await get_player_data(game_name, game_id, user_id)
 
         if player_data is not None:
             retries = MAX_RETRIES
@@ -232,7 +237,6 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
         return None, None, "User has no data"
             
     print("loop for getting the data is done")
-    print("THIS IS THE PLAYER DATA", player_data)
 
     print("starting the json_decoder section")
     if 'json_decoder' in game_config:
