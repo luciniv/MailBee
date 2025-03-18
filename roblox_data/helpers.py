@@ -209,7 +209,6 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
     if user_info is None:
         return None, None, "User account does not exist on Roblox"
     
-    print("Got user info", user_info)
 
     user_id = user_info['id']
     username = user_info['name']

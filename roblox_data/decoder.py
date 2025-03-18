@@ -3,12 +3,14 @@ import tempfile
 import os
 import json
 
+
 def prettify_json(data):
     try:
         json_data = json.loads(data)
         return json.dumps(json_data, indent=4)
     except json.JSONDecodeError:
         return data
+
 
 def call_luau_script(input_string):
     with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix=".txt") as temp_file:
@@ -26,7 +28,6 @@ def call_luau_script(input_string):
 
     return output
 
-import json
 
 def da_decoder(player_data):
     from compression.DA import ConversionTable
@@ -39,14 +40,15 @@ def da_decoder(player_data):
 
     return prettify_json(player_data)
 
+
 def sonaria_decoder(player_data):
     return call_luau_script(player_data)
+
 
 def horse_life_decoder(player_data):
     print("Entered decoder for HL")
     decoded_data = player_data.replace('\\\\\\"', '\\\\"')
     decoded_data = decoded_data.replace('\\"', '"')
-    print(decoded_data)
     
     if decoded_data.startswith('"') and decoded_data.endswith('"'):
         decoded_data = decoded_data[1:-1]
