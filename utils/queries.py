@@ -218,6 +218,29 @@ def leaderboard_queries(type: str, guildID: int, interval: str):
                 GROUP BY tickets.closeByID
                 ORDER BY count DESC;"""
             
+    elif (type == "sent"):
+        if (interval != "TOTAL"):
+            query += f""" 
+                SELECT authorID, COUNT(*) AS count
+                FROM tickets
+                INNER JOIN ticket_messages 
+                ON tickets.messageID = ticket_messages.modmail_messageID
+                WHERE tickets.guildID = {guildID}
+                AND ticket_messages.type = 'Sent'
+                AND ticket_messages.date >= NOW() - INTERVAL {interval}
+                GROUP BY ticket_messages.authorID
+                ORDER BY count DESC;"""   
+        else:
+            query += f"""       
+                SELECT authorID, COUNT(*) AS count
+                FROM tickets
+                INNER JOIN ticket_messages 
+                ON tickets.messageID = ticket_messages.modmail_messageID
+                WHERE tickets.guildID = {guildID}
+                AND ticket_messages.type = 'Sent'
+                GROUP BY ticket_messages.authorID
+                ORDER BY count DESC;"""
+            
     return query
 
 

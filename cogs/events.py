@@ -108,20 +108,57 @@ class Events(commands.Cog):
     async def on_guild_channel_delete(self, channel):
         if (isinstance(channel, discord.CategoryChannel)):
             guild = channel.guild
+
             search_monitor = [
                 (channelID) for guildID, channelID, monitorType 
                 in self.bot.data_manager.monitored_channels
                 if (channelID == channel.id)]
             
+            search_categories = [
+                (categoryID) for guildID, categoryID, type 
+                in self.bot.data_manager.category_types
+                if (categoryID == channel.id)]
+            
             if (len(search_monitor) != 0):
                 await self.bot.data_manager.remove_monitor(channel.id)
                 print(f"removed {channel.name} from monitor")
 
+            if (len(search_categories) != 0):
+                query = f"""
+                    DELETE FROM category_types WHERE 
+                    category_types.categoryID = {channel.id};
+                    """
+                await self.bot.data_manager.execute_query(query, False)
+                await self.bot.data_manager.update_cache(2)
+                print(f"removed {channel.name} from category types")
 
 
     # TYPING system
-    
+    @commands.Cog.listener()
+    async def on_guild_channel_update(self, before, after):
+        if (isinstance(before, discord.TextChannel)):
 
+            if before.category_id != after.category_id:
+                ticket_id = await self.bot.data_manager.get_ticket(before.id)
+                print("channel changed categories")
+
+                if ticket_id is not None:
+                    print("channel is a ticket channel")
+                    search_categories = [
+                        (type) for guildID, categoryID, type 
+                        in self.bot.data_manager.category_types
+                        if (categoryID == after.category_id)]
+                    
+                    if (len(search_categories) != 0):
+                        print("channel moved to typed category")
+                        query = f"""
+                            UPDATE tickets 
+                            SET tickets.type = {search_categories[0]}
+                            WHERE tickets.messageID = {ticket_id};
+                            """
+                        await self.bot.data_manager.execute_query(query, False)
+                        await self.bot.data_manager.update_cache(2)
+                        print(f"updated type in db to {search_categories[0]}")
 
 
 async def setup(bot):

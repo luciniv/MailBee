@@ -89,13 +89,16 @@ class Main(commands.Cog):
                                             " If this reaction fails to appear, run `/setup` again or contact"
                                             " <@429711831695753237>.\n\n**")
             setupEmbed.add_field(name="Setup Output:", value=f"", inline=False)
+            print(guild.channels)
 
             for channel in guild.channels:
                 if (isinstance(channel, discord.DMChannel)):
                     pass
-                # 
+                 
                 if (isinstance(channel, discord.TextChannel)):
+                    print("process text channel")
                     if (channel.name == "modmail-log"):
+                        print("modmail-log channel found")
                         search_monitor = [
                             (channelID) for guildID, channelID, monitorType 
                             in self.bot.data_manager.monitored_channels if channelID == channel.id]
@@ -110,6 +113,7 @@ class Main(commands.Cog):
                                                 inline=False)
                             
                     elif ((channel.name)[-2:] == "-0"):
+                        print("process -0 text channel, create tickets cat", channel.name)
                         this_category = channel.category
                         if ((this_category.name).casefold() == "modmail"):
                             pass
@@ -128,7 +132,8 @@ class Main(commands.Cog):
                                                     inline=False)
 
                 if (isinstance(channel, discord.CategoryChannel)):
-                    if ((channel.name).casefold() == "modmail"):
+                    print("process modmail category", channel.name)
+                    if ("modmail" in (channel.name).casefold()):
                         search_monitor = [
                             (channelID) for guildID, channelID, monitorType 
                             in self.bot.data_manager.monitored_channels if channelID == channel.id]

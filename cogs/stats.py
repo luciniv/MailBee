@@ -157,7 +157,9 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Current tickets open (server ranking)", value="open"),
         app_commands.Choice(name="Average ticket duration (server ranking)", value="duration"),
         app_commands.Choice(name="Average first response time (server ranking)", value="response"),
-        app_commands.Choice(name="Tickets closed by (moderator ranking)", value="closed")])
+        app_commands.Choice(name="Tickets closed (moderator ranking)", value="closed"),
+        app_commands.Choice(name="Tickets messages sent (moderator ranking)", value="sent")
+        ])
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
@@ -226,6 +228,9 @@ class Stats(commands.Cog):
 
                             elif (type_value == "closed"):
                                 statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** ticket(s)", inline=False)
+
+                            elif (type_value == "sent"):
+                                statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** message(s)", inline=False)
                             count += 1 
                         pages.append(statsEmbed) 
 

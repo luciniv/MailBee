@@ -18,8 +18,10 @@ redis_url = os.getenv("REDIS_URL")
 class DataManager:
     def __init__(self):
         self.db_pool = None
-        self.monitored_channels = []      # Cache for monitored channels
         self.access_roles = []            # Cache for access roles
+        self.monitored_channels = []      # Cache for monitored channels
+        self.category_types = []          # Cache of categories to their types
+        self.types = []                   # Cache for ticket types
         self.snip_list = []               # Cache for snip guildIDs, abbreviations, and summaries
         self.redis_url = redis_url
         self.redis = None
@@ -146,18 +148,28 @@ class DataManager:
 
     # Variably controlled local cache updater
     # Handles roles given permission to use Mantid and the channels Mantid monitors
-    async def update_cache(self, opt: int = 3):
-        if opt in (0, 3):
+    async def update_cache(self, opt: int = 5):
+        if opt in (0, 5):
             query = "SELECT * FROM permissions;"
             self.access_roles = await self.execute_query(query)
             logger.debug("'access_roles' cache updated from database")
 
-        if opt in (1, 3):
+        if opt in (1, 5):
             query = "SELECT * FROM channel_monitor;"
             self.monitored_channels = await self.execute_query(query)
             logger.debug("'monitored_channels' cache updated from database")
 
-        if opt in (2, 3):
+        if opt in (2, 5):
+            query = "SELECT * FROM category_types;"
+            self.category_types = await self.execute_query(query)
+            logger.debug("'category_types' cache updated from database")
+
+        if opt in (3, 5):
+            query = "SELECT * FROM types;"
+            self.types = await self.execute_query(query)
+            logger.debug("'types' cache updated from database")
+
+        if opt in (4, 5):
             query = "SELECT guildID, abbrev, summary FROM snips;"
             self.snip_list = await self.execute_query(query)
             logger.debug("'snip_list' cache updated from database")
@@ -185,6 +197,19 @@ class DataManager:
         await self.update_cache(1)
 
 
+    async def set_type(self, guildID: int, categoryID: int, typeID: int):
+        query = f"""
+            INSERT INTO category_types
+            VALUES ({guildID}, {categoryID}, {typeID}) as matches
+            ON DUPLICATE KEY UPDATE 
+            guildID = matches.guildID,
+            categoryID = matches.categoryID,
+            type = matches.type;
+            """
+        await self.execute_query(query, False)
+        await self.update_cache(2)
+
+
     # Adds snip to DB
     async def add_snip(self, guildID: int, authorID: int, abbrev: str, summary: str, content: str):
         query = f"""
@@ -193,7 +218,7 @@ class DataManager:
             """
         values = (guildID, authorID, abbrev, summary, content)
         await self.execute_query(query, False, False, values)
-        await self.update_cache(2)
+        await self.update_cache(4)
 
 
     # Removes snip from DB
@@ -203,7 +228,7 @@ class DataManager:
             snips.guildID = {guildID} AND snips.abbrev = '{abbrev}';
             """
         await self.execute_query(query, False)
-        await self.update_cache(2)
+        await self.update_cache(4)
 
 
     # Removes snip from DB

@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+from typing import List
 from classes.error_handler import *
 from classes.embeds import *
 from utils import checks
@@ -67,67 +68,67 @@ class Tickets(commands.Cog):
             raise BotError(f"/status sent an error: {e}")
         
 
-    # # Manually update the status of a ticket channel
-    # @commands.hybrid_command(name="set_type", description="Set the type of a tickets category")
-    # @checks.is_admin()
-    # @app_commands.describe(category="Select a category (must be a tickets category)")
-    # @app_commands.choices(status=[
-    #     app_commands.Choice(name=f"Uncategorized", value="1"),
-    #     app_commands.Choice(name=f"Admin / Dev Support", value="2"),
-    #     app_commands.Choice(name=f"Game Reports", value="3"),
-    #     app_commands.Choice(name=f"Giveaways", value="4"),
-    #     app_commands.Choice(name=f"NSFW", value="5"),
-    #     app_commands.Choice(name=f"Appeals", value="6"),
-    #     app_commands.Choice(name=f"Data / Reimbursements", value="7")])
-    # async def set_type(self, ctx, category: discord.CategoryChannel, type: discord.app_commands.Choice[str]):
-    #     try:    
-    #         guild = ctx.guild
-    #         category_num = category.value
-
-    #         monitor_type == "Tickets category" or monitor_type == "Overflow category"
+    # Send a snip from the database
+    @app_commands.command(name="set_type", description="Set the type of a tickets category")
+    @checks.is_user_app()
+    @app_commands.describe(category="Tickets category to set a type for")
+    @app_commands.describe(type="Select a type, or search by keyword")
+    async def set_type(self, interaction: discord.Interaction, category: discord.CategoryChannel, type: str):
+        try:
+            guild = interaction.guild
+            types = [
+                f"{typeID}: {name}" for typeID, name
+                in self.bot.data_manager.types]
             
+            typeEmbed = discord.Embed(title="", 
+                                      description=f"Set **{category.name}** as type **{type}**", 
+                                      color=0x3ad407)
 
-    #         search_monitor = [
-    #                 (channelID, monitorType) for guildID, channelID, monitorType 
-    #                 in self.bot.data_manager.monitored_channels 
-    #                 if (channelID == this_categoryID)]
+            if type not in types:
+                typeEmbed.description=f"❌ Type **{type}** not found"
+                typeEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=typeEmbed)
+                return
+            
+            typeID = int(type[:(type.index(":"))])
 
-    #         if status is None and emoji is None:
-    #             errorEmbed = discord.Embed(title=f"", 
-    #                                 description="❌ You must select a status or provide an emoji", 
-    #                                 color=0xFF0000)
+            search_monitor = [
+                (channelID) for guildID, channelID, monitorType 
+                in self.bot.data_manager.monitored_channels
+                if (channelID == category.id)]
+            
+            if (len(search_monitor) == 0):
+                typeEmbed.description=f"❌ Category is not a tickets category"
+                typeEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=typeEmbed)
+                return
+            
+            await self.bot.data_manager.set_type(guild.id, category.id, typeID)
+            await interaction.response.send_message(embed=typeEmbed)
 
-    #             await ctx.send(embed=errorEmbed, ephemeral=True)
-    #             return
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/set_type sent an error: {e}")
 
-    #         # Prioritizes status selection over custom emojis
-    #         if status is not None:
-    #             status_flag = True
-    #             emoji_name = status.name
-    #             emoji_str = status.value
 
-    #         if emoji_str is None:
-    #             if (self.bot.channel_status.check_unicode(emoji)):
-    #                 emoji_str = emoji
+    @set_type.autocomplete('type')
+    async def type_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        if not guild:
+            return []
+        
+        types = [
+            f"{typeID}: {name}" for typeID, name
+            in self.bot.data_manager.types
+            ]
 
-    #         result = await self.bot.channel_status.set_emoji(channel, emoji_str, True)
-
-    #         # Fix for outputting readable explanation of what the emoji is for
-    #         if status_flag:
-    #             emoji_str = emoji_name
-
-    #         statusEmbed = Embeds(self.bot, title="", 
-    #                             description=f"Channel status set to {emoji_str}\n*Please wait up to 5 minutes for edits to appear*")
-
-    #         if not result:
-    #             statusEmbed.description=f"Failed to set channel status to {emoji_str}, current or pending status is already set as this"
-    #             statusEmbed.color=0xFF0000
-
-    #         await ctx.reply(embed=statusEmbed)
-
-    #     except Exception as e:
-    #         logger.exception(e)
-    #         raise BotError(f"/status sent an error: {e}")
+        matches = [
+            app_commands.Choice(name=type, value=type)
+            for type in types
+            if current.lower() in type.lower()]
+        
+        return matches[:25]
+            
     
     
 
