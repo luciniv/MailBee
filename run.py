@@ -18,7 +18,7 @@ ready = True
 class Mantid(commands.Bot):
     def __init__(self):
         # guild, guild_members, guild_messages, and message_content intents, plus all default intents
-        intents = discord.Intents(1 | 2 | 512 | 32768)
+        intents = discord.Intents(1)
         description = ""
 
         # Create bot instance with command prefix
