@@ -51,18 +51,18 @@ class Mantid(commands.Bot):
             startup = False
         
         logger.log("SYSTEM", "------- LOADING COGS ---------------------")
-        # for filename in os.listdir('./cogs'):
-        #     if filename.endswith('.py'):
-        #          # Attempt to load each cog, ignore if already loaded
-        #         if (f'cogs.{filename[:-3]}') in self.extensions:
-        #             logger.info(f"Already loaded cog: {filename}")
-        #         else:  
-        #             try:
-        #                 await bot.load_extension(f'cogs.{filename[:-3]}')
-        #                 logger.success(f"Loaded cog: {filename}")
-        #             except Exception as e:
-        #                 ready = False
-        #                 logger.exception(f"Failed to load {filename}: {e}")
+        for filename in os.listdir('./cogs'):
+            if filename.endswith('.py'):
+                 # Attempt to load each cog, ignore if already loaded
+                if (f'cogs.{filename[:-3]}') in self.extensions:
+                    logger.info(f"Already loaded cog: {filename}")
+                else:  
+                    try:
+                        await bot.load_extension(f'cogs.{filename[:-3]}')
+                        logger.success(f"Loaded cog: {filename}")
+                    except Exception as e:
+                        ready = False
+                        logger.exception(f"Failed to load {filename}: {e}")
 
         # Prints READY ASCII text (duh)          
         if ready:
