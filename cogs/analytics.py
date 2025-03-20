@@ -102,6 +102,7 @@ class Analytics(commands.Cog):
             embed = message.embeds[0]
             footer = embed.footer.text
             openID = (footer.split())[-1]
+            open_name = ((footer.split())[0])[:-2]
             timestamp = message.created_at
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -142,8 +143,7 @@ class Analytics(commands.Cog):
             # Check if associated ticket channel exists, if not assume ticket has already closed
             ticket_channel = None
             for channel in guild.channels:
-                member = await guild.fetch_member(openID)
-                if ((member.name).replace("_", "").replace(".", "") in channel.name):
+                if ((open_name).replace("_", "").replace(".", "") in channel.name):
                     ticket_channel = channel
 
             if ticket_channel is not None:
