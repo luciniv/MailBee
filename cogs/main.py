@@ -103,9 +103,10 @@ class Main(commands.Cog):
                             (channelID) for guildID, channelID, monitorType 
                             in self.bot.data_manager.monitored_channels if channelID == channel.id]
                         if (len(search_monitor) != 0):
-                            setupEmbed.add_field(name="", 
-                                                value=f"{emojis.mantis} <#{channel.id}> is already set as this server's **Modmail log**", 
-                                                inline=False)
+                            pass
+                            # setupEmbed.add_field(name="", 
+                            #                     value=f"{emojis.mantis} <#{channel.id}> is already set as this server's **Modmail log**", 
+                            #                     inline=False)
                         else:
                             await self.bot.data_manager.add_monitor(guild.id, channel.id, "Modmail log")
                             setupEmbed.add_field(name="", 
@@ -122,9 +123,10 @@ class Main(commands.Cog):
                                 (channelID) for guildID, channelID, monitorType 
                                 in self.bot.data_manager.monitored_channels if channelID == this_category.id]
                             if (len(search_monitor) != 0):
-                                setupEmbed.add_field(name="", 
-                                                    value=f"{emojis.mantis} **<#{this_category.id}>** is already set as a **Tickets Category**", 
-                                                    inline=False)
+                                pass
+                                # setupEmbed.add_field(name="", 
+                                #                     value=f"{emojis.mantis} **<#{this_category.id}>** is already set as a **Tickets Category**", 
+                                #                     inline=False)
                             else:
                                 await self.bot.data_manager.add_monitor(guild.id, this_category.id, "Tickets category")
                                 setupEmbed.add_field(name="", 
@@ -138,9 +140,10 @@ class Main(commands.Cog):
                             (channelID) for guildID, channelID, monitorType 
                             in self.bot.data_manager.monitored_channels if channelID == channel.id]
                         if (len(search_monitor) != 0):
-                            setupEmbed.add_field(name="", 
-                                                value=f"{emojis.mantis} **<#{channel.id}>** is already set as a **Tickets Category**", 
-                                                inline=False)
+                            pass
+                            # setupEmbed.add_field(name="", 
+                            #                     value=f"{emojis.mantis} **<#{channel.id}>** is already set as a **Tickets Category**", 
+                            #                     inline=False)
                         else:
                             await self.bot.data_manager.add_monitor(guild.id, channel.id, "Tickets category")
                             setupEmbed.add_field(name="", 
