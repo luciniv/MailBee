@@ -13,6 +13,7 @@ class Analytics(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.processing_queue = asyncio.Queue()
+        self.mod_ids = set()
 
 
     async def cog_load(self):
@@ -141,7 +142,8 @@ class Analytics(commands.Cog):
             # Check if associated ticket channel exists, if not assume ticket has already closed
             ticket_channel = None
             for channel in guild.channels:
-                if (((guild.get_member(int(openID))).name).replace("_", "").replace(".", "") in channel.name):
+                member = await guild.fetch_member(openID)
+                if ((member.name).replace("_", "").replace(".", "") in channel.name):
                     ticket_channel = channel
 
             if ticket_channel is not None:
@@ -169,7 +171,7 @@ class Analytics(commands.Cog):
                 logger.warning(f"*** Processed open modmail ticket (Message ID: {message.id}) BAD DATA ***")
 
         except Exception as e:
-            logger.exception(f"Error processing caught modmail ticket: {e}")
+            logger.exception(f"Error processing new or caught modmail ticket: {e}")
 
 
     # Updates Modmail tickets as closed in the DB
@@ -188,8 +190,15 @@ class Analytics(commands.Cog):
                 openID = (footer.split())[-1]
                 author_name = (embed.author.name).split()
                 closeName = author_name[0][:-2]
-                closeID = guild.get_member_named(closeName).id
+                closeID = [userID for (guildID, username, userID) 
+                in self.mod_ids if (guildID == guild.id and username == closeName)]
 
+                if (len(closeID) != 0):
+                    closeID = closeID[0]
+
+                elif (len(closeID) > 1):
+                    closeID = closeID[-1]
+                
                 query = f"""
                     SELECT messageID FROM tickets WHERE 
                     (guildID = {guild.id}) AND 
@@ -278,6 +287,7 @@ class Analytics(commands.Cog):
             messageID = message.id
             guild = message.guild
             this_authorID = message.author.id
+            this_authorName = message.author.name
             timestamp = message.created_at
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
             monitor_type = ""
@@ -317,7 +327,15 @@ class Analytics(commands.Cog):
                             elif (embed.title == "Message Sent"):
                                 author_name = (embed.author.name).split()
                                 author_username = (author_name[0])[:-2]
-                                authorID = guild.get_member_named(author_username).id
+                                authorID = [userID for (guildID, username, userID) 
+                                in self.mod_ids if (guildID == guild.id and username == author_username)]
+
+                                if (len(authorID) != 0):
+                                    authorID = authorID[0]
+
+                                elif (len(authorID) > 1):
+                                    authorID = authorID[-1]
+
                                 logger.debug(f"Modmail bot sent message from {author_username}, {authorID}")
 
                                 await self.bot.data_manager.add_ticket_message(messageID, 
@@ -337,13 +355,15 @@ class Analytics(commands.Cog):
                             # Chatting message or =close
                             if (message.content.startswith(("=c", "=ac"))):
                                 logger.debug(f"Modmail channel {this_channel.name} ({this_channelID}) closed")
+                                self.mod_ids.add((guild.id, this_authorName, this_authorID))
+
                                 await self.log_closed_ticket(message, modmail_messageID)
                                 # None argument indicates deleting channel from status queue
                                 await self.bot.channel_status.set_emoji(channel, None)
 
                             elif (message.content.startswith(("=r ", "=reply ", "=ar ", "=areply ", "=air", "=aireply", 
                                                              "=s ", "=snippet ", "=as ", "=asnippet "))):
-                                pass
+                                self.mod_ids.add((guild.id, this_authorName, this_authorID))
 
                             else: 
                                 logger.debug(f"Chatting message in ticket {this_channel.name}")
@@ -355,8 +375,8 @@ class Analytics(commands.Cog):
                                                                                format_time, 
                                                                                "Discussion")
                         else:
-                            pass
-                            # Message to be sent by Modmail (IGNORE)
+                            # Message to be sent by Modmail
+                            self.mod_ids.add((guild.id, this_authorName, this_authorID))
                 else:
                     logger.debug("Ticket channel message NOT within a logged ticket")
         else: 

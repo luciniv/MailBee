@@ -598,7 +598,7 @@ class Stats(commands.Cog):
                 write_list = []
 
                 for modID, result in zip(modIDs, result_list):
-                    mod = guild.get_member(modID)
+                    mod = await guild.fetch_member(modID)
                     data = [guildID, modID, mod.name]
                     write_list.append((*data, *result))
 
