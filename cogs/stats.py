@@ -566,8 +566,11 @@ class Stats(commands.Cog):
 
             modIDs_query = queries.get_mod_ids(guildID, intervals)
             modIDs_result = await self.bot.data_manager.execute_query(modIDs_query)
+            print(modIDs_query)
             if len(modIDs_result) != 0:
+                print(modIDs_result)
                 modIDs = modIDs_result
+                print(modIDs)
 
             statsEmbed = Embeds(self.bot, title=f"Moderator Activity Export", 
                                 description=f"Download the attached CSV file to view data")
@@ -575,6 +578,7 @@ class Stats(commands.Cog):
             
             result_list = []
             query_list = queries.mod_activity_CSV(guildID, modIDs, intervals)
+            print(query_list)
 
             for query in query_list:
                 result = await self.bot.data_manager.execute_query(query)
