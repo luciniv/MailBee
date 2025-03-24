@@ -104,12 +104,15 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
 #     return None
 
 def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
-    print("entered list_ordered_data_store_entries")
-    ordered_datastore = urllib.parse.quote(ordered_datastore, safe='')
-    url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
-    params = {'max_page_size': 1, 'order_by': 'desc'}
-    response = requests.get(url, headers=HEADERS, params=params)
-    return response.json()
+    try:
+        print("entered list_ordered_data_store_entries")
+        ordered_datastore = urllib.parse.quote(ordered_datastore, safe='')
+        url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
+        params = {'max_page_size': 1, 'order_by': 'desc'}
+        response = requests.get(url, headers=HEADERS, params=params)
+        return response.json()
+    except Exception as e:
+        print(e)
 
 async def get_player_data(game_type, game_id, user_id):
     print("entered get_player_data")
