@@ -111,6 +111,7 @@ def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='globa
         url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
         params = {'max_page_size': 1, 'order_by': 'desc'}
         response = requests.get(url, headers=HEADERS, params=params)
+        print(response.text)
         return response.json()
     except Exception as e:
         logger.exception(e)
