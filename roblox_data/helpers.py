@@ -7,6 +7,7 @@ import json
 import asyncio
 from dotenv import load_dotenv
 from pathlib import Path
+from utils.logger import *
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
@@ -112,7 +113,8 @@ def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='globa
         response = requests.get(url, headers=HEADERS, params=params)
         return response.json()
     except Exception as e:
-        print(e)
+        logger.exception(e)
+        
 
 async def get_player_data(game_type, game_id, user_id):
     print("entered get_player_data")
