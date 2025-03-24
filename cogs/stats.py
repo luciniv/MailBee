@@ -534,7 +534,6 @@ class Stats(commands.Cog):
     @commands.hybrid_command(name="export_mod_activity", description="Output a CSV file of this server's moderators'"
                              " ticketing activity over the past X amount of time")
     @checks.is_admin()
-    @app_commands.describe(roles="Input the moderator role(s) for this server (their names must contain 'mod')")
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
@@ -543,13 +542,12 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Past Month", value="1 MONTH"),
         app_commands.Choice(name="All Time", value="TOTAL"),
         app_commands.Choice(name="All of the above", value="ALL")])
-    async def export_mod_activity(self, ctx, roles: Greedy[discord.Role], timeframe: discord.app_commands.Choice[str]):
+    async def export_mod_activity(self, ctx, timeframe: discord.app_commands.Choice[str]):
         try:
             # Allows command to take longer than 3 seconds
             await ctx.defer()
             await self.bot.data_manager.flush_messages()
 
-            mod_roles = []
             modIDs = []
             time_value = timeframe.value
             time_name = timeframe.name
@@ -566,14 +564,10 @@ class Stats(commands.Cog):
                 intervals = [f"{time_value}"]
                 rows = [f"{time_name}"]
 
-            for role in roles:
-                if ("mod" in role.name.casefold()):
-                    mod_roles.append(role)
-
-            for role in mod_roles:
-                for member in role.members:
-                    if (member.id not in modIDs):
-                        modIDs.append(member.id)
+            modIDs_query = queries.get_mod_ids(guildID, intervals)
+            modIDs_result = await self.bot.data_manager.execute_query(modIDs_query)
+            if len(modIDs_result) != 0:
+                modIDs = modIDs_result[0]
 
             statsEmbed = Embeds(self.bot, title=f"Moderator Activity Export", 
                                 description=f"Download the attached CSV file to view data")
@@ -609,6 +603,7 @@ class Stats(commands.Cog):
             await ctx.send(embed=statsEmbed, file=file)
 
         except Exception as e:
+            logger.exception(e)
             raise BotError(f"/export_mod_activity sent an error: {e}")
 
     # OTHER STATS

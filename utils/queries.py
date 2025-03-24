@@ -731,6 +731,40 @@ def mod_activity(guildID: int, closeByID: int, intervals: List[str]):
     
     return query
 
+
+def get_mod_ids(guildID: int, intervals: List[str]):
+    if "TOTAL" in intervals:
+        query = f"""
+            SELECT closeByID AS authorID 
+            FROM tickets 
+            WHERE tickets.guildID = {guildID}
+            AND tickets.closeByID != NULL
+            UNION
+            SELECT authorID 
+            FROM tickets
+            INNER JOIN ticket_messages 
+            ON tickets.messageID = ticket_messages.modmail_messageID
+            WHERE tickets.guildID = {guildID}
+            AND (ticket_messages.type = 'Sent' OR ticket_messages.type = 'Discussion');"""
+    else:
+        query = f"""
+            SELECT closeByID AS authorID 
+            FROM tickets 
+            WHERE tickets.guildID = {guildID}
+            AND tickets.closeByID != NULL
+            AND tickets.dateClose >= NOW() - INTERVAL {intervals[0]})
+            UNION
+            SELECT authorID 
+            FROM tickets
+            INNER JOIN ticket_messages 
+            ON tickets.messageID = ticket_messages.modmail_messageID
+            WHERE tickets.guildID = {guildID}
+            AND (ticket_messages.type = 'Sent' OR ticket_messages.type = 'Discussion')
+            AND ticket_messages.date >= NOW() - INTERVAL {intervals[0]};"""
+        
+    return query
+
+
 # Query string for /mod_activity_CSV
 def mod_activity_CSV(guildID: int, modIDs: int, intervals: List[str]):
     query_list = []
