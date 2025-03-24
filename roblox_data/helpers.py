@@ -87,21 +87,29 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
     return None
 
 
-async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
+# async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
+#     print("entered list_ordered_data_store_entries")
+#     ordered_datastore = urllib.parse.quote(ordered_datastore, safe='')
+#     url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
+#     params = {'max_page_size': 1, 'order_by': 'desc'}
+
+#     async with aiohttp.ClientSession() as session:
+#         async with session.get(url, params=params, headers=HEADERS) as response:
+#             print(f"Ordered Datastore API Status: {response.status}")
+
+#             if response.status == 200:
+#                 print("got the response")
+#                 return await response.json()  # Parse JSON response
+
+#     return None
+
+def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
     print("entered list_ordered_data_store_entries")
     ordered_datastore = urllib.parse.quote(ordered_datastore, safe='')
     url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
     params = {'max_page_size': 1, 'order_by': 'desc'}
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=HEADERS, params=params) as response:
-            print(f"Ordered Datastore API Status: {response.status}")
-
-            if response.status == 200:
-                print("got the response")
-                return await response.json()  # Parse JSON response
-
-    return None
+    response = requests.get(url, headers=HEADERS, params=params)
+    return response.json()
 
 async def get_player_data(game_type, game_id, user_id):
     print("entered get_player_data")
@@ -110,7 +118,8 @@ async def get_player_data(game_type, game_id, user_id):
     print("section checking if keys prefix is in game config")
     if 'keys_prefix' in game_config:
         print("running api call for ordered data store entries")
-        key_data = await list_ordered_data_store_entries(game_id, f"{game_config['keys_prefix']}{user_id}")
+        print(game_id, f"{game_config['keys_prefix']}{user_id}")
+        key_data = list_ordered_data_store_entries(game_id, f"{game_config['keys_prefix']}{user_id}")
         if key_data is None:
             return None
         time_key = key_data.get('entries', [{}])[0].get('value')
@@ -152,6 +161,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
     retries = 0
     while retries < MAX_RETRIES:
         print("called get_player_data")
+        print(game_type.name, game_type.value, user_id)
         player_data = await get_player_data(game_type.name, game_type.value, user_id)
 
         if player_data is not None:

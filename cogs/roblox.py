@@ -7,8 +7,10 @@ from utils import checks
 
 
 GAME_TYPE_CHOICES = [
+    discord.app_commands.Choice(name="Creatures of Sonaria", value=1831550657),
     discord.app_commands.Choice(name="Dragon Adventures", value=1235188606),
-    discord.app_commands.Choice(name="Horse Life", value=5422546686)]
+    discord.app_commands.Choice(name="Horse Life", value=5422546686)
+]
 
 
 class Roblox(commands.Cog):

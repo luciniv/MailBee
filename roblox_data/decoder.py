@@ -69,6 +69,7 @@ def horse_life_decoder(player_data):
 
     return prettify_json(json.dumps(new_data))
 
+
 CONFIG = {
     'Dragon Adventures': {
         'keys_prefix': 'keys/live',
