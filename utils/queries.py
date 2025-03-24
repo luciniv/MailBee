@@ -752,7 +752,7 @@ def get_mod_ids(guildID: int, intervals: List[str]):
             FROM tickets 
             WHERE tickets.guildID = {guildID}
             AND tickets.closeByID != NULL
-            AND tickets.dateClose >= NOW() - INTERVAL {intervals[0]})
+            AND tickets.dateClose >= NOW() - INTERVAL {intervals[0]}
             UNION
             SELECT authorID 
             FROM tickets
