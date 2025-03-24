@@ -567,7 +567,7 @@ class Stats(commands.Cog):
             modIDs_query = queries.get_mod_ids(guildID, intervals)
             modIDs_result = await self.bot.data_manager.execute_query(modIDs_query)
             if len(modIDs_result) != 0:
-                modIDs = modIDs_result[0]
+                modIDs = modIDs_result
 
             statsEmbed = Embeds(self.bot, title=f"Moderator Activity Export", 
                                 description=f"Download the attached CSV file to view data")
