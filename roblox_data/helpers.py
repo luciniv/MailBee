@@ -130,10 +130,8 @@ async def get_player_data(game_type, game_id, user_id):
             print(game_id, f"{game_config['keys_prefix']}{user_id}")
             key_data = await list_ordered_data_store_entries(game_id, f"{game_config['keys_prefix']}{user_id}")
             if key_data is None:
-                # return None
-                pass
-            # time_key = key_data.get('entries', [{}])[0].get('value')
-            time_key = user_id
+                return None
+            time_key = key_data.get('entries', [{}])[0].get('value')
         else:
             time_key = None
 
