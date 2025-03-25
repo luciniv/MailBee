@@ -6,9 +6,34 @@ from utils import emojis, checks
 from utils.logger import *
 
 
+SERVER_TO_GAME = {
+    1196293227976863806: ("Horse Life", 5422546686, "7b1cd9dc-662b-456a-93e2-716c79ca9ad4"),
+    714722808009064492: ("Creatures of Sonaria", 1831550657, "e4ff7605-8b4b-4498-8975-7d82ba68fcb8")
+}
+
+
 class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command()
+    @checks.is_owner()
+    async def pri(self, ctx, id):
+        guild = ctx.guild
+        priority_values = [-1,-1]
+        game_type = SERVER_TO_GAME.get(guild.id, None)
+        print(game_type)
+
+        if game_type is not None:
+            priority_values = await get_priority(game_type, guild.id, id)
+            print(f"priority values: {priority_values}")
+
+        if not priority_values:
+            priority_values = [-1,-1]
+            print("priority values set to default")
+
+        print(f"ending priority values: {priority_values}")
+        await ctx.send(priority_values)
 
 
     # Runs an SQL query from a message
