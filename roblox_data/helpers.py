@@ -83,6 +83,7 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
         print("entered get_datastore_entry")
         url = f'https://apis.roblox.com/datastores/v1/universes/{universe_id}/standard-datastores/datastore/entries/entry'
         params = {'datastoreName': datastore_name, 'entryKey': entry_key, 'scope': scope}
+        print("get_data_store_entry URL is ", url)
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params, headers=HEADERS) as response:
@@ -103,6 +104,7 @@ async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope=
         ordered_datastore = urllib.parse.quote(ordered_datastore, safe='')
         url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
         params = {'max_page_size': 1, 'order_by': 'desc'}
+        print("list_ordered_data_store_entries URL is ", url)
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params=params, headers=HEADERS) as response:
@@ -126,7 +128,7 @@ async def get_player_data(game_type, game_id, user_id):
         if 'keys_prefix' in game_config:
             print("running api call for ordered data store entries")
             print(game_id, f"{game_config['keys_prefix']}{user_id}")
-            key_data = list_ordered_data_store_entries(game_id, f"{game_config['keys_prefix']}{user_id}")
+            key_data = list_ordered_data_store_entries(game_id, f'{game_config['keys_prefix']}{user_id}')
             if key_data is None:
                 return None
             time_key = key_data.get('entries', [{}])[0].get('value')
@@ -231,7 +233,6 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
         
         if user_info is None:
             return None, None, "User account does not exist on Roblox"
-        
 
         user_id = user_info['id']
         username = user_info['name']
