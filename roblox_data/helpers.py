@@ -133,7 +133,7 @@ async def get_player_data(game_type, game_id, user_id):
                 # return None
                 pass
             # time_key = key_data.get('entries', [{}])[0].get('value')
-            time_key = None
+            time_key = user_id
         else:
             time_key = None
 
