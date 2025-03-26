@@ -1,5 +1,6 @@
 import discord
 import asyncio
+import time
 from discord.ext import commands
 from roblox_data.helpers import *
 from utils import emojis, checks
@@ -19,8 +20,8 @@ class Analytics(commands.Cog):
 
     async def cog_load(self):
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        await self.catch_modmail_backlog()
-        await self.process_queue()
+        # await self.catch_modmail_backlog()
+        # await self.process_queue()
 
 
     # Populate queue with unprocessed messages
@@ -97,6 +98,7 @@ class Analytics(commands.Cog):
     # Adds ticket to Redis cache if the ticket is still open
     async def log_open_ticket(self, message: discord.Message, status: str):
         try:
+            print("GOT TO MODMAIL LOG CAPTURED")
             guild = message.guild
             this_channel = message.channel
             this_channelID = this_channel.id
@@ -107,13 +109,15 @@ class Analytics(commands.Cog):
             timestamp = message.created_at
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
-            await asyncio.sleep(0.2)
-
-            # Check if associated ticket channel exists, if not assume ticket has already closed
+            # Check if associated ticket channel exists for 2 seconds, if not assume ticket has already closed
             ticket_channel = None
-            for channel in guild.channels:
-                if ((open_name).replace("_", "").replace(".", "") in channel.name):
-                    ticket_channel = channel
+            start_time = time.time()
+            while ((time.time() - start_time < 2) and (ticket_channel is None)):
+                print("checked for channel")
+                for channel in guild.channels:
+                    if ((open_name).replace("_", "").replace(".", "") in channel.name):
+                        ticket_channel = channel
+                await asyncio.sleep(0.1)
 
             if ticket_channel is not None:
                 ticket_channelID = ticket_channel.id                         
@@ -164,7 +168,7 @@ class Analytics(commands.Cog):
                 {priority_values[1]});
                 """
             await self.bot.data_manager.execute_query(query, False)
-            await message.add_reaction(emojis.mantis)
+            # await message.add_reaction(emojis.mantis)
 
             if (status == 'good'):
                 logger.success(f"*** Processed open modmail ticket (Message ID: {message.id}) GOOD DATA ***")
@@ -259,6 +263,13 @@ class Analytics(commands.Cog):
                 
         except Exception as e:
             logger.error(f"Error closing modmail ticket: {e}")
+
+   
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel):
+        if (isinstance(channel, discord.TextChannel)):
+            print("GOT TO CHANNEL CAPTURED")
+            pass
 
 
     # TODO add this: await self.bot.process_commands(message)
