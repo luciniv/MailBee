@@ -11,6 +11,26 @@ def prettify_json(data):
         return json.dumps(json_data, indent=4)
     except json.JSONDecodeError:
         return data
+    
+
+def lua_test():
+# Define your Lua script
+    lua_script = """
+    print("Hello from Lua!")
+    return "Lua script executed successfully."
+    """
+    
+    # Save Lua script to a temporary file
+    with open("/tmp/temp_script.lua", "w") as file:
+        file.write(lua_script)
+    
+    # Run Lua script using Lune
+    result = subprocess.run(
+        ["/Users/lucin/.rokit/bin/lune", "run", "/tmp/temp_script.lua"],  # Ensure to replace with the correct path to Lune
+        text=True,
+        capture_output=True
+    )
+    return result
 
 
 def call_luau_script(input_string):

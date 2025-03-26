@@ -1,7 +1,11 @@
 import discord
+import subprocess
+import tempfile
+import os
 from discord.ext import commands
 from classes.error_handler import *
 from roblox_data.helpers import *
+from roblox_data.decoder import lua_test
 from utils import emojis, checks
 from utils.logger import *
 
@@ -15,6 +19,25 @@ SERVER_TO_GAME = {
 class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    # Discord command that triggers the Lua script execution
+    @commands.command()
+    async def lua(self, ctx):
+        try:
+            result = lua_test()
+            
+            # Check if the result is successful
+            if result.returncode == 0:
+                # Output the Lua script's output
+                output = result.stdout.strip()
+                await ctx.send(f"Lua output: {output}")
+            else:
+                # If there was an error, send the error message
+                error = result.stderr.strip()
+                await ctx.send(f"Lua script error: {error}")
+
+        except Exception as e:
+            await ctx.send(f"An error occurred: {str(e)}")
 
     @commands.command()
     @checks.is_owner()
