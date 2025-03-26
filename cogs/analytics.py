@@ -20,8 +20,8 @@ class Analytics(commands.Cog):
 
     async def cog_load(self):
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        # await self.catch_modmail_backlog()
-        # await self.process_queue()
+        await self.catch_modmail_backlog()
+        await self.process_queue()
 
 
     # Populate queue with unprocessed messages
@@ -168,7 +168,7 @@ class Analytics(commands.Cog):
                 {priority_values[1]});
                 """
             await self.bot.data_manager.execute_query(query, False)
-            # await message.add_reaction(emojis.mantis)
+            await message.add_reaction(emojis.mantis)
 
             if (status == 'good'):
                 logger.success(f"*** Processed open modmail ticket (Message ID: {message.id}) GOOD DATA ***")
