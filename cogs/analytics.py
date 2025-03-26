@@ -107,6 +107,31 @@ class Analytics(commands.Cog):
             timestamp = message.created_at
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
+            await asyncio.sleep(0.2)
+
+            # Check if associated ticket channel exists, if not assume ticket has already closed
+            ticket_channel = None
+            for channel in guild.channels:
+                if ((open_name).replace("_", "").replace(".", "") in channel.name):
+                    ticket_channel = channel
+
+            if ticket_channel is not None:
+                ticket_channelID = ticket_channel.id                         
+                ticket_channel_timestamp = ticket_channel.created_at
+
+                # Check that found channel shares creation time (within one minute), if not assume this channel belongs to a different ticket
+                difference = abs((timestamp - ticket_channel_timestamp).total_seconds())
+                if difference <= 60:
+                    await self.bot.data_manager.add_ticket(ticket_channelID, message.id)
+                    await self.bot.channel_status.set_emoji(ticket_channel, "new")
+
+                else:
+                    logger.debug(f"Attempted to match incorrect channel ({ticket_channelID}) to modmail log 'New Ticket' message, ticket must have already closed")
+                    pass
+            else:
+                logger.debug("Ticket channel is already closed")
+                pass
+
             priority_values = [-1,-1]
             game_type = SERVER_TO_GAME.get(guild.id, None)
             print(game_type)
@@ -139,33 +164,8 @@ class Analytics(commands.Cog):
                 {priority_values[1]});
                 """
             await self.bot.data_manager.execute_query(query, False)
-            await asyncio.sleep(0.5)
+            await message.add_reaction(emojis.mantis)
 
-            # Check if associated ticket channel exists, if not assume ticket has already closed
-            ticket_channel = None
-            for channel in guild.channels:
-                if ((open_name).replace("_", "").replace(".", "") in channel.name):
-                    ticket_channel = channel
-
-            if ticket_channel is not None:
-                ticket_channelID = ticket_channel.id                         
-                ticket_channel_timestamp = ticket_channel.created_at
-
-                # Check that found channel shares creation time (within one minute), if not assume this channel belongs to a different ticket
-                difference = abs((timestamp - ticket_channel_timestamp).total_seconds())
-                if difference <= 60:
-                    await self.bot.data_manager.add_ticket(ticket_channelID, message.id)
-                    await self.bot.channel_status.set_emoji(ticket_channel, "new")
-                    await message.add_reaction(emojis.mantis)
-
-                else:
-                    logger.debug(f"Attempted to match incorrect channel ({ticket_channelID}) to modmail log 'New Ticket' message, ticket must have already closed")
-                    await message.add_reaction(emojis.mantis)
-                    pass
-            else:
-                logger.debug("Ticket channel is already closed")
-                await message.add_reaction(emojis.mantis)
-                pass
             if (status == 'good'):
                 logger.success(f"*** Processed open modmail ticket (Message ID: {message.id}) GOOD DATA ***")
             else:
