@@ -11,46 +11,20 @@ def prettify_json(data):
         return json.dumps(json_data, indent=4)
     except json.JSONDecodeError:
         return data
-    
-
-def lua_test():
-# Define your Lua script
-    lua_script = """
-    print("Hello from Lua!")
-    return "Lua script executed successfully."
-    """
-    
-    # Save Lua script to a temporary file
-    with open("/tmp/temp_script.lua", "w") as file:
-        file.write(lua_script)
-    
-    # Run Lua script using Lune
-    result = subprocess.run(
-        ["/Users/lucin/.rokit/bin/lune", "run", "/tmp/temp_script.lua"],  # Ensure to replace with the correct path to Lune
-        text=True,
-        capture_output=True
-    )
-    return result
 
 
 def call_luau_script(input_string):
-    print("entered call_luau_script")
     with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix=".txt") as temp_file:
         temp_file.write(input_string)
         temp_file_path = temp_file.name
-
-    print("opened tempfile")
 
     result = subprocess.run(
         ["/root/.rokit/bin/lune", "run", "translate.luau", temp_file_path],
         text=True,
         capture_output=True
     )
-    
-    print("ran subprocess")
 
     output = result.stdout.strip()
-    print("output is", output)
     os.remove(temp_file_path)
 
     return output
@@ -71,7 +45,6 @@ def sonaria_decoder(player_data):
 
 
 def horse_life_decoder(player_data):
-    print("Entered decoder for HL")
     decoded_data = player_data.replace('\\\\\\"', '\\\\"')
     decoded_data = decoded_data.replace('\\"', '"')
     
@@ -87,7 +60,7 @@ def horse_life_decoder(player_data):
                 else:
                     simplified_node[child["Name"]] = process_node(child) 
             return simplified_node
-        print("the thing right before serialized data")
+      
         return process_node(data["SerializedData"])
     
     new_data = simplify_data(json.loads(decoded_data))
