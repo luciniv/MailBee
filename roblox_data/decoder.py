@@ -19,7 +19,7 @@ def call_luau_script(input_string):
         temp_file_path = temp_file.name
 
     result = subprocess.run(
-        ["/root/.rokit/bin/lune", "run", "translate.luau", temp_file_path],
+        ["/root/.rokit/bin/lune", "run", "/root/Mantid/roblox_data/translate.luau", temp_file_path],
         text=True,
         capture_output=True
     )
