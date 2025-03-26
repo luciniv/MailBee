@@ -2,6 +2,7 @@ import subprocess
 import tempfile
 import os
 import json
+from .compression.DA import ConversionTable
 
 
 def prettify_json(data):
@@ -30,8 +31,6 @@ def call_luau_script(input_string):
 
 
 def da_decoder(player_data):
-    from compression.DA import ConversionTable
-
     if not isinstance(player_data, str):
         player_data = json.dumps(player_data)
 
