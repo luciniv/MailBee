@@ -5,7 +5,6 @@ import os
 from discord.ext import commands
 from classes.error_handler import *
 from roblox_data.helpers import *
-from roblox_data.decoder import lua_test
 from utils import emojis, checks
 from utils.logger import *
 
