@@ -1,2 +1,2 @@
-Server ID,Server Name,Open Tickets,All Tickets,All Time Average Ticket Duration,All Time Average First Response Time,All Time Average Messages Per Ticket Resolved
-1334213483469869139,Ditnam,0,0,,,
+Server ID,Server Name,Total Tickets Open,Total Tickets Closed,Num Tickets Opened This Week,Num Tickets Still Open From This Week,Num Tickets Closed From This Week,Total Tickets Closed This Week,Day Most Tickets Opened,Day Most Tickets Closed,Average Ticket Duration,Average First Response Time,Average Messages Per Ticket Resolved,Mod: Closed The Most Tickets,Mod: Sent The Most Replies,Mod: Sent The Most Discussions,Num Mods Answering Tickets
+1334213483469869139,Ditnam,1,10,10,0,10,10,2025-03-26,2025-03-26,1.0000,,1.0000,429711831695753237,,,1
