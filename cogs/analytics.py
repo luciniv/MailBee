@@ -390,7 +390,7 @@ class Analytics(commands.Cog):
                             # Message to be sent by Modmail
                             self.mod_ids.add((guild.id, this_authorName, this_authorID))
                 else:
-                    logger.debug("Ticket channel message NOT within a logged ticket")
+                    logger.debug(f"Ticket channel message NOT within a logged ticket (channel: {this_channelID})")
         else: 
             # Calls if message is from the Modmail bot in a #modmail-log channel
             if (message.author.id == 575252669443211264):

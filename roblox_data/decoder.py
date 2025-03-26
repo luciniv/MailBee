@@ -30,7 +30,7 @@ def call_luau_script(input_string):
     print("ran subprocess")
 
     output = result.stdout.strip()
-    print(output)
+    print("output is", output)
     os.remove(temp_file_path)
 
     return output
