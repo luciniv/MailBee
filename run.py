@@ -23,8 +23,8 @@ class Mantid(commands.Bot):
 
         # Create bot instance with command prefix
         super().__init__(command_prefix=commands.when_mentioned_or('m!'), intents=intents, description=description, help_command=None)
-        self.data_manager = DataManager()
-        self.channel_status = ChannelStatus()
+        self.data_manager = DataManager(self)
+        self.channel_status = ChannelStatus(self)
 
 
     # Loads cogs when bot is ready
@@ -45,6 +45,7 @@ class Mantid(commands.Bot):
             if self.data_manager.db_pool is not None:
                 await self.data_manager.update_cache()
                 await self.data_manager.connect_to_redis()
+                await self.data_manager.load_status_dicts_from_redis()
                 await self.channel_status.start_worker()
                 await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="for tickets!"))
                 heartbeat.start()
@@ -82,9 +83,10 @@ class Mantid(commands.Bot):
         logger.log("SYSTEM", "------- SHUTTING DOWN --------------------")
         
         heartbeat.cancel()
+        await self.channel_status.shutdown()
+        await self.data_manager.save_status_dicts_to_redis()
         await self.data_manager.close_db()
         await self.data_manager.close_redis()
-        await self.channel_status.shutdown()
         await super().close()
 
 bot = Mantid()
@@ -107,9 +109,10 @@ async def shutdown(ctx):
     logger.log("SYSTEM", "------- SHUTTING DOWN --------------------")
 
     heartbeat.cancel()
+    await bot.channel_status.shutdown()
+    await bot.data_manager.save_status_dicts_to_redis()
     await bot.data_manager.close_db()
     await bot.data_manager.close_redis()
-    await bot.channel_status.shutdown()
     await bot.close()
 
 

@@ -1,8 +1,10 @@
 import aiomysql
 import asyncio
+import json
+import os
+from datetime import datetime
 import redis.asyncio as redis
 from dotenv import load_dotenv
-import os
 from typing import List, Dict
 from utils.logger import *
 from tenacity import retry, wait_random_exponential, stop_after_attempt, before_sleep
@@ -16,7 +18,8 @@ redis_url = os.getenv("REDIS_URL")
 
 
 class DataManager:
-    def __init__(self):
+    def __init__(self, bot):
+        self.bot = bot
         self.db_pool = None
         self.access_roles = []            # Cache for access roles
         self.monitored_channels = []      # Cache for monitored channels
@@ -285,6 +288,40 @@ class DataManager:
 
             except Exception as e:
                 logger.error(f"Error closing Redis cache connection: {e}")
+
+
+    # Save contents to Redis before shutdown
+    async def save_status_dicts_to_redis(self):
+        print("saving status")
+        try:
+            for channelID, time in self.bot.channel_status.last_update_times.items():
+                self.bot.channel_status.last_update_times[channelID] = time.isoformat()
+
+            await self.redis.set("last_update_times", json.dumps(self.bot.channel_status.last_update_times))
+            await self.redis.set("pending_updates", json.dumps(self.bot.channel_status.pending_updates))
+            print("status saved")
+
+        except Exception as e:
+            logger.exception(f"Error saving status to Redis: {e}")
+
+
+    # Load contents from Redis on startup
+    async def load_status_dicts_from_redis(self):
+        print("loading status")
+        try:
+            self.bot.channel_status.last_update_times = json.loads(await self.redis.get("last_update_times") or "{}")
+            self.bot.channel_status.pending_updates = json.loads(await self.redis.get("pending_updates") or "{}")
+
+            for channelID, time in self.bot.channel_status.last_update_times.items():
+                self.bot.channel_status.last_update_times[channelID] = datetime.fromisoformat(time)
+
+            self.bot.channel_status.last_update_times = {int(key): value for key, value in self.bot.channel_status.last_update_times.items()}
+            self.bot.channel_status.pending_updates = {int(key): value for key, value in self.bot.channel_status.pending_updates.items()}
+
+            print("status loaded",self.bot.channel_status.last_update_times,self.bot.channel_status.pending_updates)
+
+        except Exception as e:
+            logger.exception(f"Error loading status from Redis: {e}")
 
 
     # Add a ticket to the tickets cache, relies on channel_id

@@ -106,6 +106,11 @@ class Events(commands.Cog):
     # Catch deleted overflow categories        
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
+        if (isinstance(channel, discord.TextChannel)):
+            if channel.id in self.bot.channel_status.last_update_times:
+                del self.bot.channel_status.last_update_times[channel.id]  # Remove the entry from the dictionary
+                logger.debug(f"Removed last update time for channel {channel.id}")
+
         if (isinstance(channel, discord.CategoryChannel)):
             guild = channel.guild
 

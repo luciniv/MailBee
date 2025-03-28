@@ -11,10 +11,10 @@ from utils.logger import *
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
-hl_key = os.getenv("HL_KEY")
+api_key = os.getenv("API_KEY")
 
 from roblox_data.decoder import CONFIG
-HEADERS = {'x-api-key': hl_key}
+HEADERS = {'x-api-key': api_key}
 MAX_RETRIES = 3
 
 

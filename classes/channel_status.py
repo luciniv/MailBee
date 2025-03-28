@@ -7,7 +7,8 @@ from utils.logger import *
 
 
 class ChannelStatus:
-    def __init__(self):
+    def __init__(self, bot):
+        self.bot = bot
         self.last_update_times = {}
         self.pending_updates = {}  # Stores only the latest update per channel
         self.cooldown = timedelta(minutes=5.05)  # 1 update per ~5 minutes
@@ -35,23 +36,23 @@ class ChannelStatus:
 
     # Worker, attempts to edit a channel's name in the queue after 5 minutes
     # Cooldown is local to each channel, set by Discord's ratelimiting (oh well, what can one do)
-    async def worker(self):
-        # Wait for 5 minutes before starting loop
-        await asyncio.sleep(300)
+    async def worker(self): 
         while True:
-            await asyncio.sleep(1)  # Prevents high CPU usage
+            await asyncio.sleep(2)  # Prevents high CPU usage
 
             now = datetime.now(timezone.utc)
             channels_to_update = []
 
             # Collect channels that are ready to be updated
-            for channel_id, (channel, new_name) in list(self.pending_updates.items()):
-                last_update_time = self.last_update_times.get(channel_id, now - self.cooldown)
+            for channel_id, new_name in list(self.pending_updates.items()):
+                last_update_time = self.last_update_times.get(channel_id, (now - self.cooldown) if (new_name.startswith(emojis.emoji_map.get("new", ""))) else (now))
+             
                 if (now - last_update_time) >= self.cooldown:
-                    channels_to_update.append((channel_id, channel, new_name))
+                    channels_to_update.append((channel_id, new_name))
 
             # Apply updates for ready channels
-            for channel_id, channel, new_name in channels_to_update:
+            for channel_id, new_name in channels_to_update:
+                channel = self.bot.get_channel(channel_id)
                 try:
                     if channel.name != new_name:
                         await channel.edit(name=new_name)
@@ -77,7 +78,7 @@ class ChannelStatus:
             # Automatic updates, do not allow "new" overwrites by "alert"
             if not manual:
                 if self.pending_updates.get(channel.id):
-                    if ((self.pending_updates[channel.id][1]).startswith(emojis.emoji_map.get("new", "")) and (new_name.startswith(emojis.emoji_map.get("alert", "")))):
+                    if ((self.pending_updates[channel.id]).startswith(emojis.emoji_map.get("new", "")) and (new_name.startswith(emojis.emoji_map.get("alert", "")))):
                         return False
                 else:
                     if ((channel.name).startswith(emojis.emoji_map.get("new", "")) and new_name.startswith(emojis.emoji_map.get("alert", ""))): 
@@ -85,13 +86,13 @@ class ChannelStatus:
                     
             # Manual updates, allow "new" overwrites
             if self.pending_updates.get(channel.id):
-                if ((self.pending_updates[channel.id][1]) == new_name):
+                if ((self.pending_updates[channel.id]) == new_name):
                     return False
             else:
                 if (channel.name == new_name):
                     return False
                 
-            self.pending_updates[channel.id] = (channel, new_name)
+            self.pending_updates[channel.id] = new_name
             logger.debug(f"Queued update for channel {channel.id}: {new_name}")
             return True
 
