@@ -48,11 +48,11 @@ class ChannelStatus:
 
                 last_update_time = None
                 if (self.last_update_times.get(channel_id, None) is None):
-                    if (new_name.startswith(emojis.emoji_map.get("new", None)) is None):
+                    if (new_name.startswith(emojis.emoji_map.get("new", ""))):
+                        last_update_time = now - self.cooldown
+                    else:
                         last_update_time = now
                         self.last_update_times[channel_id] = now
-                    else:
-                        last_update_time = now - self.cooldown
              
                 if (now - last_update_time) >= self.cooldown:
                     channels_to_update.append((channel_id, new_name))
