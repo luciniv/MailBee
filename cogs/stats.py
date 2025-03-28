@@ -214,26 +214,27 @@ class Stats(commands.Cog):
 
                         while (count < limit): 
                             row = result[count] 
-                            if (self.bot.get_guild(row[0]) is None):
-                                pass
-                            else:
-                                if (type_value == "open"):
+                            
+                            if (type_value == "open"):
+                                if not (self.bot.get_guild(row[0]) is None):
                                     statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
                                                         f" - **{row[1]}** ticket(s)", inline=False)
 
-                                elif (type_value == "duration"):
+                            elif (type_value == "duration"):
+                                if not (self.bot.get_guild(row[0]) is None):
                                     statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
                                                         f" - **{queries.format_time(row[1])}**", inline=False)
 
-                                elif (type_value == "response"):
+                            elif (type_value == "response"):
+                                if not (self.bot.get_guild(row[0]) is None):
                                     statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
                                                         f" - **{queries.format_time(row[1])}**", inline=False)
 
-                                elif (type_value == "closed"):
-                                    statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** ticket(s)", inline=False)
+                            elif (type_value == "closed"):
+                                statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** ticket(s)", inline=False)
 
-                                elif (type_value == "sent"):
-                                    statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** message(s)", inline=False)
+                            elif (type_value == "sent"):
+                                statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** message(s)", inline=False)
                             count += 1 
                         pages.append(statsEmbed) 
 
