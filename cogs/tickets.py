@@ -42,11 +42,11 @@ class Tickets(commands.Cog):
                 return
             
             else:
-                end_time = now + (hours * 60)
+                end_time = now + (hours * 3600)
                 result = await self.bot.channel_status.set_emoji(channel, "inactive")
                 statusEmbed = Embeds(self.bot, title="", 
                                 description=f"Status set to **inactive** 🕓 for {hours} hours. "
-                                            f"This ticket will be set to **close** ❌ <t:{int(end_time)}:R> (alotting ~5 minutes of mandatory delay)")
+                                            f"This ticket will be set to **close** ❌ <t:{int(end_time)}:R> (alotting up to 5 minutes of mandatory delay)")
                 
                 if not result:
                     statusEmbed.description = (f"Failed to change status to **inactive** 🕓, "
