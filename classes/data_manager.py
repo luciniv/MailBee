@@ -310,7 +310,7 @@ class DataManager:
             self.bot.channel_status.pending_updates = json.loads(await self.redis.get("pending_updates") or "{}")
 
             self.bot.channel_status.last_update_times = {
-                int(key): float(value) for key, value 
+                int(key): int(value) for key, value 
                 in self.bot.channel_status.last_update_times.items()}
             
             self.bot.channel_status.pending_updates = {
@@ -336,7 +336,7 @@ class DataManager:
     async def load_timers_from_redis(self):
         try:
             self.bot.channel_status.timers = json.loads(await self.redis.get("timers") or "{}")
-            self.bot.channel_status.timers = {int(key): value for key, value in self.bot.channel_status.timers.items()}
+            self.bot.channel_status.timers = {int(key): int(value) for key, value in self.bot.channel_status.timers.items()}
             logger.success("Loaded timers from Redis:", self.bot.channel_status.timers)
 
         except Exception as e:

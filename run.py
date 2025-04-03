@@ -45,7 +45,7 @@ class Mantid(commands.Bot):
             if self.data_manager.db_pool is not None:
                 await self.data_manager.update_cache()
                 await self.data_manager.connect_to_redis()
-                await self.data_manager.load_status_dicts_from_redis()
+                # await self.data_manager.load_status_dicts_from_redis()
                 await self.data_manager.load_timers_from_redis()
                 await self.channel_status.start_worker()
                 await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="for tickets!"))
@@ -104,10 +104,10 @@ async def heartbeat():
 
 
 # Save channel_status dictionaries to cache every 2 minutes
-@tasks.loop(minutes=2)
-async def autosave():
-    await bot.data_manager.save_status_dicts_to_redis()
-    await bot.data_manager.save_timers_to_redis()
+# @tasks.loop(minutes=2)
+# async def autosave():
+#     await bot.data_manager.save_status_dicts_to_redis()
+#     await bot.data_manager.save_timers_to_redis()
 
 
 # Shuts down the bot (and all workers )
