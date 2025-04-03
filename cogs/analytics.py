@@ -165,7 +165,7 @@ class Analytics(commands.Cog):
                 'open',
                 '{status}',
                 'false',
-                NULL,
+                1,
                 {priority_values[0]},
                 {priority_values[1]});
                 """

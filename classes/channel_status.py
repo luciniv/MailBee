@@ -3,35 +3,40 @@ import asyncio
 import emoji
 from utils import emojis
 from datetime import datetime, timezone, timedelta
+import time
 from utils.logger import *
 
 
 class ChannelStatus:
     def __init__(self, bot):
         self.bot = bot
-        self.last_update_times = {}
-        self.pending_updates = {}  # Stores only the latest update per channel
-        self.cooldown = timedelta(minutes=5.05)  # 1 update per ~5 minutes
+        self.last_update_times = {}  # Stores only the latest update per channel
+        self.pending_updates = {}  # Stores text newname 
+        self.cooldown = 303  # 1 update per ~5 minutes
         self.worker_task = None
+        self.timer_worker_task = None
+        self.timers = {}  # Stores ticket close timers
 
 
     # Start worker 
     async def start_worker(self):
         try:
             self.worker_task = asyncio.create_task(self.worker())
-            logger.success("Worker started")
+            self.timer_worker_task = asyncio.create_task(self.timer_worker())
+            logger.success("Workers started")
         except Exception as e:
-            logger.error(f"Error starting worker: {e}")
+            logger.error(f"Error starting workers: {e}")
 
 
     # Shutdown worker gracefully
     async def shutdown(self):
         try:
             self.worker_task.cancel()
-            logger.success("Worker shut down")
+            self.timer_worker_task.cancel()
+            logger.success("Workers shut down")
 
         except Exception as e:
-            logger.exception(f"Error shutting down worker: {e}")
+            logger.exception(f"Error shutting down workers: {e}")
 
 
     # Worker, attempts to edit a channel's name in the queue after 5 minutes
@@ -40,7 +45,7 @@ class ChannelStatus:
         while True:
             await asyncio.sleep(2)  # Prevents high CPU usage
 
-            now = datetime.now(timezone.utc)
+            now = time.time()
             channels_to_update = []
 
             # Collect channels that are ready to be updated
@@ -53,7 +58,6 @@ class ChannelStatus:
                     else:
                         last_update_time = now
                         self.last_update_times[channel_id] = now
-             
 
                 if (now - last_update_time) >= self.cooldown:
                     channels_to_update.append((channel_id, new_name))
@@ -67,13 +71,39 @@ class ChannelStatus:
                         logger.debug(f"Updated channel {channel.id} to {new_name}")
 
                     # Update last update time
-                    self.last_update_times[channel_id] = datetime.now(timezone.utc)
+                    self.last_update_times[channel_id] = time.time()
 
                 except Exception as e:
                     logger.error(f"Failed to update channel {channel.id}: {e}")
 
                 # Remove channel from queue
                 self.pending_updates.pop(channel_id, None)
+    
+
+    # Timer worker, handles scheduled name changes
+    async def timer_worker(self):
+        while True:
+            await asyncio.sleep(60)  
+
+            now = time.time()
+            expired_timers = []
+
+            for channel_id, end_time in self.timers.items():
+                if now >= end_time:
+                    expired_timers.append(channel_id)
+
+            for channel_id in expired_timers:
+                channel = self.bot.get_channel(channel_id)
+                try:
+                    if channel:
+                        await self.set_emoji(channel, "close")
+                        logger.debug(f"Timer expired for channel {channel.id}")
+
+                    # Remove expired timer
+                    del self.timers[channel_id]
+                    
+                except Exception as e:
+                    logger.error(f"Failed to update channel {channel.id} after timer expired: {e}")
 
 
     # Queues a channel name update, replacing any previous updates for that channel
@@ -86,13 +116,43 @@ class ChannelStatus:
             # Automatic updates, do not allow "new" overwrites by "alert"
             if not manual:
                 if self.pending_updates.get(channel.id):
-                    if ((self.pending_updates[channel.id]).startswith(emojis.emoji_map.get("new", "")) and (new_name.startswith(emojis.emoji_map.get("alert", "")))):
+                    if ((self.pending_updates[channel.id]).startswith(emojis.emoji_map.get("new", "")) 
+                        and (new_name.startswith(emojis.emoji_map.get("alert", "")))):
                         return False
+                    
+                    # Drop update if ticket is inactive and staff sends a message
+                    elif ((((self.pending_updates[channel.id]).startswith(emojis.emoji_map.get("inactive", ""))) 
+                        or ((self.pending_updates[channel.id]).startswith(emojis.emoji_map.get("close", ""))))
+                        and (new_name.startswith(emojis.emoji_map.get("wait", "")))):
+                        return False
+                    
+                    # Delete timer and update if opener sends a message
+                    elif ((((self.pending_updates[channel.id]).startswith(emojis.emoji_map.get("inactive", ""))) 
+                        or ((self.pending_updates[channel.id]).startswith(emojis.emoji_map.get("close", ""))))
+                        and (new_name.startswith(emojis.emoji_map.get("alert", "")))):
+                        if self.timers.get(channel.id):
+                            del self.timers[channel.id]
+
                 else:
                     if ((channel.name).startswith(emojis.emoji_map.get("new", "")) and new_name.startswith(emojis.emoji_map.get("alert", ""))): 
                         return False
                     
-            # Manual updates, allow "new" overwrites
+                    # Drop update if ticket is inactive and staff sends a message
+                    elif ((((channel.name).startswith(emojis.emoji_map.get("inactive", ""))) 
+                        or ((channel.name).startswith(emojis.emoji_map.get("close", "")))) 
+                        and (new_name.startswith(emojis.emoji_map.get("wait", "")))):
+                        return False
+                    
+                    # Delete timer and update if opener sends a message
+                    elif ((((channel.name).startswith(emojis.emoji_map.get("inactive", ""))) 
+                        or ((channel.name).startswith(emojis.emoji_map.get("close", "")))) 
+                        and (new_name.startswith(emojis.emoji_map.get("alert", "")))):
+                        if self.timers.get(channel.id):
+                            del self.timers[channel.id]
+                    
+            # FIXME Add code for manual updates, or remove manual feature
+
+            # Drop update if its to the same name
             if self.pending_updates.get(channel.id):
                 if ((self.pending_updates[channel.id]) == new_name):
                     return False
@@ -105,7 +165,7 @@ class ChannelStatus:
             return True
 
         except Exception as e:
-            logger.error(f"queue_update sent an error: {e}")
+            logger.exception(f"queue_update sent an error: {e}")
 
 
     # Add emoji to the start of a channel's name

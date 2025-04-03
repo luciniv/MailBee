@@ -294,9 +294,6 @@ class DataManager:
     async def save_status_dicts_to_redis(self):
         print("saving status")
         try:
-            for channelID, time in self.bot.channel_status.last_update_times.items():
-                self.bot.channel_status.last_update_times[channelID] = time.isoformat()
-
             await self.redis.set("last_update_times", json.dumps(self.bot.channel_status.last_update_times))
             await self.redis.set("pending_updates", json.dumps(self.bot.channel_status.pending_updates))
             print("status saved")
@@ -312,16 +309,38 @@ class DataManager:
             self.bot.channel_status.last_update_times = json.loads(await self.redis.get("last_update_times") or "{}")
             self.bot.channel_status.pending_updates = json.loads(await self.redis.get("pending_updates") or "{}")
 
-            for channelID, time in self.bot.channel_status.last_update_times.items():
-                self.bot.channel_status.last_update_times[channelID] = datetime.fromisoformat(time)
+            self.bot.channel_status.last_update_times = {
+                int(key): float(value) for key, value 
+                in self.bot.channel_status.last_update_times.items()}
+            
+            self.bot.channel_status.pending_updates = {
+                int(key): value for key, value 
+                in self.bot.channel_status.pending_updates.items()}
 
-            self.bot.channel_status.last_update_times = {int(key): value for key, value in self.bot.channel_status.last_update_times.items()}
-            self.bot.channel_status.pending_updates = {int(key): value for key, value in self.bot.channel_status.pending_updates.items()}
-
-            print("status loaded",self.bot.channel_status.last_update_times,self.bot.channel_status.pending_updates)
+            print("status loaded", self.bot.channel_status.last_update_times, self.bot.channel_status.pending_updates)
 
         except Exception as e:
             logger.exception(f"Error loading status from Redis: {e}")
+
+
+    # Save timers to Redis
+    async def save_timers_to_redis(self):
+        try:
+            await self.redis.set("timers", json.dumps(self.bot.channel_status.timers))
+            logger.debug(f"Saved timers to redis: {self.bot.channel_status.timers}")
+        except Exception as e:
+            logger.exception(f"Error saving timers to Redis: {e}")
+
+
+    # Load timers from Redis
+    async def load_timers_from_redis(self):
+        try:
+            self.bot.channel_status.timers = json.loads(await self.redis.get("timers") or "{}")
+            self.bot.channel_status.timers = {int(key): value for key, value in self.bot.channel_status.timers.items()}
+            logger.success("Loaded timers from Redis:", self.bot.channel_status.timers)
+
+        except Exception as e:
+            logger.error(f"Error loading timers from Redis: {e}")
 
 
     # Add a ticket to the tickets cache, relies on channel_id

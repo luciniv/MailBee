@@ -397,7 +397,7 @@ def server_stats(guildID: int, intervals: List[str]):
 
 
 # Query string for /export_week
-def week_CSV(guildIDs: List[int], weekISO: int):
+def week_CSV(guildIDs: List[int], weekISO: int, type_numbers: List[int]):
     query_list = []
 
     for guildID in guildIDs:
@@ -485,6 +485,80 @@ def week_CSV(guildIDs: List[int], weekISO: int):
                         AND YEARWEEK(tickets.dateClose, 3) = {weekISO}
                         GROUP BY tickets.messageID
                     ) AS ticket_counts),
+
+                (SELECT ROUND(AVG(openerRobux), 2)
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.openerRobux != '-1'
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}),
+                    
+                (SELECT ROUND(AVG(openerHours), 2)
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.openerHours != '-1'
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}),
+
+                (SELECT HOUR(tickets.dateOpen) AS hour_of_day
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID}
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}
+                    GROUP BY hour_of_day
+                    ORDER BY COUNT(*) DESC
+                    LIMIT 1),
+                    
+                (SELECT HOUR(tickets.dateClose) AS hour_of_day
+                    FROM tickets
+                    WHERE tickets.guildID = {guildID} 
+                    AND YEARWEEK(tickets.dateClose, 3) = {weekISO}
+                    GROUP BY hour_of_day
+                    ORDER BY COUNT(*) DESC
+                    LIMIT 1),
+                    
+                (SELECT hour_of_day
+                    FROM (
+                        SELECT HOUR(tickets.dateClose) AS hour_of_day, COUNT(*) AS activity_count
+                        FROM tickets
+                        WHERE tickets.guildID = {guildID}
+                        AND tickets.dateClose IS NOT NULL
+                        AND YEARWEEK(tickets.dateClose, 3) = {weekISO}
+                        GROUP BY hour_of_day
+
+                        UNION ALL
+
+                        SELECT HOUR(ticket_messages.date) AS hour_of_day, COUNT(*) AS activity_count
+                        FROM ticket_messages
+                        JOIN tickets ON tickets.messageID = ticket_messages.modmail_messageID
+                        WHERE tickets.guildID = {guildID}
+                        AND YEARWEEK(ticket_messages.date, 3) = {weekISO}
+                        AND ticket_messages.type IN ('Sent', 'Discussion')
+                        GROUP BY hour_of_day
+                    ) AS combined_activity
+                    GROUP BY hour_of_day
+                    ORDER BY SUM(activity_count) DESC
+                    LIMIT 1),
+                    
+                (SELECT hour_of_day
+                    FROM (
+                        SELECT HOUR(tickets.dateClose) AS hour_of_day, COUNT(*) AS activity_count
+                        FROM tickets
+                        WHERE tickets.guildID = {guildID}
+                        AND tickets.dateClose IS NOT NULL
+                        AND YEARWEEK(tickets.dateClose, 3) = {weekISO}
+                        GROUP BY hour_of_day
+
+                        UNION ALL
+
+                        SELECT HOUR(ticket_messages.date) AS hour_of_day, COUNT(*) AS activity_count
+                        FROM ticket_messages
+                        JOIN tickets ON tickets.messageID = ticket_messages.modmail_messageID
+                        WHERE tickets.guildID = {guildID} 
+                        AND YEARWEEK(ticket_messages.date, 3) = {weekISO}
+                        AND ticket_messages.type IN ('Sent', 'Discussion')
+                        GROUP BY hour_of_day
+                    ) AS combined_activity
+                    GROUP BY hour_of_day
+                    ORDER BY SUM(activity_count) ASC
+                    LIMIT 1),
                     
                 (SELECT tickets.closeByID
                     FROM tickets
@@ -531,7 +605,41 @@ def week_CSV(guildIDs: List[int], weekISO: int):
                     WHERE tickets.guildID = {guildID}
                     AND (ticket_messages.type = 'Sent' OR ticket_messages.type = 'Discussion') 
                     AND YEARWEEK(ticket_messages.date, 3) = {weekISO}
-                    ) AS unique_mods);"""
+                    ) AS unique_mods),"""
+        
+        type_queries = ""
+        for num in type_numbers:
+            type_queries += f"""
+                (SELECT COUNT(*)
+                    FROM tickets 
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.type = {num}
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}),
+                
+                (SELECT ROUND(AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, tickets.dateClose)), 2)
+                    FROM tickets 
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.status = 'closed'
+                    AND tickets.type = {num}
+                    AND YEARWEEK(tickets.dateClose, 3) = {weekISO}),
+                
+                (SELECT ROUND(AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)), 2)
+                    FROM tickets
+                    INNER JOIN (
+                        SELECT modmail_messageID, MIN(date) AS date
+                        FROM ticket_messages
+                        WHERE type = 'Sent'
+                        GROUP BY modmail_messageID
+                    ) AS first_message
+                    ON tickets.messageID = first_message.modmail_messageID
+                    WHERE tickets.guildID = {guildID}
+                    AND tickets.type = {num}
+                    AND tickets.flag = 'good'
+                    AND YEARWEEK(tickets.dateOpen, 3) = {weekISO}),"""
+      
+        query += type_queries
+        # Fixes possible dangling comma
+        query = query.rstrip(',') + ';'
         query_list.append(query)
     
     return query_list

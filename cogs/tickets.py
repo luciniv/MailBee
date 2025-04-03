@@ -1,4 +1,5 @@
 import discord
+import time
 from discord.ext import commands
 from discord import app_commands
 from typing import List
@@ -11,6 +12,56 @@ from utils.logger import *
 class Tickets(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+
+    # Manually update the status of a ticket channel
+    @commands.hybrid_command(name="inactive", description="Mark current ticket to close after X hours of non-response")
+    @checks.is_user()
+    @app_commands.describe(hours="(Default is 24) Hours to wait before marking to close")
+    async def inactive(self, ctx, hours: int = 24):
+        try:    
+            channel = ctx.channel
+            channelID = channel.id
+            now = time.time()
+
+            modmail_messageID = await self.bot.data_manager.get_ticket(channelID)
+
+            if (modmail_messageID is None):
+                errorEmbed = discord.Embed(title="", 
+                                    description="❌ You must use this command in a monitored ticket "
+                                                "channel (a channel with a status emoji)", 
+                                    color=0xFF0000)
+                await ctx.send(embed=errorEmbed, ephemeral=True)
+                return
+            
+            elif ((hours < 1) or (hours > 72)):
+                errorEmbed = discord.Embed(title="", 
+                                    description="❌ Hours must be between 1 to 72 (inclusive)", 
+                                    color=0xFF0000)
+                await ctx.send(embed=errorEmbed, ephemeral=True)
+                return
+            
+            else:
+                end_time = now + (hours * 60)
+                result = await self.bot.channel_status.set_emoji(channel, "inactive")
+                statusEmbed = Embeds(self.bot, title="", 
+                                description=f"Status set to **inactive** 🕓 for {hours} hours. "
+                                            f"This ticket will be set to **close** ❌ <t:{int(end_time)}:R> (alotting ~5 minutes of mandatory delay)")
+                
+                if not result:
+                    statusEmbed.description = (f"Failed to change status to **inactive** 🕓, "
+                                              "please try again later")
+                    await ctx.reply(embed=statusEmbed)
+                    return
+                
+                self.bot.channel_status.timers[channelID] = end_time
+                await self.bot.data_manager.save_timers_to_redis()
+
+                await ctx.reply(embed=statusEmbed)
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/status sent an error: {e}")
 
 
     # Manually update the status of a ticket channel
@@ -128,8 +179,6 @@ class Tickets(commands.Cog):
             if current.lower() in type.lower()]
         
         return matches[:25]
-            
-    
     
 
 async def setup(bot):

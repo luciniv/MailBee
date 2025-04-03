@@ -3,5 +3,7 @@ mantis = "<:mantis:1304887716370186330>"
 emoji_map = {
     "new": "🆕",
     "alert": "❗️",
-    "wait": "⏳"
+    "wait": "⏳",
+    "inactive": "🕓",
+    "close": "❌"
 }

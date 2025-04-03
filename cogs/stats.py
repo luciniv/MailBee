@@ -417,34 +417,57 @@ class Stats(commands.Cog):
                                 description=f"Download the attached CSV file to view data")
             statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
             
+
+            type_numbers = [int(num) for num, name in self.bot.data_manager.types]
             result_list = []
-            query_list = queries.week_CSV(guildIDs, weekISO)
+
+            query_list = queries.week_CSV(guildIDs, weekISO, type_numbers)
 
             for query in query_list:
                 result = await self.bot.data_manager.execute_query(query)
                 if result is not None:
                     result_list.append(result[0])
 
+            header = ["Server ID", 
+                    "Server Name",
+                    "Total Tickets Open",
+                    "Total Tickets Closed",
+                    "Num Tickets Opened This Week",
+                    "Num Tickets Still Open From This Week",
+                    "Num Tickets Closed From This Week",
+                    "Total Tickets Closed This Week",
+                    "Day Most Tickets Opened",
+                    "Day Most Tickets Closed",
+                    "Average Ticket Duration",
+                    "Average First Response Time",
+                    "Average Messages Per Ticket Resolved",
+                    "Value: Average Ticket Robux", 
+                    "Value: Average Ticket Hours", 
+                    "Activity: Daily Time Most Tickets Opened", 
+                    "Activity: Daily Time Most Tickets Closed",
+                    "Activity: Daily Time Most Mod Activity",
+                    "Activity: Daily Time Least Mod Activity",
+                    "Mod: Closed The Most Tickets", 
+                    "Mod: Sent The Most Replies",
+                    "Mod: Sent The Most Discussions",
+                    "Mod: Num Mods Answering Tickets"]
+
+            type_names = [name for num, name in self.bot.data_manager.types]
+            type_header = [
+                    metric.format(name)
+                    for name in type_names  
+                    for metric in [ 
+                        "Type: {} - Num Tickets Opened This Week",
+                        "Type: {} - Average Ticket Duration",
+                        "Type: {} - Average First Response Time"
+                        ]
+                    ]
+
+            # Link static headings to dynamic type headings
+            header.extend(type_header)
+
             # Create CSV file from data
             if (len(result_list) != 0):
-                header = ["Server ID", 
-                          "Server Name",
-                          "Total Tickets Open",
-                          "Total Tickets Closed",
-                          "Num Tickets Opened This Week",
-                          "Num Tickets Still Open From This Week",
-                          "Num Tickets Closed From This Week",
-                          "Total Tickets Closed This Week",
-                          "Day Most Tickets Opened",
-                          "Day Most Tickets Closed",
-                          "Average Ticket Duration",
-                          "Average First Response Time",
-                          "Average Messages Per Ticket Resolved",
-                          "Mod: Closed The Most Tickets",
-                          "Mod: Sent The Most Replies",
-                          "Mod: Sent The Most Discussions",
-                          "Num Mods Answering Tickets"]
-
                 write_list = []
 
                 for guildID, result in zip(guildIDs, result_list):

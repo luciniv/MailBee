@@ -162,7 +162,6 @@ class Events(commands.Cog):
                             WHERE tickets.messageID = {ticket_id};
                             """
                         await self.bot.data_manager.execute_query(query, False)
-                        await self.bot.data_manager.update_cache(2)
                         print(f"updated type in db to {search_categories[0]}")
 
 
