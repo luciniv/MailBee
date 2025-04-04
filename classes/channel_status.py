@@ -44,14 +44,11 @@ class ChannelStatus:
     async def worker(self): 
         while True:
             await asyncio.sleep(20)  # Prevents high CPU usage
-            print("went around loop")
             now = int(time.time())
             channels_to_update = []
 
             # Collect channels that are ready to be updated
             for channel_id, new_name in list(self.pending_updates.items()):
-                print(channel_id)
-                print("channel has pending update", channel_id)
 
                 last_update_time = self.last_update_times.get(channel_id, None)
                 if (last_update_time is None):
@@ -66,8 +63,6 @@ class ChannelStatus:
 
             # Apply updates for ready channels
             for channel_id, new_name in channels_to_update:
-                print(channel_id)
-                print("channel has ready update", channel_id)
                 channel = self.bot.get_channel(channel_id)
                 try:
                     if channel:
@@ -81,10 +76,8 @@ class ChannelStatus:
                     logger.error(f"Failed to update channel {channel.id}: {e}")
 
                 # Remove channel from queue
-                print("removed channel from the queue, or at least got to the end of the for channels_to_update")
                 self.pending_updates.pop(channel_id, None)
                 await asyncio.sleep(0.5)
-            print("SHOULD LOOP AGAIN NOW")
     
 
     # Timer worker, handles scheduled name changes
@@ -119,6 +112,9 @@ class ChannelStatus:
             if new_name is None:
                 self.pending_updates.pop(channel.id, None)
                 return False
+
+            print("channel name is", channel.name)
+            print("new name is", new_name)
             
             if channel.name == new_name:
                 self.pending_updates.pop(channel.id, None)

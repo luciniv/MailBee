@@ -26,6 +26,7 @@ class DataManager:
         self.category_types = []          # Cache of categories to their types
         self.types = []                   # Cache for ticket types
         self.snip_list = []               # Cache for snip guildIDs, abbreviations, and summaries
+        self.mod_ids = {}              # Set of mod ids and names, will be removed for full system
         self.redis_url = redis_url
         self.redis = None
         self.ticket_count = 0
@@ -200,6 +201,7 @@ class DataManager:
         await self.update_cache(1)
 
 
+    # Query for setting category as a type in the database
     async def set_type(self, guildID: int, categoryID: int, typeID: int):
         query = f"""
             INSERT INTO category_types
@@ -341,6 +343,26 @@ class DataManager:
 
         except Exception as e:
             logger.error(f"Error loading timers from Redis: {e}")
+
+
+    # Save timers to Redis
+    async def save_mods_to_redis(self):
+        try:
+            await self.redis.set("mods", json.dumps(self.bot.data_manager.mod_ids))
+            logger.debug(f"Saved mod ids to redis: {self.bot.data_manager.mod_ids}")
+        except Exception as e:
+            logger.exception(f"Error saving mod ids to Redis: {e}")
+
+
+    # Load timers from Redis
+    async def load_mods_from_redis(self):
+        try:
+            self.bot.data_manager.mod_ids = json.loads(await self.redis.get("mods") or "{}")
+            self.bot.data_manager.mod_ids = {key: int(value) for key, value in self.bot.data_manager.mod_ids.items()}
+            logger.success("Loaded mod ids from Redis:", self.bot.data_manager.mod_ids)
+
+        except Exception as e:
+            logger.error(f"Error loading mod ids from Redis: {e}")
 
 
     # Add a ticket to the tickets cache, relies on channel_id
