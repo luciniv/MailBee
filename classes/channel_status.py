@@ -69,26 +69,26 @@ class ChannelStatus:
             print("got ready updates", channels_to_update)
             # Apply updates for ready channels
             for channel_id, new_name in channels_to_update:
-                logger.debug("Started process to update channel")
+                print("Started process to update channel")
                 channel = self.bot.get_channel(channel_id)
-                logger.debug(f"Got channel object: {channel.name}")
+                print(f"Got channel object: {channel.name}")
                 try:
                     if channel:
-                        logger.debug("Channel edit loop started")
+                        print("Channel edit loop started")
                         for _ in range(MAX_RETRIES):
                             try:
-                                logger.debug("Try edit in loop")
+                                print("Try edit in loop")
                                 await asyncio.wait_for(channel.edit(name=new_name), timeout=2)
-                                logger.debug("Edit success")
+                                print("Edit success")
                                 break
                             except asyncio.TimeoutError:
-                                logger.debug(f"Edit timed out on retry {_}")
+                                print(f"Edit timed out on retry {_}")
                                 continue
-                        logger.debug(f"Updated channel {channel.id} to {new_name}")
+                        print(f"Updated channel {channel.id} to {new_name}")
 
                     # Update last update time
                     self.last_update_times[channel_id] = int(time.time())
-                    logger.debug("Modified last update time")
+                    print("Modified last update time")
 
                 except Exception as e:
                     logger.error(f"Failed to update channel {channel.id}: {e}")
