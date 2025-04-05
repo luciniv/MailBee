@@ -47,70 +47,72 @@ class ChannelStatus:
     # Cooldown is local to each channel, set by Discord's ratelimiting (oh well, what can one do)
     async def worker(self): 
         while True:
-            await asyncio.sleep(20)  # Prevents high CPU usage
-            now = int(time.time())
-            channels_to_update = []
+            try:
+                await asyncio.sleep(20)  # Prevents high CPU usage
+                now = int(time.time())
+                channels_to_update = []
 
-            # Collect channels that are ready to be updated
-            print("start of loop")
-            for channel_id, new_name in list(self.pending_updates.items()):
+                # Collect channels that are ready to be updated
+                print("start of loop")
+                for channel_id, new_name in list(self.pending_updates.items()):
 
-                last_update_time = self.last_update_times.get(channel_id, None)
-                if (last_update_time is None):
-                    if (new_name.startswith(emojis.emoji_map.get("new", ""))):
-                        last_update_time = now - self.cooldown
-                    else:
-                        last_update_time = now
-                        self.last_update_times[channel_id] = now
+                    last_update_time = self.last_update_times.get(channel_id, None)
+                    if (last_update_time is None):
+                        if (new_name.startswith(emojis.emoji_map.get("new", ""))):
+                            last_update_time = now - self.cooldown
+                        else:
+                            last_update_time = now
+                            self.last_update_times[channel_id] = now
 
-                if (now - last_update_time) >= self.cooldown:
-                    channels_to_update.append((channel_id, new_name))
+                    if (now - last_update_time) >= self.cooldown:
+                        channels_to_update.append((channel_id, new_name))
 
-            print("got ready updates", channels_to_update)
-            # Apply updates for ready channels
-            for channel_id, new_name in channels_to_update:
-                print("Started process to update channel")
-                print("getting channel", channel_id)
-                try:
-                    channel = self.bot.get_channel(channel_id)
-                    if channel is None:
-                        print("Channel not cached, attempting fetch")
-                        channel = await asyncio.wait_for(self.bot.fetch_channel(channel_id), timeout=2)
-                except asyncio.TimeoutError:
-                    print("timeout error")
+                print("got ready updates", channels_to_update)
+                # Apply updates for ready channels
+                for channel_id, new_name in channels_to_update:
+                    print("Started process to update channel")
+                    print("getting channel", channel_id)
+                    try:
+                        channel = self.bot.get_channel(channel_id)
+                        if channel is None:
+                            print("Channel not cached, attempting fetch")
+                            channel = await asyncio.wait_for(self.bot.fetch_channel(channel_id), timeout=2)
+                    except asyncio.TimeoutError:
+                        print("timeout error")
 
-                except discord.NotFound:
-                    print(f"Channel {channel_id} was deleted")
+                    except discord.NotFound:
+                        print(f"Channel {channel_id} was deleted")
+                        
+                    except Exception as e:
+                        print(f"Fetching channel {channel_id} failed: {e}")
                     
-                except Exception as e:
-                    print(f"Fetching channel {channel_id} failed: {e}")
-                
-                print(f"Got channel object: {channel.name}")
-                try:
-                    if channel:
-                        print("Channel edit loop started")
-                        for _ in range(MAX_RETRIES):
-                            try:
-                                print("Try edit in loop")
-                                await asyncio.wait_for(channel.edit(name=new_name), timeout=2)
-                                print("Edit success")
-                                break
-                            except asyncio.TimeoutError:
-                                print(f"Edit timed out on retry {_}")
-                                continue
-                        print(f"Updated channel {channel.id} to {new_name}")
+                    try:
+                        if channel:
+                            print("Channel edit loop started")
+                            for _ in range(MAX_RETRIES):
+                                try:
+                                    print("Try edit in loop")
+                                    await asyncio.wait_for(channel.edit(name=new_name), timeout=2)
+                                    print("Edit success")
+                                    break
+                                except asyncio.TimeoutError:
+                                    print(f"Edit timed out on retry {_}")
+                                    continue
+                            print(f"Updated channel {channel.id} to {new_name}")
 
-                    # Update last update time
-                    self.last_update_times[channel_id] = int(time.time())
-                    print("Modified last update time")
+                        # Update last update time
+                        self.last_update_times[channel_id] = int(time.time())
+                        print("Modified last update time")
 
-                except Exception as e:
-                    logger.error(f"Failed to update channel {channel.id}: {e}")
+                    except Exception as e:
+                        logger.error(f"Failed to update channel {channel.id}: {e}")
 
-                # Remove channel from queue
-                self.pending_updates.pop(channel_id, None)
-                await asyncio.sleep(0.5)
-            print("updated channels section done")
+                    # Remove channel from queue
+                    self.pending_updates.pop(channel_id, None)
+                    await asyncio.sleep(0.5)
+                print("updated channels section done")
+            except Exception as e:
+                logger.exception(f"Channel worker sent an error: {e}")
     
 
     # Timer worker, handles scheduled name changes
