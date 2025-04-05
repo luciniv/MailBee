@@ -21,12 +21,12 @@ class DataManager:
     def __init__(self, bot):
         self.bot = bot
         self.db_pool = None
-        self.access_roles = []            # Cache for access roles
-        self.monitored_channels = []      # Cache for monitored channels
-        self.category_types = []          # Cache of categories to their types
-        self.types = []                   # Cache for ticket types
-        self.snip_list = []               # Cache for snip guildIDs, abbreviations, and summaries
-        self.mod_ids = {}              # Set of mod ids and names, will be removed for full system
+        self.access_roles = []            # Cache for access roles FIXME switch to redis
+        self.monitored_channels = []      # Cache for monitored channels, will be removed for full system
+        self.category_types = []          # Cache of categories to their types FIXME switch to redis
+        self.types = []                   # Cache for ticket types FIXME switch to redis
+        self.snip_list = []               # Cache for snip guildIDs, abbreviations, and summaries FIXME switch to redis
+        self.mod_ids = {}              # Set of mod ids and names, will be removed for full system 
         self.redis_url = redis_url
         self.redis = None
         self.ticket_count = 0
@@ -151,7 +151,7 @@ class DataManager:
                     
 
     # Variably controlled local cache updater
-    # Handles roles given permission to use Mantid and the channels Mantid monitors
+    # Handles locally stored and redis caches
     async def update_cache(self, opt: int = 5):
         if opt in (0, 5):
             query = "SELECT * FROM permissions;"

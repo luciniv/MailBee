@@ -225,7 +225,7 @@ class Analytics(commands.Cog):
                     err = True
 
                 # Update ticket at modmail_messageID
-                if not err and (len(closeID) == 1):
+                if not err and closeID:
                     query = f"""
                         UPDATE tickets SET 
                         dateClose = '{format_time}', 

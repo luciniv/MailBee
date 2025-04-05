@@ -14,7 +14,51 @@ class Tickets(commands.Cog):
         self.bot = bot
 
 
-    # Manually update the status of a ticket channel
+
+    # Set a ticket as inactive for a period of time, then mark to close
+    # Remove inactive / close marker if the user responds
+    @commands.hybrid_command(name="dev_ticket", description="Move ticket to the developer support category (if one exists)")
+    @checks.is_user()
+    async def dev_ticket(self, ctx):
+        try:    
+            channel = ctx.channel
+            channelID = channel.id
+            now = time.time()
+
+            modmail_messageID = await self.bot.data_manager.get_ticket(channelID)
+
+            if (modmail_messageID is None):
+                errorEmbed = discord.Embed(title="", 
+                                    description="❌ You must use this command in a monitored ticket "
+                                                "channel (a channel with a status emoji)", 
+                                    color=0xFF0000)
+                await ctx.send(embed=errorEmbed, ephemeral=True)
+                return
+            
+         
+                statusEmbed = Embeds(self.bot, title="", 
+                                description=f"Status set to **inactive** 🕓 for {hours} hour(s). "
+                                            f"This ticket will be set to **close** ❌ <t:{int(end_time)}:R> (alotting up to 5 minutes of mandatory delay)")
+                
+                if not result:
+                    statusEmbed.description = (f"Failed to change status to **inactive** 🕓, "
+                                              "please try again later")
+                    await ctx.reply(embed=statusEmbed)
+                    return
+                
+                self.bot.channel_status.timers[channelID] = end_time
+                await self.bot.data_manager.save_timers_to_redis()
+
+                await ctx.reply(embed=statusEmbed)
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/inactive sent an error: {e}")
+    
+
+
+    # Set a ticket as inactive for a period of time, then mark to close
+    # Remove inactive / close marker if the user responds
     @commands.hybrid_command(name="inactive", description="Mark current ticket to close after X hours of non-response")
     @checks.is_user()
     @app_commands.describe(hours="(Default is 24) Hours to wait before marking to close")
@@ -61,7 +105,7 @@ class Tickets(commands.Cog):
 
         except Exception as e:
             logger.exception(e)
-            raise BotError(f"/status sent an error: {e}")
+            raise BotError(f"/inactive sent an error: {e}")
 
 
     # Manually update the status of a ticket channel
