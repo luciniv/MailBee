@@ -197,12 +197,6 @@ class Analytics(commands.Cog):
                 author_name = (embed.author.name).split()
                 closeName = author_name[0][:-2]
                 closeID = self.bot.data_manager.mod_ids.get(closeName, None)
-
-                if (len(closeID) != 0):
-                    closeID = closeID[0]
-
-                elif (len(closeID) > 1):
-                    closeID = closeID[-1]
                 
                 query = f"""
                     SELECT messageID FROM tickets WHERE 
