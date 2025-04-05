@@ -78,6 +78,12 @@ class ChannelStatus:
                         channel = await asyncio.wait_for(self.bot.fetch_channel(channel_id), timeout=2)
                 except asyncio.TimeoutError:
                     print("timeout error")
+                    
+                except discord.NotFound:
+                    print(f"Channel {channel_id} was deleted")
+                    
+                except Exception as e:
+                    print(f"Fetching channel {channel_id} failed: {e}")
 
                 if channel is None:
                     print("Channel still not found, skipping")
