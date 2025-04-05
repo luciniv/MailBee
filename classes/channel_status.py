@@ -72,9 +72,16 @@ class ChannelStatus:
                 print("Started process to update channel")
                 print("getting channel", channel_id)
                 try:
-                    channel = await asyncio.wait_for(self.bot.get_channel(channel_id), timeout=2)
+                    channel = self.bot.get_channel(channel_id)
+                    if channel is None:
+                        print("Channel not cached, attempting fetch")
+                        channel = await asyncio.wait_for(self.bot.fetch_channel(channel_id), timeout=2)
                 except asyncio.TimeoutError:
                     print("timeout error")
+
+                if channel is None:
+                    print("Channel still not found, skipping")
+                    continue
                 
                 print(f"Got channel object: {channel.name}")
                 try:
