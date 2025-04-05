@@ -70,7 +70,12 @@ class ChannelStatus:
             # Apply updates for ready channels
             for channel_id, new_name in channels_to_update:
                 print("Started process to update channel")
-                channel = self.bot.get_channel(channel_id)
+                print("getting channel", channel_id)
+                try:
+                    channel = await asyncio.wait_for(self.bot.get_channel(channel_id), timeout=2)
+                except asyncio.TimeoutError:
+                    print("timeout error")
+                
                 print(f"Got channel object: {channel.name}")
                 try:
                     if channel:
