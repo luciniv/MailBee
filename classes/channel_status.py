@@ -7,6 +7,9 @@ import time
 from utils.logger import *
 
 
+# logger.debug = lambda *a, **kw: None  # No-op debug logging
+
+
 class ChannelStatus:
     def __init__(self, bot):
         self.bot = bot
@@ -63,14 +66,18 @@ class ChannelStatus:
 
             # Apply updates for ready channels
             for channel_id, new_name in channels_to_update:
+                logger.debug("Started process to update channel")
                 channel = self.bot.get_channel(channel_id)
+                logger.debug(f"Got channel object: {channel.name}")
                 try:
                     if channel:
+                        logger.debug("Channel edit started")
                         await channel.edit(name=new_name)
                         logger.debug(f"Updated channel {channel.id} to {new_name}")
 
                     # Update last update time
                     self.last_update_times[channel_id] = int(time.time())
+                    logger.debug("Modified last update time")
 
                 except Exception as e:
                     logger.error(f"Failed to update channel {channel.id}: {e}")
