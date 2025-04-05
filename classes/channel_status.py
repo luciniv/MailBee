@@ -8,6 +8,7 @@ from utils.logger import *
 
 
 # logger.debug = lambda *a, **kw: None  # No-op debug logging
+MAX_RETRIES = 3
 
 
 class ChannelStatus:
@@ -71,8 +72,16 @@ class ChannelStatus:
                 logger.debug(f"Got channel object: {channel.name}")
                 try:
                     if channel:
-                        logger.debug("Channel edit started")
-                        await channel.edit(name=new_name)
+                        logger.debug("Channel edit loop started")
+                        for _ in range(MAX_RETRIES):
+                            try:
+                                logger.debug("Try edit in loop")
+                                await asyncio.wait_for(channel.edit(name=new_name), timeout=2)
+                                logger.debug("Edit success")
+                                break
+                            except asyncio.TimeoutError:
+                                logger.debug(f"Edit timed out on retry {_}")
+                                continue
                         logger.debug(f"Updated channel {channel.id} to {new_name}")
 
                     # Update last update time
