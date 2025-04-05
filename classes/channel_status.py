@@ -52,6 +52,7 @@ class ChannelStatus:
             channels_to_update = []
 
             # Collect channels that are ready to be updated
+            print("start of loop")
             for channel_id, new_name in list(self.pending_updates.items()):
 
                 last_update_time = self.last_update_times.get(channel_id, None)
@@ -65,6 +66,7 @@ class ChannelStatus:
                 if (now - last_update_time) >= self.cooldown:
                     channels_to_update.append((channel_id, new_name))
 
+            print("got ready updates", channels_to_update)
             # Apply updates for ready channels
             for channel_id, new_name in channels_to_update:
                 logger.debug("Started process to update channel")
@@ -94,6 +96,7 @@ class ChannelStatus:
                 # Remove channel from queue
                 self.pending_updates.pop(channel_id, None)
                 await asyncio.sleep(0.5)
+            print("updated channels section done")
     
 
     # Timer worker, handles scheduled name changes
