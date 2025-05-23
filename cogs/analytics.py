@@ -507,8 +507,7 @@ class Analytics(commands.Cog):
                 await self.log_open_ticket(message, "good")
 
             if (title == "Ticket Closed"):
-                #await message.add_reaction(emojis.mantis)
-                pass
+                await message.add_reaction(emojis.mantis)
 
 
     # Stores opened Modmail tickets into the DB
@@ -585,7 +584,7 @@ class Analytics(commands.Cog):
                 {priority_values[1]});
                 """
             await self.bot.data_manager.execute_query(query, False)
-            #await message.add_reaction(emojis.mantis)
+            await message.add_reaction(emojis.mantis)
 
             if (status == 'good'):
                 logger.success(f"*** Processed open modmail ticket (Message ID: {message.id}) GOOD DATA ***")
@@ -653,7 +652,7 @@ class Analytics(commands.Cog):
                     
                 else:
                     logger.error(f"Close embed not loggable")
-                    #await message.add_reaction(emojis.mantis)
+                    await message.add_reaction(emojis.mantis)
             
             else:
                 closeID = message.author.id
@@ -686,10 +685,8 @@ class Analytics(commands.Cog):
     # On-message event listener for messages in #modmail-log channels or modmail categories
     @commands.Cog.listener()
     async def on_message(self, message):
-        logger.debug("entered message listener")
         # Check to ensure Mantid doesnt respond to its own messages
         if (message.author.id in [1304609006379073628, 1333954467519004673]):
-            logger.debug("returning near-instantly")
             return
         
         # Temp, allows Mantid to still work (allows Modmail message processing)
@@ -709,7 +706,6 @@ class Analytics(commands.Cog):
 
         # check if chanel descrip is good, if so send mod message to dm
         # check permissions
-        logger.debug("check if its a text channel")
         if (isinstance(this_channel, discord.TextChannel)):
             if (this_channel.topic):
                 if ("Ticket channel" in this_channel.topic):
