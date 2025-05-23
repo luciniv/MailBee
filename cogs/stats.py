@@ -5,24 +5,10 @@ from discord.ext.commands import Greedy
 from datetime import datetime, timezone, date
 from typing import List
 from classes.error_handler import *
-from classes.paginator import *
+from classes.paginator import Paginator, build_subsections
 from classes.embeds import *
 from utils import checks, queries, csv_write
 from utils.logger import *
-
-
-# Subsects a number into a list of numbers that cap at max_size (for pagination)
-def build_subsections(size: int, max_size = 10) -> List[int]:
-    if size <= max_size:
-        return [size]
-    
-    subsections = [max_size] * (size // max_size)
-
-    remainder = size % max_size
-    if (remainder > 0):
-        subsections.append(remainder)
-
-    return subsections
 
 
 # Populate stats embed with fields from query data

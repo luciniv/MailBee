@@ -1,10 +1,11 @@
 import discord
 import asyncio
 import emoji
+import time
 from utils import emojis
 from datetime import datetime, timezone, timedelta
-import time
 from utils.logger import *
+from cogs.tickets import close_ticket
 
 
 # logger.debug = lambda *a, **kw: None  # No-op debug logging
@@ -53,7 +54,6 @@ class ChannelStatus:
                 channels_to_update = []
 
                 # Collect channels that are ready to be updated
-                print("start of loop")
                 for channel_id, new_name in list(self.pending_updates.items()):
 
                     last_update_time = self.last_update_times.get(channel_id, None)
@@ -67,18 +67,15 @@ class ChannelStatus:
                     if (now - last_update_time) >= self.cooldown:
                         channels_to_update.append((channel_id, new_name))
 
-                print("got ready updates", channels_to_update)
                 # Apply updates for ready channels
                 for channel_id, new_name in channels_to_update:
-                    print("Started process to update channel")
-                    print("getting channel", channel_id)
                     try:
                         channel = self.bot.get_channel(channel_id)
                         if channel is None:
                             print("Channel not cached, attempting fetch")
                             channel = await asyncio.wait_for(self.bot.fetch_channel(channel_id), timeout=2)
                     except asyncio.TimeoutError:
-                        print("timeout error")
+                        print("channel fetch timeout error")
 
                     except discord.NotFound:
                         print(f"Channel {channel_id} was deleted")
@@ -88,21 +85,15 @@ class ChannelStatus:
                     
                     try:
                         if channel:
-                            print("Channel edit loop started")
                             for _ in range(MAX_RETRIES):
                                 try:
-                                    print("Try edit in loop")
                                     await asyncio.wait_for(channel.edit(name=new_name), timeout=2)
-                                    print("Edit success")
                                     break
                                 except asyncio.TimeoutError:
-                                    print(f"Edit timed out on retry {_}")
                                     continue
-                            print(f"Updated channel {channel.id} to {new_name}")
 
                         # Update last update time
                         self.last_update_times[channel_id] = int(time.time())
-                        print("Modified last update time")
 
                     except Exception as e:
                         logger.error(f"Failed to update channel {channel.id}: {e}")
@@ -110,7 +101,6 @@ class ChannelStatus:
                     # Remove channel from queue
                     self.pending_updates.pop(channel_id, None)
                     await asyncio.sleep(0.5)
-                print("updated channels section done")
             except Exception as e:
                 logger.exception(f"Channel worker sent an error: {e}")
     
@@ -133,6 +123,7 @@ class ChannelStatus:
                     if channel:
                         await self.set_emoji(channel, "close")
                         logger.debug(f"Timer expired for channel {channel.id}")
+                        
 
                     # Remove expired timer
                     del self.timers[channel_id]

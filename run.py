@@ -4,6 +4,7 @@ from discord.ext import commands, tasks
 import os
 from classes.data_manager import DataManager
 from classes.channel_status import ChannelStatus
+from classes.ticket_handler import DMCategoryButtonView
 from classes.error_handler import *
 from utils import emojis, checks
 from utils.logger import *
@@ -17,12 +18,16 @@ ready = True
 
 class Mantid(commands.Bot):
     def __init__(self):
-        # guild, guild_messages, and message_content intents, plus all default intents
-        intents = discord.Intents(1 | 512 | 32768)
+        # guild, guild_messages, message_content, and dm_messages intents, plus all default intents
+        intents = discord.Intents.default()  # Start with default intents
+        intents.messages = True  # Enable messages intent (to track messages)
+        intents.guilds = True  # Enable guild-related events
+        intents.dm_messages = True  # Enable direct message events
+        intents.message_content = True 
         description = ""
 
         # Create bot instance with command prefix
-        super().__init__(command_prefix=commands.when_mentioned_or('m!'), intents=intents, description=description, help_command=None)
+        super().__init__(command_prefix=commands.when_mentioned_or('-'), intents=intents, description=description, help_command=None)
         self.data_manager = DataManager(self)
         self.channel_status = ChannelStatus(self)
 
@@ -43,12 +48,8 @@ class Mantid(commands.Bot):
                 logger.critical(f"All database re-connect attempts failed: {e}")
                 await self.close()
             if self.data_manager.db_pool is not None:
-                await self.data_manager.update_cache()
-                await self.data_manager.connect_to_redis()
-                await self.data_manager.load_status_dicts_from_redis()
-                await self.data_manager.load_timers_from_redis()
-                await self.data_manager.load_mods_from_redis()
-                await self.channel_status.start_worker()
+                await self.data_manager.data_startup()
+                bot.add_view(DMCategoryButtonView(bot))
                 await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="for tickets!"))
                 heartbeat.start()
             startup = False
@@ -67,7 +68,7 @@ class Mantid(commands.Bot):
                         ready = False
                         logger.exception(f"Failed to load {filename}: {e}")
 
-        # Prints READY ASCII text (duh)          
+        # Prints READY ASCII text         
         if ready:
             logger.log("NOTIF", "\n  ___   ___     _     ___   __   __"
                                 "\n | _ \ | __|   /_\   |   \  \ \ / /"
@@ -85,12 +86,7 @@ class Mantid(commands.Bot):
         logger.log("SYSTEM", "------- SHUTTING DOWN --------------------")
         
         heartbeat.cancel()
-        await self.channel_status.shutdown()
-        await self.data_manager.save_status_dicts_to_redis()
-        await self.data_manager.save_timers_to_redis()
-        await self.data_manager.save_mods_to_redis()
-        await self.data_manager.close_db()
-        await self.data_manager.close_redis()
+        await self.data_manager.data_shutdown()
         await super().close()
 
 bot = Mantid()
@@ -120,12 +116,7 @@ async def shutdown(ctx):
     logger.log("SYSTEM", "------- SHUTTING DOWN --------------------")
 
     heartbeat.cancel()
-    await bot.channel_status.shutdown()
-    await bot.data_manager.save_status_dicts_to_redis()
-    await bot.data_manager.save_timers_to_redis()
-    await bot.data_manager.save_mods_to_redis()
-    await bot.data_manager.close_db()
-    await bot.data_manager.close_redis()
+    await bot.data_manager.data_shutdown()
     await bot.close()
 
 

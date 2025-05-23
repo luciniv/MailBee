@@ -21,6 +21,12 @@ class Util(commands.Cog):
 
     @commands.command()
     @checks.is_owner()
+    async def del_rticket(self, ctx, userID, guildID):
+        await self.bot.data_manager.delete_user_ticket(userID, guildID)
+        await ctx.send(f"Deleted ticket from redis, guild {guildID}")
+
+    @commands.command()
+    @checks.is_owner()
     async def pri(self, ctx, id):
         guild = ctx.guild
         priority_values = [-1,-1]
@@ -104,6 +110,14 @@ class Util(commands.Cog):
     async def empty_messages(self, ctx):
         await self.bot.data_manager.empty_messages()
         await ctx.send("Emptied messages cache")
+
+
+    # Empties messages cache
+    @commands.command()
+    @checks.is_owner()
+    async def empty_messages_v2(self, ctx):
+        await self.bot.data_manager.empty_messages_v2()
+        await ctx.send("Emptied messages_v2 cache")
 
 
     # Flushes ticket messages to SQL

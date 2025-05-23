@@ -1,8 +1,16 @@
 import discord
 import asyncio
 import time
+import os
+import io
+import re
 from discord.ext import commands
+from discord.errors import NotFound
+from datetime import datetime, timezone
 from roblox_data.helpers import *
+from classes.error_handler import *
+from classes.embeds import *
+from classes.ticket_handler import TicketSelectView
 from utils import emojis, checks
 from utils.logger import *
 
@@ -23,6 +31,413 @@ class Analytics(commands.Cog):
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
         await self.catch_modmail_backlog()
         await self.process_queue()
+
+    ### NOTE
+    ### Modmail System Development --> Message event handling functions
+    ### NOTE
+
+    async def bot_dm(self, message: discord.Message):
+        try:
+            channel = message.channel
+            authorID = message.author.id
+            tickets = await self.bot.data_manager.get_or_load_user_tickets(authorID)
+            print("tickets is", tickets)
+
+            # Prompt to open a ticket
+            if tickets is None:
+                startEmbed = discord.Embed(title="Open a Ticket",
+                                        description="Type `/create_ticket` in this channel to open a ticket."
+                                        f"\n\n{self.bot.user.name} needs to know what servers you are in to open a ticket. "
+                                        "If you have not verified your servers yet: [CLICK HERE](https://x.com)",
+                                        color=discord.Color.blue())
+                await channel.send(embed=startEmbed)
+
+            # Route message to open ticket
+            elif (len(tickets) == 1):
+                print("one ticket found, sending message to channel")
+                for ticket in tickets:
+                    channelID = ticket["channelID"]
+                    await self.route_to_server(message, channelID)
+
+            # Selection menu for where to route ticket message
+            elif (len(tickets) > 1):
+                ticketEmbed = discord.Embed(title="Choose Message Destination",
+                                        description="Use the dropdown menu to select which server to send your message to."
+                                        "\n\nThese are servers you **currently have an open ticket with**. "
+                                        "If you would like to create a new ticket with a different server, use `/create_ticket`",
+                                        color=discord.Color.blue())
+                await channel.send(embed=ticketEmbed, view=TicketSelectView(self.bot, tickets))
+
+        except Exception as e:
+            logger.exception(f"bot_dm sent an error: {e}")
+
+
+    async def route_to_server(self, message: discord.Message, channelID: int):
+        try:
+            server_channel = self.bot.get_channel(channelID)
+            files = []
+
+            if not server_channel:
+                try:
+                    server_channel = await asyncio.wait_for(self.bot.fetch_channel(channelID), timeout=1)
+                except Exception as e:
+                    await message.add_reaction("❌")
+                    print("channel fetch failed, must not exist")
+                    return
+                
+            id_list = (server_channel.topic).split()
+            threadID = id_list[-1]
+            guild = server_channel.guild
+            timestamp = datetime.now(timezone.utc)
+            format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+            logger.debug("started file process")
+            # Process any attachments
+            attachments = []
+            raw_files = []  # <-- store raw data
+            fileMessage = None
+            fileEmbed = discord.Embed(title="", 
+                                    description="**Processing files...**\n"
+                                    "Please note that image / video files may not send if they are too "
+                                    "large (>20MB). For the fastest processing, upload large files to "
+                                    "hosting websites and share links to the uploads instead.",
+                                    color=discord.Color.blue())
+
+            if message:
+                attachments = message.attachments
+
+                if len(attachments) > 0:
+                    fileMessage = await message.channel.send(embed=fileEmbed)
+                    print("message has attachments")
+
+                for file in attachments:
+                    saved_file = io.BytesIO()
+                    await file.save(saved_file)
+                    raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
+
+            replyEmbed = discord.Embed(title="Message Sent", 
+                                    description=message.content,
+                                    color=discord.Color.green())
+            replyEmbed.timestamp = datetime.now(timezone.utc)
+            # Add attachment URLs to embed
+            for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
+                replyEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
+
+            if guild.icon:
+                replyEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
+            else:
+                replyEmbed.set_footer(text=guild.name)
+
+            # Later, when sending:
+            files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
+            sent_message = await message.channel.send(embed=replyEmbed, files=files)
+
+            if fileMessage is not None:
+                await fileMessage.delete()
+
+            sendEmbed = discord.Embed(title="Message Received", 
+                                    description=message.content,
+                                    color=discord.Color.green())
+            sendEmbed.timestamp = datetime.now(timezone.utc)
+            # Add attachment URLs to embed
+            for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
+                sendEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
+
+            if message.author.avatar:
+                sendEmbed.set_footer(text=f"{message.author.name} | {message.author.id}", icon_url=message.author.avatar.url)
+            else:
+                sendEmbed.set_footer(text=f"{message.author.name} | {message.author.id}")
+
+            files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
+            await server_channel.send(embed=sendEmbed, files=files)
+
+            thread = self.bot.get_channel(threadID)
+            if not thread:
+                try:
+                    thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
+                except Exception as e:
+                    print("thread fetch failed, must not exist")
+                    return
+            
+            files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
+            await thread.send(embed=sendEmbed, files=files)
+            logger.debug("sent thread receipt")
+
+            await self.bot.data_manager.add_ticket_message(sent_message.id, 
+                                                            None, 
+                                                            message.channel.id, 
+                                                            message.author.id, 
+                                                            format_time, 
+                                                            "Received", True)
+            await self.bot.channel_status.set_emoji(server_channel, "alert")
+
+        except Exception as e:
+            await message.add_reaction("❌")
+            logger.exception(f"route_to_server sent an error: {e}")
+
+
+    async def staff_message(self, message: discord.Message):
+        logger.debug("entered staff message")
+        channel = message.channel
+        id_list = (channel.topic).split()
+        threadID = id_list[-1]
+        dm_channelID = id_list[-2]
+        userID = id_list[-3]
+        
+        # Process message to ticket opener
+        await self.route_to_dm(message, threadID, dm_channelID, userID)
+
+
+    async def route_to_dm(self, message: discord.Message, threadID: int, dm_channelID: int, userID: int, anon = None, interaction = None, interaction_content = None):
+        logger.debug("entered route to dm")
+        try:
+            if message is not None:
+                channel = message.channel
+                content = re.sub(r"^\+\s*", "", message.content)
+                author = message.author
+            else:
+                channel = interaction.channel
+                content = interaction_content
+                author = interaction.user
+
+            guild = channel.guild
+            timestamp = datetime.now(timezone.utc)
+            format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            files = []
+
+            if anon is None:
+                config = await self.bot.data_manager.get_or_load_config(guild.id)
+                if config is not None:
+                    if (config["anon"] == 'true'):
+                        anon = True
+                    else:
+                        anon = False
+                logger.debug("loaded config")
+
+            dm_channel = self.bot.get_channel(dm_channelID)
+            if not dm_channel:
+                logger.debug("dm channel via fetch")
+                try:
+                    dm_channel = await asyncio.wait_for(self.bot.fetch_channel(dm_channelID), timeout=1)
+                except Exception as e:
+                    if message is not None:
+                        await message.reply("❌ Could not find DM channel with user")
+                    # FIXME tell user the bot couldnt find their ticket channel
+                    print("channel fetch failed, must not exist")
+                    return
+            logger.debug("got the dm channel")
+
+            try:
+                member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
+            except Exception:
+                try:
+                    member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
+                except Exception as e:
+                    if message is not None:
+                        await message.reply("❌ You are sending messages too fast")
+                    print("failed to fetch guild member", e)
+                return
+            logger.debug("got the member")
+
+            logger.debug("started file process")
+            # Process any attachments
+            attachments = []
+            raw_files = [] 
+            fileMessage = None
+            fileEmbed = discord.Embed(title="", 
+                                    description="**Processing files...**\n"
+                                    "Please note that image / video files may not send if they are too "
+                                    "large (>20MB). For the fastest processing, upload large files to "
+                                    "hosting websites and share links to the uploads instead.",
+                                    color=discord.Color.blue())
+
+            if message:
+                attachments = message.attachments
+                print("attachments are", attachments)
+
+                if len(attachments) > 0:
+                    fileMessage = await message.channel.send(embed=fileEmbed)
+                    print("message has attachments")
+
+                for file in attachments:
+                    saved_file = io.BytesIO()
+                    await file.save(saved_file)
+                    raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
+            logger.debug("finished file process")
+
+            if message:
+                await message.delete()
+            logger.debug("deleted message")
+
+            receiptEmbed = discord.Embed(title=f"Message Sent [STAFF]", 
+                                    description=content,
+                                    color=discord.Color.blue())
+            receiptEmbed.timestamp = datetime.now(timezone.utc)
+            # Add attachment URLs to embed
+            for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
+                receiptEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
+            logger.debug("added attachment urls")
+
+            if (author.avatar):
+                receiptEmbed.set_author(name=f"{author.name} | {author.id}", icon_url=author.avatar.url)
+            else:
+                receiptEmbed.set_author(name=f"{author.name} | {author.id}")
+
+            if anon:
+                author_name = receiptEmbed.author.name
+                receiptEmbed.set_author(name=f"{author_name} (Anonymous)", icon_url=author.avatar.url)
+
+            if member:
+                if member.avatar:
+                    receiptEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.avatar.url)
+                else:
+                    receiptEmbed.set_footer(text=f"{member.name} | {member.id}")
+
+            files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
+            sent_message = await channel.send(embed=receiptEmbed, files=files)
+
+            if fileMessage is not None:
+                await fileMessage.delete()
+            logger.debug("sent receipt embed")
+
+            sendEmbed = discord.Embed(title=f"Message Received", 
+                                    description=content,
+                                    color=discord.Color.blue())
+            sendEmbed.timestamp = datetime.now(timezone.utc)
+            # Add attachment URLs to embed
+            for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
+                sendEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
+
+            if channel.guild.icon:
+                sendEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
+            else:
+                sendEmbed.set_footer(text=guild.name)
+
+            if not anon:
+                if (author.avatar):
+                    sendEmbed.set_author(name=f"{author.name} | {author.id}", icon_url=author.avatar.url)
+                else:
+                    sendEmbed.set_author(name=f"{author.name} | {author.id}")  
+
+            files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
+            await dm_channel.send(embed=sendEmbed, files=files)
+            logger.debug("sent message to dms")
+
+            thread = self.bot.get_channel(threadID)
+            if not thread:
+                logger.debug("thread via fetch")
+                try:
+                    thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
+                except Exception as e:
+                    print("thread fetch failed, must not exist")
+                    return
+            logger.debug("got the thread")
+
+            files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
+            await thread.send(embed=receiptEmbed, files=files)
+            logger.debug("sent thread receipt")
+
+            await self.bot.data_manager.add_ticket_message(sent_message.id, 
+                                                            None, 
+                                                            channel.id, 
+                                                            author.id, 
+                                                            format_time, 
+                                                            "Sent", True)
+            await self.bot.channel_status.set_emoji(channel, "wait")
+
+        except Exception as e:
+            if message:
+                await message.reply("❌ An error occurred, please try again")
+            logger.exception(f"got_dm sent an error: {e}")
+
+
+    async def store_comment(self, message: discord.Message):
+        author = message.author
+        channel = message.channel
+        id_list = (channel.topic).split()
+        threadID = id_list[-1]
+
+        thread = self.bot.get_channel(threadID)
+        if not thread:
+            logger.debug("thread via fetch")
+            try:
+                thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
+            except Exception as e:
+                print("thread fetch failed, must not exist")
+                return
+        logger.debug("got the thread")
+
+        # Process any attachments
+        attachments = []
+        raw_files = []  # <-- store raw data
+
+        if message:
+            attachments = message.attachments
+
+            print("attachments are", attachments)
+
+            if len(attachments) > 0:
+                print("message has attachments")
+
+            for file in attachments:
+                saved_file = io.BytesIO()
+                await file.save(saved_file)
+                raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
+        logger.debug("finished file process")
+
+        files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
+        await thread.send(f"**{author.name}** `[COMMENT]`\n{message.content}\n"
+                          f"-# `ID: {author.id} | MSG: {message.id}`", files=files)
+        
+
+    async def edit_comment(self, message):
+        channel = message.channel
+        author = message.author
+        id_list = (channel.topic).split()
+        threadID = id_list[-1]
+
+        thread = self.bot.get_channel(threadID)
+        if not thread:
+            logger.debug("thread via fetch")
+            try:
+                thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
+            except Exception as e:
+                print("thread fetch failed, must not exist")
+                return
+        logger.debug("got the thread")
+
+        async for thread_message in thread.history(limit=None, oldest_first=False):
+            if str(message.id) in thread_message.content:
+                print(f"Found message:\n{message.content}")
+                await thread_message.edit(content=f"**{author.name}** `[COMMENT]`\n{message.content}\n"
+                                                  f"-# `ID: {author.id} | MSG: {message.id}`")
+                return
+        print("No matching message found.")
+        return None
+    
+
+    async def delete_comment(self, message):
+        channel = message.channel
+        id_list = (channel.topic).split()
+        threadID = id_list[-1]
+
+        thread = self.bot.get_channel(threadID)
+        if not thread:
+            logger.debug("thread via fetch")
+            try:
+                thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
+            except Exception as e:
+                print("thread fetch failed, must not exist")
+                return
+        logger.debug("got the thread")
+
+        async for thread_message in thread.history(limit=None, oldest_first=False):
+            if str(message.id) in thread_message.content:
+                print(f"Found message:\n{message.content}")
+                await thread_message.delete()
+                return
+        print("No matching message found.")
+        return None
 
 
     # Populate queue with unprocessed messages
@@ -92,7 +507,8 @@ class Analytics(commands.Cog):
                 await self.log_open_ticket(message, "good")
 
             if (title == "Ticket Closed"):
-                await message.add_reaction(emojis.mantis)
+                #await message.add_reaction(emojis.mantis)
+                pass
 
 
     # Stores opened Modmail tickets into the DB
@@ -169,7 +585,7 @@ class Analytics(commands.Cog):
                 {priority_values[1]});
                 """
             await self.bot.data_manager.execute_query(query, False)
-            await message.add_reaction(emojis.mantis)
+            #await message.add_reaction(emojis.mantis)
 
             if (status == 'good'):
                 logger.success(f"*** Processed open modmail ticket (Message ID: {message.id}) GOOD DATA ***")
@@ -233,11 +649,11 @@ class Analytics(commands.Cog):
                     # Remove from Redis if ticket is still present
                     await self.bot.data_manager.remove_ticket_modmail(modmail_messageID)
                     logger.warning(f"*** Processed closed modmail ticket (Message ID: {modmail_messageID}) BAD DATA ***")
-                    await message.add_reaction(emojis.mantis)
+                    #
                     
                 else:
                     logger.error(f"Close embed not loggable")
-                    await message.add_reaction(emojis.mantis)
+                    #await message.add_reaction(emojis.mantis)
             
             else:
                 closeID = message.author.id
@@ -270,15 +686,53 @@ class Analytics(commands.Cog):
     # On-message event listener for messages in #modmail-log channels or modmail categories
     @commands.Cog.listener()
     async def on_message(self, message):
-        if (isinstance(message.channel, discord.DMChannel) or not message.guild):
+        logger.debug("entered message listener")
+        # Check to ensure Mantid doesnt respond to its own messages
+        if (message.author.id in [1304609006379073628, 1333954467519004673]):
+            logger.debug("returning near-instantly")
             return
-        # Check to ensure Mantid doesnt store its own messages
-        if (message.author.id == 1304609006379073628):
+        
+        # Temp, allows Mantid to still work (allows Modmail message processing)
+        if (message.author.bot and message.author.id != 575252669443211264):
             return
 
+        if (isinstance(message.channel, discord.DMChannel)):
+            logger.debug("message was in DM ticket channel")
+            print("called got_dm")
+            await self.bot_dm(message)
+            logger.debug("FULLY DONE NOW")
+            return
+        
         this_channel = message.channel
         this_channelID = this_channel.id
         this_channel_catID = message.channel.category_id
+
+        # check if chanel descrip is good, if so send mod message to dm
+        # check permissions
+        logger.debug("check if its a text channel")
+        if (isinstance(this_channel, discord.TextChannel)):
+            if (this_channel.topic):
+                if ("Ticket channel" in this_channel.topic):
+                    # Process comment
+                    logger.debug("check if its a reply")
+                    if (message.content.startswith("+")):
+                        logger.debug("its a staff message, function called")
+                        print("staff sent a message")
+                        await self.staff_message(message)
+                    else:
+                        # Process comment
+                        print("staff sent comment")
+                        timestamp = datetime.now(timezone.utc)
+                        format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                        await self.bot.data_manager.add_ticket_message(message.id, 
+                                                            None, 
+                                                            this_channelID, 
+                                                            message.author.id, 
+                                                            format_time, 
+                                                            "Discussion", True)
+                        await self.store_comment(message)
+                        logger.debug("comment processed")
+                        return
 
         search_monitor = [
             (channelID, monitorType) for guildID, channelID, monitorType 
@@ -309,6 +763,7 @@ class Analytics(commands.Cog):
             if (monitor_type == "Tickets category" or monitor_type == "Overflow category"):
 
                 # Check if channel is cached as a ticket
+                print("checking for ticket redis data")
                 modmail_messageID = (await self.bot.data_manager.get_ticket(this_channelID))
                 if (modmail_messageID is not None):
                     if (this_authorID == 575252669443211264):
@@ -331,6 +786,7 @@ class Analytics(commands.Cog):
 
                             # Store sent message (embed from the Modmail bot to DM)
                             elif (embed.title == "Message Sent"):
+                                logger.debug("MESSAGE WAS SENT BY MODMAIL")
                                 author_name = (embed.author.name).split()
                                 author_username = (author_name[0])[:-2]
                                 authorID = self.bot.data_manager.mod_ids.get(author_username, None)
@@ -375,6 +831,7 @@ class Analytics(commands.Cog):
                                                                                "Discussion")
                         else:
                             # Message to be sent by Modmail
+                            logger.debug("MESSAGE TO BE SENT BY MODMAIL")
                             self.bot.data_manager.mod_ids[this_authorName] = this_authorID
                 else:
                     logger.debug(f"Ticket channel message NOT within a logged ticket (channel: {this_channelID})")
@@ -383,6 +840,35 @@ class Analytics(commands.Cog):
             if (message.author.id == 575252669443211264):
                     if message.embeds:
                         await self.process_modmail(message, False)
+
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before, after):
+        # Ignore bot edits to prevent loops
+        if before.author.bot:
+            return
+        
+        if before.content == after.content:
+            return
+        
+        logger.debug("check if its a ticket channel")
+        if (isinstance(before.channel, discord.TextChannel)):
+            if (before.channel.topic):
+                if ("Ticket channel" in before.channel.topic):
+                    await self.edit_comment(after)
+
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message):
+        # Ignore bot message deletions
+        if message.author.bot:
+            return
+        
+        logger.debug("check if its a ticket channel")
+        if (isinstance(message.channel, discord.TextChannel)):
+            if (message.channel.topic):
+                if ("Ticket channel" in message.channel.topic):
+                    await self.delete_comment(message)
 
 
 async def setup(bot):

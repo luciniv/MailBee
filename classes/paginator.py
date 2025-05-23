@@ -1,6 +1,22 @@
 import discord
 from discord.ext import commands
 from discord.ui import View, Button
+from typing import List
+
+
+# Subsects a number into a list of numbers that cap at max_size (for pagination)
+def build_subsections(size: int, max_size = 10) -> List[int]:
+    if size <= max_size:
+        return [size]
+    
+    subsections = [max_size] * (size // max_size)
+
+    remainder = size % max_size
+    if (remainder > 0):
+        subsections.append(remainder)
+
+    return subsections
+
 
 class Paginator(View):
     def __init__(self, pages, timeout=120):

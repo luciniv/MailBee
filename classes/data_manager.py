@@ -2,7 +2,7 @@ import aiomysql
 import asyncio
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import redis.asyncio as redis
 from dotenv import load_dotenv
 from typing import List, Dict
@@ -16,20 +16,24 @@ db_name = os.getenv("DB_NAME")
 db_host = os.getenv("DB_HOST")
 redis_url = os.getenv("REDIS_URL")
 
+REDIS_TTL = 60 * 3  # 3 minutes
+# Expected TTL: 12 hours 
+
 
 class DataManager:
     def __init__(self, bot):
         self.bot = bot
         self.db_pool = None
-        self.access_roles = []            # Cache for access roles FIXME switch to redis
+        self.access_roles = []            # Cache for access roles FIXME switch to redis - NOTE, did this
         self.monitored_channels = []      # Cache for monitored channels, will be removed for full system
-        self.category_types = []          # Cache of categories to their types FIXME switch to redis
-        self.types = []                   # Cache for ticket types FIXME switch to redis
-        self.snip_list = []               # Cache for snip guildIDs, abbreviations, and summaries FIXME switch to redis
+        self.category_types = []          # Cache of categories to their types FIXME switch to redis - NOTE, did this
+        self.types = []                   # Cache for ticket types FIXME switch to redis - NOTE, did this
+        self.snip_list = []               # Cache for snip guildIDs, abbreviations, and summaries FIXME switch to redis MAYBE
         self.mod_ids = {}              # Set of mod ids and names, will be removed for full system 
         self.redis_url = redis_url
         self.redis = None
         self.ticket_count = 0
+        self.ticket_count_v2 = 0
         self.flush_lock = asyncio.Lock()  # Initializes lock for flushing Redis
 
 
@@ -148,6 +152,34 @@ class DataManager:
                 except Exception as e:
                     logger.exception(f"Failed to release connection: {e}")
         return result
+    
+
+    async def data_startup(self):
+        await self.update_cache()
+        # Connect to redis
+        await self.connect_to_redis()
+
+        # Pull DB data, send to redis
+        # FIXME either keep this system, or brainstorm it
+        #await self.load_verified_users_from_db()
+
+        # FIXME change these to expire after 5 min
+        # Pull redis data to local variables
+        await self.load_status_dicts_from_redis() # keep local
+        await self.load_timers_from_redis() # keep local
+
+        # NOTE this one stays, for mantid
+        await self.load_mods_from_redis() 
+        await self.bot.channel_status.start_worker()
+
+
+    async def data_shutdown(self):
+        await self.bot.channel_status.shutdown()
+        await self.save_status_dicts_to_redis()
+        await self.save_timers_to_redis()
+        await self.save_mods_to_redis()
+        await self.close_db()
+        await self.close_redis()
                     
 
     # Variably controlled local cache updater
@@ -177,6 +209,405 @@ class DataManager:
             query = "SELECT guildID, abbrev, summary FROM snips;"
             self.snip_list = await self.execute_query(query)
             logger.debug("'snip_list' cache updated from database")
+    
+
+    # V2 FUNCTIONS BELOW -----------------------------------------
+
+
+    # Load server config from the database
+    async def load_config_from_db(self, guildID):
+        query = f"""
+            SELECT * FROM config
+            WHERE guildID = {guildID};"""
+        data = await self.execute_query(query)
+        return data
+    
+
+    # run setup
+    # 1 check for admin perms
+    # 2 check db for config (specifically inbox and log)
+    #   if found, check if valid (aka they exist), remake them if they dont
+    #   if they do exist, just tell user setup is done (re-set perms for these channels for the default role only)
+    # 3 prompt for next steps
+
+    # edit permissions
+    # add role --> change 
+    
+
+    # Add base config (guild + channels)
+    async def add_config_to_db(self, guildID, logID, inboxID, responsesID, feedbackID, reportID):
+        query = """
+            INSERT INTO config (guildID, logID, inboxID, responsesID, feedbackID, reportID) 
+            VALUES (%s, %s, %s, %s, %s, %s);
+            """
+        params = (guildID, logID, inboxID, responsesID, feedbackID, reportID)
+        await self.execute_query(query, False, False, params)
+
+
+    # get or load config to use config data
+    # run database queries, re-load full config from DB (arguably easier)
+
+    async def set_ticket_log(self, guildID, channelID):
+        query = f"""
+            UPDATE config
+            SET logID = {channelID}
+            WHERE guildID = {guildID};
+        """
+        await self.execute_query(query, False)
+
+    
+    async def set_ticket_inbox(self, guildID, categoryID):
+        query = f"""
+            UPDATE config
+            SET inboxID = {categoryID}
+            WHERE guildID = {guildID};
+        """
+        await self.execute_query(query, False)
+
+
+    async def set_ticket_responses(self, guildID, channelID):
+        query = f"""
+            UPDATE config
+            SET responsesID = {channelID}
+            WHERE guildID = {guildID};
+        """
+        await self.execute_query(query, False)
+
+
+    async def set_feedback_thread(self, guildID, threadID):
+        query = f"""
+            UPDATE config
+            SET feedbackID = {threadID}
+            WHERE guildID = {guildID};
+        """
+        await self.execute_query(query, False)
+
+
+    async def set_report_thread(self, guildID, threadID):
+        query = f"""
+            UPDATE config
+            SET reportID = {threadID}
+            WHERE guildID = {guildID};
+        """
+        await self.execute_query(query, False)
+
+
+    # edit config calls
+    async def set_anon_status(self, guildID, anon):
+        query = f"""
+            UPDATE config
+            SET anon = '{anon}'
+            WHERE guildID = {guildID};
+        """
+        await self.execute_query(query, False)
+
+
+    async def set_ticket_accepting(self, guildID, accepting):
+        query = f"""
+            UPDATE config
+            SET accepting = '{accepting}'
+            WHERE guildID = {guildID};
+        """
+        await self.execute_query(query, False)
+
+
+    async def set_greeting(self, guildID, greeting):
+        query = f"""
+            UPDATE config
+            SET greeting = %s
+            WHERE guildID = {guildID};
+            """
+        params = (greeting)
+        await self.execute_query(query, False, False, params)
+
+
+    async def set_closing(self, guildID, closing):
+        query = f"""
+            UPDATE config
+            SET closing = %s
+            WHERE guildID = {guildID};
+            """
+        params = (closing)
+        await self.execute_query(query, False, False, params)
+
+
+    # Get all open tickets from database per user
+    async def load_tickets_from_db(self, userID):
+        query = f"""
+            SELECT guildID, channelID 
+            FROM tickets_v2
+            WHERE openerID = {userID}
+            AND state = 'open';
+            """
+        print(query)
+        open_tickets = await self.execute_query(query)
+        print(open_tickets)
+        print("loaded tickets from db")
+        return open_tickets
+    
+
+    async def get_ticket_history(self, guildID, userID):
+        query = f"""
+            SELECT channelID, logID, dateOpen, dateClose, closerID, state, typeName 
+            FROM tickets_v2 INNER JOIN ticket_types ON tickets_v2.type = ticket_types.typeID
+            WHERE tickets_v2.guildID = {guildID}
+            AND tickets_v2.openerID = {userID}
+            ORDER BY dateOpen Desc;
+            """
+        print(query)
+        history = await self.execute_query(query)
+        print(history)
+        print("got history from db")
+        return history
+    
+
+    # Create a new ticket entry in the database
+    async def create_ticket(self, guildID, channelID, memberID, threadID, typeID):
+        print("attempting to store ticket in database")
+        timestamp = datetime.now(timezone.utc)
+        dateOpen = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+        query = f"""
+            INSERT IGNORE INTO tickets_v2 (guildID, channelID, logID, dateOpen, openerID, state, type) VALUES
+            ({guildID},
+            {channelID},
+            {threadID},
+            '{dateOpen}',
+            {memberID},
+            'open',
+            {typeID});
+            """
+        await self.execute_query(query, False)
+        print("storage success")
+        
+
+    # Update an open database entry as closed
+    async def close_ticket(self, guildID, userID, closeID, closeUN):
+        timestamp = datetime.now(timezone.utc)
+        dateClose = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+        query = f"""
+            UPDATE tickets_v2
+            JOIN (
+                SELECT *
+                FROM (
+                    SELECT channelID
+                    FROM tickets_v2
+                    WHERE guildID = {guildID}
+                    AND openerID = {userID}
+                    AND state = 'open'
+                    ORDER BY dateOpen ASC
+                    LIMIT 1
+                ) AS inner_subquery
+            ) AS target ON tickets_v2.channelID = target.channelID
+            SET
+                dateClose = '{dateClose}',
+                closerID = {closeID},
+                closerUN = '{closeUN}',
+                state = 'closed';
+            """
+        await self.execute_query(query, False)
+        print("close sucess")
+
+
+    # Add note to user / ticket
+    # async def add_ticket_note(self, userID, token):
+    #     query = f"""
+    #         INSERT INTO notes VALUES
+    #         ({userID},
+    #         '{token}');
+    #         """
+    #     await self.execute_query(query, False)
+    #     print("added verified user", userID, token)
+    
+
+
+    # Get a verified user from database
+    async def get_verified_user_from_db(self, userID):
+        query = f"""
+            SELECT token FROM verified_users
+            WHERE userID = {userID};
+            """
+        user = await self.execute_query(query)
+        print("loaded token from db", user)
+        return user
+
+
+    # Add verified user to database
+    async def add_verified_user_to_db(self, userID, token):
+        query = f"""
+            INSERT INTO verified_users VALUES
+            ({userID},
+            '{token}');
+            """
+        await self.execute_query(query, False)
+        print("added verified user", userID, token)
+
+
+    # Get all blacklist entries from database
+    async def get_all_blacklist_from_db(self, guildID):
+        query = f"""
+            SELECT userID from blacklist
+            WHERE guildID = {guildID};
+            """
+        blacklist = await self.execute_query(query)
+        return blacklist
+
+
+    # Get one blacklist entry from database
+    async def get_blacklist_from_db(self, guildID, userID):
+        query = f"""
+            SELECT userID from blacklist
+            WHERE guildID = {guildID}
+            AND userID = {userID};
+            """
+        user = await self.execute_query(query)
+        return user
+    
+
+    # Add blacklist entry
+    async def add_blacklist_to_db(self, guildID, userID, reason, modID):
+        timestamp = datetime.now(timezone.utc)
+        date = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+        query = """
+            INSERT INTO blacklist (guildID, userID, reason, date, modID) 
+            VALUES (%s, %s, %s, %s, %s);
+            """
+        params = (guildID, userID, reason, date, modID)
+        await self.execute_query(query, False, False, params)
+    
+
+    # Delete blacklist entry
+    async def delete_blacklist_from_db(self, guildID, userID):
+        query = f"""
+            DELETE FROM blacklist
+            WHERE guildID = {guildID}
+            AND userID = {userID};
+            """
+        await self.execute_query(query, False)
+        
+
+    # Get ticket types from database
+    async def get_types_from_db(self, guildID):
+        query = f"""
+            SELECT * FROM ticket_types
+            WHERE guildID = {guildID}
+            ORDER BY categoryID ASC;
+            """
+        types = await self.execute_query(query)
+        return types
+
+
+    # Add ticket type
+    # Add ticket type safely with parameterized query
+    async def add_type_to_db(self, guildID, categoryID, typeName, typeDescrip, typeEmoji, subType = -1):
+        formJson = {
+            "title": f"{typeName}",
+            "fields": [
+                {
+                    "label": "Explain your issue in detail.",
+                    "placeholder": "If you have any relevant evidence, send it in this DM channel after your ticket is created.",
+                    "style": "paragraph",
+                    "max_length": 1024
+                }
+            ]
+        }
+
+        query = """
+            INSERT INTO ticket_types (guildID, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """
+        params = (
+            guildID,
+            categoryID,
+            typeName,
+            typeDescrip,
+            typeEmoji,
+            json.dumps(formJson),
+            subType)
+
+        await self.execute_query(query, False, False, params)
+
+
+    async def set_form(self, guildID, categoryID, form=None):
+        if form is None:
+            form = {
+                "title": "Submit Form",
+                "fields": [
+                    {
+                        "label": "Explain your issue in detail.",
+                        "placeholder": "If you have any relevant evidence, send it in this DM channel after your ticket is created.",
+                        "style": "paragraph",
+                        "min_length": 20,
+                        "max_length": 1024,
+                        "required" : True
+                    }
+                ]
+            }
+
+        query = """
+            UPDATE ticket_types
+            SET formJson = %s
+            WHERE guildID = %s AND categoryID = %s;
+            """
+        params = (json.dumps(form), guildID, categoryID)
+        await self.execute_query(query, False, False, params)
+
+
+    # Delete ticket type
+    async def delete_type_from_db(self, guildID, categoryID):
+        query = f"""
+            DELETE FROM ticket_types 
+            WHERE guildID = {guildID}
+            AND categoryID = {categoryID};
+            """
+        await self.execute_query(query, False)
+
+
+    async def replace_type(self, old_categoryID, newcategoryID):
+        # gpt here yeaaaaah
+        pass
+                             
+
+    # on ticket create, add ticket in category based on categoryID
+    # default is the inbox category
+    # if category cant be found, default to inbox
+
+    # create new type --> creates category
+    # ticket stored in database with type linked via typeID (categoryID)
+    # if category is deleted? 
+    # pick a new category to reroute tickets to if you want, elsewise theyre now uncategorized 
+
+
+    async def get_permissions_from_db(self, guildID):
+        query = f"""
+            SELECT roleID, permLevel FROM permissions
+            WHERE guildID = {guildID};
+            """
+        permissions = await self.execute_query(query)
+        return permissions
+    
+
+    # Add permission
+    async def add_permission_to_db(self, guildID, roleID, permLevel):
+        query = f"""
+            INSERT INTO permissions VALUES
+            ({guildID},
+            {roleID},
+            '{permLevel}');
+            """
+        await self.execute_query(query, False)
+    
+
+    # Delete permission
+    async def delete_permission_from_db(self, guildID, roleID):
+        query = f"""
+            DELETE FROM permissions 
+            WHERE guildID = {guildID}
+            AND roleID = {roleID};
+            """
+        await self.execute_query(query, False)
 
 
     # Adds monitored channels / categories to DB
@@ -215,9 +646,67 @@ class DataManager:
         await self.update_cache(2)
 
 
+    # Adds verbal to DB
+    async def add_verbal(self, messageID: int, guildID: int, userID: int, authorID: int, authorName: str, content: str):
+        epoch_time = int(datetime.now(timezone.utc).timestamp())
+
+        query = """
+            INSERT INTO verbals (messageID, guildID, userID, authorID, authorName, date, content)
+            VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """
+        values = (messageID, guildID, userID, authorID, authorName, epoch_time, content)
+        await self.execute_query(query, False, False, values)
+
+
+    # Removes verbal from DB
+    async def remove_verbal(self, messageID: int):
+        query = f"""
+            DELETE FROM verbals WHERE 
+            verbals.messageID = {messageID};
+            """
+        await self.execute_query(query, False)
+
+
+    # Edit verbal in DB
+    async def edit_verbal(self, messageID: int, authorID: int, authorName: str, content: str):
+        epoch_time = int(datetime.now(timezone.utc).timestamp())
+
+        query = """
+            UPDATE verbals
+            SET verbals.authorID = %s, 
+            verbals.authorName = %s, 
+            verbals.date = %s, 
+            verbals.content = %s
+            WHERE verbals.messageID = %s;
+            """
+        params = (authorID, authorName, epoch_time, content, messageID)
+        await self.execute_query(query, False, False, params)
+
+    
+    # Gets verbal from DB
+    async def get_verbal(self, messageID: int):
+        query = f"""
+            SELECT * FROM verbals WHERE
+            verbals.messageID = {messageID};
+            """
+        content = await self.execute_query(query)
+        return content
+    
+
+    # Get all verbals for user from DB
+    async def get_verbal_history(self, guildID: int, userID: int):
+        query = f"""
+            SELECT verbals.messageID, verbals.authorID, verbals.authorName, verbals.date, verbals.content
+            FROM verbals WHERE
+            verbals.guildID = {guildID} AND verbals.userID = {userID};
+            """
+        content = await self.execute_query(query)
+        return content
+
+
     # Adds snip to DB
     async def add_snip(self, guildID: int, authorID: int, abbrev: str, summary: str, content: str):
-        query = f"""
+        query = """
             INSERT INTO snips (guildID, authorID, abbrev, summary, content)
             VALUES (%s, %s, %s, %s, %s);
             """
@@ -236,13 +725,12 @@ class DataManager:
         await self.update_cache(4)
 
 
-    # Removes snip from DB
+    # Gets snip from DB
     async def get_snip(self, guildID: int, abbrev: str):
         query = f"""
             SELECT snips.content FROM snips WHERE
             snips.guildID = {guildID} AND snips.abbrev = '{abbrev}';
             """
-        
         content = await self.execute_query(query)
         return content
 
@@ -266,6 +754,24 @@ class DataManager:
     # -------------------------------------------------------------------------
     # ---------------------- REDIS MANAGEMENT FUNCTIONS -----------------------
     # -------------------------------------------------------------------------
+
+
+    async def set_with_expiry(self, key: str, value: str, expiry: int = REDIS_TTL):
+        print(f"[Redis SET] Key: {key} | Value: {value} | Expiry: {expiry}")
+        await self.redis.set(key, value, ex=expiry)
+
+
+    async def hset_field_with_expiry(self, key: str, field: str, value: str, expiry: int = REDIS_TTL):
+        print(f"[Redis HSET FIELD] Key: {key} | Field: {field} | Value: {value} | Expiry: {expiry}")
+        await self.redis.hset(key, field, value)
+        await self.redis.expire(key, expiry)
+
+
+    async def hset_with_expiry(self, key: str, data: dict, expiry: int = REDIS_TTL):
+        json_data = {field: json.dumps(value) for field, value in data.items()}
+        print(f"[Redis HSET MAPPING] Key: {key} | Fields: {json_data} | Expiry: {expiry}")
+        await self.redis.hset(key, mapping=json_data)
+        await self.redis.expire(key, expiry)
 
 
     # Redis connection function, creates a single connection
@@ -365,6 +871,226 @@ class DataManager:
             logger.error(f"Error loading mod ids from Redis: {e}")
 
 
+    def format_config(self, guildID, logID, inboxID, 
+                      responsesID, feedbackID, reportID,
+                      accepting, anon, blacklisted, 
+                      greeting, closing, 
+                      analytics, logging):
+        
+        if greeting is None:
+            greeting = ""
+        if closing is None:
+            closing = ""
+            
+        return {
+            "guildID": guildID,
+            "logID": logID,
+            "inboxID": inboxID,
+            "responsesID": responsesID,
+            "feedbackID": feedbackID,
+            "reportID": reportID,
+            "accepting": accepting,
+            "anon": anon,
+            "blacklisted": blacklisted,
+            "greeting": greeting,
+            "closing": closing,
+            "analytics": analytics,
+            "logging": logging}
+
+    
+    async def get_or_load_config(self, guildID: int, get = True):
+        redis_key = f"config:{guildID}"
+        if get:
+            cached = await self.redis.get(redis_key)
+
+            if cached:
+                print(f"[CACHE HIT] Config for {guildID}: {cached}")
+                return json.loads(cached)
+
+        config = await self.load_config_from_db(guildID)
+        print(f"[DB LOAD] Config for {guildID}: {config}")
+        if not config:
+            return None
+
+        formatted = self.format_config(*config[0])
+        await self.set_with_expiry(redis_key, json.dumps(formatted))
+        return formatted
+
+
+    # Combined load/get user tickets from Redis, with fallback to DB
+    async def get_or_load_user_tickets(self, userID: int, get = True) -> list[dict]:
+        redis_key = f"user_tickets:{userID}"
+        if get:
+            redis_key = f"user_tickets:{userID}"
+            fields = await self.redis.hgetall(redis_key)
+
+            if fields:
+                print(f"[CACHE HIT] User Tickets for {userID}: {fields}")
+                return [json.loads(data) for data in fields.values()]
+
+        db_tickets = await self.load_tickets_from_db(userID)
+        print(f"[DB LOAD] Tickets for {userID}: {db_tickets}")
+        if not db_tickets:
+            return None
+
+        for guildID, channelID in db_tickets:
+            ticket_data = {"guildID": guildID, "channelID": channelID}
+            await self.hset_field_with_expiry(redis_key, str(guildID), json.dumps(ticket_data))
+
+        return [dict(guildID=g, channelID=c) for g, c in db_tickets]
+
+
+    # Delete an open ticket from a user in a specific guild
+    async def delete_user_ticket(self, userID: int, guildID: int):
+        redis_key = f"user_tickets:{userID}"
+        await self.redis.hdel(redis_key, str(guildID))
+    
+
+    # verified users code 
+    # Lazy get or load verified user
+    async def get_or_load_verified_user(self, userID: int, get = True):
+        redis_key = f"verified_users:{userID}"
+        if get:
+            cached = await self.redis.hget(redis_key, "data")
+
+            if cached:
+                print(f"[CACHE HIT] Verified User {userID}: {cached}")
+                return json.loads(cached)
+
+        user = await self.get_verified_user_from_db(userID)
+        print(f"[DB LOAD] Verified User {userID}: {user}")
+        if not user:
+            return None
+
+        token = user[0]
+        await self.hset_field_with_expiry(redis_key, "data", json.dumps({"token": token}))
+        return {"token": token}
+
+
+    # delete verified user
+    async def delete_verified_user(self, userID):
+        await self.delete_ver
+
+        redis_key = f"verified_users:{userID}"
+        await self.redis.delete(redis_key)
+
+
+    def format_blacklist_entry(self, guildID, userID, reason, date, modID):
+        return {
+            "guildID": guildID,
+            "userID": userID,
+            "reason": reason,
+            "date": date,
+            "modID": modID}
+
+
+    async def get_or_load_blacklist_entry(self, guildID: int, userID: int, get = True):
+        redis_key = f"blacklist:{guildID}:{userID}"
+        if get:
+            cached = await self.redis.get(redis_key)
+
+            if cached:
+                print(f"[CACHE HIT] Blacklist Entry {guildID}-{userID}: {cached}")
+                return json.loads(cached)
+
+        entry = await self.get_blacklist_from_db(guildID, userID)
+        print(f"[DB LOAD] Blacklist Entry {guildID}-{userID}: {entry}")
+        if not entry:
+            return None
+
+        formatted = self.format_blacklist_entry(*entry)
+        await self.set_with_expiry(redis_key, json.dumps(formatted))
+        return formatted
+
+
+    async def delete_blacklist_entry(self, guildID: int, userID: int):
+        # Delete from DB
+        await self.delete_blacklist_from_db(guildID, userID)
+
+        # Delete from Redis
+        redis_key = f"blacklist:{guildID}:{userID}"
+        await self.redis.delete(redis_key)
+
+
+    def format_guild_type_entry(self, typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType):
+        return {
+            "typeID": typeID,
+            "categoryID": categoryID,
+            "typeName": typeName,
+            "typeDescrip": typeDescrip,
+            "typeEmoji": typeEmoji,
+            "form": form,
+            "subType": subType}
+
+
+    async def get_or_load_guild_types(self, guildID, get = True):
+        redis_key = f"ticket_types:{guildID}"
+        if get:
+            cached = await self.redis.hgetall(redis_key)
+
+            if cached:
+                print(f"[CACHE HIT] Ticket Types for {guildID}: {cached}")
+                return [json.loads(data) for data in cached.values()]
+
+        types = await self.get_types_from_db(guildID)
+        print(f"[DB LOAD] Ticket Types for {guildID}: {types}")
+        if not types:
+            return []
+
+        result = []
+        for entry in types:
+            print(entry)
+            typeID, _, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType = entry
+            form = json.loads(formJson)
+            data = self.format_guild_type_entry(typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType)
+            await self.hset_field_with_expiry(redis_key, str(typeID), json.dumps(data))
+            result.append(data)
+
+        return result
+
+
+    # delete guild type
+    async def delete_guild_type(self, guildID, categoryID):
+        # Delete from DB
+        await self.delete_type_from_db(guildID, categoryID)
+
+        redis_key = f"ticket_types:{guildID}"
+        await self.redis.hdel(redis_key, str(categoryID))
+
+
+    # Lazy get or load permissions for a guild
+    async def get_or_load_permissions(self, guildID, get = True):
+        redis_key = f"permissions:{guildID}"
+        if get:
+            cached = await self.redis.hgetall(redis_key)
+
+            if cached:
+                print(f"[CACHE HIT] Permissions for {guildID}: {cached}")
+                return {int(roleID): json.loads(data)["permLevel"] for roleID, data in cached.items()}
+
+        permissions = await self.get_permissions_from_db(guildID)
+        print(f"[DB LOAD] Permissions for {guildID}: {permissions}")
+        if not permissions:
+            return {}
+
+        result = {}
+        for roleID, permLevel in permissions:
+            data = {"permLevel": permLevel}
+            await self.hset_field_with_expiry(redis_key, str(roleID), json.dumps(data))
+            result[int(roleID)] = permLevel
+            
+        return result
+
+
+    # delete permission
+    async def delete_permission(self, guildID, roleID):
+        # Delete from DB
+        await self.delete_permission_from_db(guildID, roleID)
+
+        redis_key = f"permissions:{guildID}"
+        await self.redis.hdel(redis_key, str(roleID))
+
+
     # Add a ticket to the tickets cache, relies on channel_id
     async def add_ticket(self, channel_id: int, modmail_log_id: int):
         key = f"tickets:{channel_id}"
@@ -384,6 +1110,7 @@ class DataManager:
         try:
             ticket_data = await self.redis.hgetall(key)
             if ticket_data:
+                
                 return int(ticket_data["modmail_log_id"])
             return None
         
@@ -469,30 +1196,52 @@ class DataManager:
                                  channel_id: int, 
                                  author_id: int, 
                                  date: str, 
-                                 message_type: str):
-        key = f"ticket_messages:{message_id}"
-        try:
-            await self.redis.hset(key, mapping={
+                                 message_type: str,
+                                 v2: bool = False):
+        key = ""
+        mapping = {}
+
+        if v2:
+            key = f"ticket_messages_v2:{message_id}"
+            mapping = {
+                "channelID": channel_id,
+                "authorID": author_id,
+                "date": date,
+                "type": message_type
+                }
+        else:
+            key = f"ticket_messages:{message_id}"
+            mapping = {
                 "modmail_messageID": modmail_message_id,
                 "channelID": channel_id,
                 "authorID": author_id,
                 "date": date,
                 "type": message_type
-            })
-            self.ticket_count += 1
-            logger.debug(f"Added ticket message {message_id} to Redis")
+                }
+        try:
+            await self.redis.hset(key, mapping=mapping)
+            if v2:
+                self.ticket_count_v2 += 1
+                logger.debug(f"Added ticket message_v2 {message_id} to Redis")
+            else:
+                self.ticket_count += 1
+                logger.debug(f"Added ticket message {message_id} to Redis")
 
-            # Batch flush cache if 10 messages have collected
-            if (self.ticket_count > 19):
+            # Batch flush cache if 20 messages have collected
+            if (self.ticket_count > 19): 
                 await self.flush_messages()
                 logger.info(f"Called flush tickets")
+
+            if (self.ticket_count_v2 > 19): 
+                await self.flush_messages_v2()
+                logger.info(f"Called flush tickets_v2")
 
         except Exception as e:
             logger.exception(f"Error adding ticket message to Redis: {e}")
 
     
     # Remove one ticket message from the cache, relies on the ticket's message_id
-    async def remove_ticket_message(self, message_id: int):
+    async def remove_ticket_message(self, message_id: int, v2: bool = False):
         key = f"ticket_messages:{message_id}"
         try:
             await self.redis.delete(key)
@@ -533,7 +1282,7 @@ class DataManager:
         
 
     # Deletes all ticket messages (NOT REVERSIBLE)
-    async def empty_messages(self):
+    async def empty_messages(self, v2: bool = False):
         try:
             keys = await self.redis.keys("ticket_messages:*")
             if not keys:
@@ -543,6 +1292,23 @@ class DataManager:
             for key in keys:
                 await self.redis.delete(key)
             logger.success(f"Deleted {len(keys)} ticket messages from Redis")
+
+        except Exception as e:
+            logger.exception(f"Error during Redis empty: {e}")
+
+
+
+    # Deletes all ticket messages (NOT REVERSIBLE)
+    async def empty_messages_v2(self, v2: bool = False):
+        try:
+            keys = await self.redis.keys("ticket_messages_v2:*")
+            if not keys:
+                logger.info("Attempted to delete empty ticket messages_v2 cache")
+                return
+
+            for key in keys:
+                await self.redis.delete(key)
+            logger.success(f"Deleted {len(keys)} ticket messages_v2 from Redis")
 
         except Exception as e:
             logger.exception(f"Error during Redis empty: {e}")
@@ -593,6 +1359,55 @@ class DataManager:
                 # Delete only processed keys from Redis
                 for key in keys:
                     await self.redis.delete(key)
-
+                
                 self.ticket_count = 0
                 logger.success(f"Flushed {len(messages_to_insert)} messages to DB")
+
+
+
+    # Copies all ticket messages_v2 to DB, then deletes them
+    # Uses asyncio.Lock() to ensure another flush cannot occur before the current flush is done
+    async def flush_messages_v2(self):
+        # Get the lock
+        async with self.flush_lock:
+            try:
+                keys = await self.redis.keys("ticket_messages_v2:*")
+                if not keys:
+                    logger.debug("Attempted to flush zero v2 messages")
+                    return
+
+                messages_to_insert = []
+                for key in keys:
+                    message = await self.redis.hgetall(key)
+                    # Extract message ID from the key
+                    messageID = key.split(':')[1]
+                    if message:
+                        messages_to_insert.append((
+                            message["channelID"],
+                            messageID,
+                            message["authorID"],
+                            message["date"],
+                            message["type"]
+                        ))
+
+                # Attempt SQL transaction, roll back changes if any message fails to insert
+                query = """
+                        INSERT INTO ticket_messages_v2 (channelID, messageID, authorID, date, type)
+                        VALUES (%s, %s, %s, %s, %s) AS messages
+                        ON DUPLICATE KEY UPDATE 
+                            channelID = messages.channelID,
+                            authorID = messages.authorID,
+                            date = messages.date,
+                            type = messages.type; 
+                            """
+                await self.execute_query(query, False, True, messages_to_insert)
+                
+            except Exception as e:
+                logger.exception(f"Error during v2 cache flush: {e}")
+            else:
+                # Delete only processed keys from Redis
+                for key in keys:
+                    await self.redis.delete(key)
+
+                self.ticket_count_v2 = 0
+                logger.success(f"Flushed {len(messages_to_insert)} v2 messages to DB")

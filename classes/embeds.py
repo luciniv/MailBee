@@ -10,7 +10,7 @@ class Embeds(discord.Embed):
 
         # Ensure bot user is available
         if bot.user:
-            self.set_footer(text="Mantid", icon_url=bot.user.avatar.url if bot.user.avatar else None)
+            self.set_footer(text=bot.user.name, icon_url=bot.user.avatar.url if bot.user.avatar else None)
 
         # Set timestamp
         self.timestamp = datetime.now(timezone.utc)
