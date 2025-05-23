@@ -847,7 +847,6 @@ class Analytics(commands.Cog):
         if before.content == after.content:
             return
         
-        logger.debug("check if its a ticket channel")
         if (isinstance(before.channel, discord.TextChannel)):
             if (before.channel.topic):
                 if ("Ticket channel" in before.channel.topic):
@@ -860,7 +859,6 @@ class Analytics(commands.Cog):
         if message.author.bot:
             return
         
-        logger.debug("check if its a ticket channel")
         if (isinstance(message.channel, discord.TextChannel)):
             if (message.channel.topic):
                 if ("Ticket channel" in message.channel.topic):
