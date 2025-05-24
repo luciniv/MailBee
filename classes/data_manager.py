@@ -647,6 +647,64 @@ class DataManager:
 
 
     # Adds verbal to DB
+    async def add_note(self, messageID: int, guildID: int, userID: int, authorID: int, authorName: str, content: str):
+        epoch_time = int(datetime.now(timezone.utc).timestamp())
+
+        query = """
+            INSERT INTO verbals (messageID, guildID, userID, authorID, authorName, date, content)
+            VALUES (%s, %s, %s, %s, %s, %s, %s);
+            """
+        values = (messageID, guildID, userID, authorID, authorName, epoch_time, content)
+        await self.execute_query(query, False, False, values)
+
+
+    # Removes verbal from DB
+    async def remove_note(self, messageID: int):
+        query = f"""
+            DELETE FROM verbals WHERE 
+            verbals.messageID = {messageID};
+            """
+        await self.execute_query(query, False)
+
+
+    # Edit verbal in DB
+    async def edit_note(self, messageID: int, authorID: int, authorName: str, content: str):
+        epoch_time = int(datetime.now(timezone.utc).timestamp())
+
+        query = """
+            UPDATE verbals
+            SET verbals.authorID = %s, 
+            verbals.authorName = %s, 
+            verbals.date = %s, 
+            verbals.content = %s
+            WHERE verbals.messageID = %s;
+            """
+        params = (authorID, authorName, epoch_time, content, messageID)
+        await self.execute_query(query, False, False, params)
+
+    
+    # Gets verbal from DB
+    async def get_note(self, messageID: int):
+        query = f"""
+            SELECT * FROM verbals WHERE
+            verbals.messageID = {messageID};
+            """
+        content = await self.execute_query(query)
+        return content
+    
+
+    # Get all verbals for user from DB
+    async def get_note_history(self, guildID: int, userID: int):
+        query = f"""
+            SELECT verbals.messageID, verbals.authorID, verbals.authorName, verbals.date, verbals.content
+            FROM verbals WHERE
+            verbals.guildID = {guildID} AND verbals.userID = {userID};
+            """
+        content = await self.execute_query(query)
+        return content
+
+
+    # Adds verbal to DB
     async def add_verbal(self, messageID: int, guildID: int, userID: int, authorID: int, authorName: str, content: str):
         epoch_time = int(datetime.now(timezone.utc).timestamp())
 

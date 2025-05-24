@@ -1,6 +1,7 @@
 import discord
 import datetime
 import asyncio
+import re
 from discord.ext import commands
 from discord import app_commands
 from classes.error_handler import *
@@ -8,6 +9,22 @@ from classes.paginator import Paginator, build_subsections
 from classes.embeds import *
 from utils import emojis, checks
 from utils.logger import *
+
+
+async def convert_mentions(bot, text, guild):
+    # Find all <#channel_id> patterns
+    matches = re.findall(r'<#(\d+)>', text)
+    for channel_id in matches:
+        channel = None
+        try:
+            channel = guild.get_channel(int(channel_id))
+            if channel is None:
+                channel = await asyncio.wait_for(bot.fetch_channel(channel_id), timeout=1)
+        except Exception:
+            pass
+        if channel:
+            text = text.replace(f'https://discord.com/channels/{guild.id}/{channel_id}', channel.mention)
+    return text
 
 
 class Moderation(commands.Cog):
@@ -116,7 +133,7 @@ class Moderation(commands.Cog):
             else:
                 await self.bot.data_manager.add_blacklist_to_db(guild.id, user.id, reason, ctx.author.id)
                 embed = discord.Embed(
-                    description=f"✅ **{user.mention}** has been blacklisted from opening tickets.\nReason: {reason}",
+                    description=f"✅ **{user.mention}** has been blacklisted from opening tickets\nReason: {reason}",
                     color=discord.Color.green()
                 )
 
@@ -200,6 +217,16 @@ class Moderation(commands.Cog):
             sent_message = None
             dm_channel = user.dm_channel or await user.create_dm()
 
+            reason = await convert_mentions(self.bot, reason, guild)
+
+            if (len(reason) > 800):
+                embed = discord.Embed(description="❌ Reason length is too long, it must be at most 800 characters"
+                                                  "\n\nNote that channel links add approximately 70 characters each",
+                                          color=discord.Color.red())
+                await ctx.send(embed=embed)
+                return
+
+
             verbalEmbed = discord.Embed(title="Verbal Warning",
                                         description=f"**{reason}**",
                                         color=discord.Color.blue())
@@ -255,10 +282,20 @@ class Moderation(commands.Cog):
             author = ctx.author
             userID = None
             user = None
+            old_reason = None
+            new_reason = await convert_mentions(self.bot, new_reason, guild)
+
+            if (len(new_reason) > 800):
+                embed = discord.Embed(description="❌ New reason length is too long, it must be at most 800 characters"
+                                                  "\n\nNote that channel links add approximately 70 characters each",
+                                          color=discord.Color.red())
+                await ctx.send(embed=embed)
+                return
 
             result = await self.bot.data_manager.get_verbal(verbal_id)
             if len(result) != 0:
-                userID = result[0][3]
+                userID = result[0][2]
+                old_reason = result[0][6]
             else:
                 embed = discord.Embed(description="❌ Verbal not found, invalid ID",
                                             color=discord.Color.red())
@@ -315,6 +352,7 @@ class Moderation(commands.Cog):
 
             successEmbed = discord.Embed(description=f"✅ **Updated verbal for <@{user.id}> ({user.name})**",
                                          color=discord.Color.green())
+            successEmbed.add_field(name="Old Reason", value=old_reason, inline=False)
             successEmbed.add_field(name="New Reason", value=new_reason, inline=False)
             successEmbed.add_field(name="Verbal ID", value=f"```{verbal_id}```", inline=False)
             await ctx.send(embed=successEmbed)
@@ -428,7 +466,7 @@ class Moderation(commands.Cog):
                     await ctx.send(embed=historyEmbed)
                     return
                 else:
-                    page_counts = build_subsections(len(history), 4)
+                    page_counts = build_subsections(len(history), 3)
                     print(page_counts)
                     for page_count in page_counts:
                         limit += page_count
@@ -459,6 +497,7 @@ class Moderation(commands.Cog):
                             historyEmbed.add_field(name=f"Case {count + 1}", 
                                             value=f"**Moderator:** {authorName} ({authorID})\n**Date:** <t:{date}:D> (<t:{date}:R>)\n**Reason:** {content}\n**Verbal ID:**```{verbalID}```{'⎯' * 20}", 
                                             inline=False)
+                            historyEmbed.add_field
                             count += 1
                         pages.append(historyEmbed)
 
