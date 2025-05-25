@@ -155,6 +155,30 @@ async def sync_commands(ctx):
 @bot.event
 async def on_command_error(ctx, error):
     try:
+        # Prevent a response if the user has no bot permissions
+        def check_perms():
+            guild_id = ctx.guild
+            user = ctx.author
+            channel = ctx.channel
+            data_manager = bot.data_manager
+            user_roles = user.roles
+
+            search_access = [
+                tup[1] for tup 
+                in data_manager.access_roles
+                if tup[0] == guild_id]
+
+            if channel.permissions_for(user).administrator:
+                return True
+
+            for role in user_roles:
+                if role.id in search_access:
+                    return True
+            return False
+        
+        if not check_perms():
+            return
+
         errorMsg = "❌ An unexpected error occurred. Please try again later"
         
         if (ctx.author.id in owners):
@@ -192,6 +216,7 @@ async def on_command_error(ctx, error):
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error):
     try:
+
         errorMsg = "❌ An unexpected error occurred. Please try again later"
 
         if interaction.user.id in owners:

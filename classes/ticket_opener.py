@@ -42,36 +42,46 @@ class TicketOpener:
     # potentially supply context
 
     async def open_ticket(self, interaction, guild, category, typeID, dm_channelID, values, title):
+        logger.debug("ticket creation started")
         # Create ticket channel
         user = interaction.user
 
         # Send log embed
         log_message = await self.send_log(guild, user, title)
+        logger.debug("sent opening log")
+
         thread = await log_message.create_thread(name=f"Ticket {user.name} - {log_message.id}", auto_archive_duration=1440)
+        logger.debug("created logging thread")
 
         channel = await self.create_ticket_channel(guild, category, user, dm_channelID, thread.id)
+        logger.debug("created ticket channel")
 
         dm_channel = self.bot.get_channel(dm_channelID)
+        logger.debug("got dm channel via bot")
 
         if not dm_channel:
             try:
                 dm_channel = await asyncio.wait_for(self.bot.fetch_channel(dm_channelID), timeout=1)
+                logger.debug("got dm channel via fetch BAD!!!!")
             except Exception as e:
                 print("dm channel fetch failed, must not exist")
 
         if channel:
             # Send opening embed, and greeting if it exists
             await self.send_opener(guild, dm_channel, user, values)
+            logger.debug("sent opening embeds to user")
 
             # Send in-channel embeds
             await self.send_ticket_embeds(guild, channel, dm_channel, thread, user, values, title)
+            logger.debug("sent ticket channel embeds")
 
             # Add new ticket to database
             await self.bot.data_manager.create_ticket(guild.id, channel.id, user.id, thread.id, typeID)
+            logger.debug("added ticket to DB")
             tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id, False)
-            print(tickets)
-
+            logger.debug("ticket creation done")
             return True
+
 
         else:
             print("failed to create ticket channel")
@@ -80,12 +90,14 @@ class TicketOpener:
 
     async def send_log(self, guild, user, title):
             config = await self.bot.data_manager.get_or_load_config(guild.id)
+            logger.debug("got config")
 
             if config is None:
                 return
             
             logID = config["logID"] 
             log_channel = guild.get_channel(logID)
+            logger.debug("got log channel")
 
             if not log_channel:
                 try:
