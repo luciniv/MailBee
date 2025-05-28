@@ -10,8 +10,9 @@ from utils.logger import *
 
 
 SERVER_TO_GAME = {
-    1196293227976863806: ("Horse Life", 5422546686, "7b1cd9dc-662b-456a-93e2-716c79ca9ad4"),
-    714722808009064492: ("Creatures of Sonaria", 1831550657, "e4ff7605-8b4b-4498-8975-7d82ba68fcb8")
+    714722808009064492: ("Creatures of Sonaria", 1831550657, os.getenv("COS_KEY")),
+    346515443869286410: ("Dragon Adventures", 1235188606, os.getenv("DA_KEY")),
+    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY"))
 }
 
 

@@ -8,7 +8,7 @@ from discord import app_commands
 from typing import List
 from classes.error_handler import *
 from classes.embeds import *
-from classes.ticket_handler import ServerSelectView, TicketRatingView
+from classes.ticket_creator import DMCategoryButtonView, TicketRatingView
 from utils import checks
 from utils.logger import *
 
@@ -26,8 +26,8 @@ async def close_ticket(bot, guild,
 
         # FIXME database call here
         closeLogEmbed.add_field(name="Logs", value=f"<#{thread.id}>", inline=False)
-        closeLogEmbed.add_field(name="Ticket Duration", value="15 min", inline=True)
-        closeLogEmbed.add_field(name="First Response Time", value="2 min", inline=True)
+        closeLogEmbed.add_field(name="Ticket Duration", value="Placeholder", inline=True)
+        closeLogEmbed.add_field(name="First Response Time", value="Placeholder", inline=True)
 
         if (closer.avatar):
             closeLogEmbed.set_author(name=f"{closer.name} | {closer.id}", icon_url=closer.avatar.url)
@@ -161,57 +161,9 @@ async def send_closing(bot, guild, dm_channel, threadID, user, closing_text):
 
 
 
-class Tickets(commands.Cog):
+class Tools(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
-
-    # Create ticket command
-    @commands.hybrid_command(name="create_ticket", description="Open a support ticket with a server")
-    async def create_ticket(self, ctx):
-        try:    
-            channel = ctx.channel
-            channelID = channel.id
-            user = ctx.author
-            errorEmbed = discord.Embed(title="", description="", color=0xFF0000)
-            
-            # Ensure command is DM only
-            if (isinstance(channel, discord.DMChannel) or not ctx.guild):
-
-                # Check if verified, skip for now
-                if (True):
-                    shared_guilds = []
-                    for guild in self.bot.guilds:
-                        shared_guilds.append(guild)
-    
-                    if not shared_guilds:
-                        errorEmbed.description = "❌ You do not share any servers with the bot"
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    # Send server selection embed
-                    serverEmbed = discord.Embed(title="Choose A Server",
-                                                description="Please select a server for your ticket. Use "
-                                                "the provided drop-down menu by clicking \"Choose a server...\"\n\n"
-                                                "If you don't see your server, use the arrow buttons to change pages.",
-                                                color=discord.Color.blue())
-                    
-                    view = ServerSelectView(self.bot, shared_guilds, channelID)
-                    message = await ctx.send(embed=serverEmbed, view=view)
-                    view.message = message
-
-                # Not verified
-                else:
-                    # FIXME
-                    pass
-            else:
-                errorEmbed.description="❌ Cannot open ticket outside of bot DMs"
-                await ctx.send(embed=errorEmbed, ephemeral=True)
-                return
-
-        except Exception as e:
-            logger.exception(e)
-            raise BotError(f"/create_ticket sent an error: {e}")
         
 
     @app_commands.command(name="reply", description="Send a reply in the current ticket")
@@ -245,6 +197,9 @@ class Tickets(commands.Cog):
         except Exception as e:
             logger.exception(e)
             raise BotError(f"/reply sent an error: {e}")
+        
+
+    # FIXME aireply, air
     
 
     @commands.hybrid_command(name="close", description="Close the current ticket, with an optional reason")
@@ -453,68 +408,25 @@ class Tickets(commands.Cog):
             raise BotError(f"/status sent an error: {e}")
         
 
-    # Send a snip from the database
-    @app_commands.command(name="set_type", description="Set the type of a tickets category")
-    @checks.is_guild()
-    @checks.is_user()
-    @app_commands.describe(category="Tickets category to set a type for")
-    @app_commands.describe(type="Select a type, or search by keyword")
-    async def set_type(self, interaction: discord.Interaction, category: discord.CategoryChannel, type: str):
-        try:
-            guild = interaction.guild
-            types = [
-                f"{typeID}: {name}" for typeID, name
-                in self.bot.data_manager.types]
-            
-            typeEmbed = discord.Embed(title="", 
-                                      description=f"Set **{category.name}** as type **{type}**", 
-                                      color=0x3ad407)
+    @commands.hybrid_command(name="ticket_button", description="Creates a button users can click to open a ticket via DMs")
+    @commands.has_permissions(administrator=True)
+    async def post_ticket_button(self, ctx: commands.Context):
+        guild_id = ctx.guild.id
 
-            if type not in types:
-                typeEmbed.description=f"❌ Type **{type}** not found"
-                typeEmbed.color=0xFF0000
-                await interaction.response.send_message(embed=typeEmbed)
-                return
-            
-            typeID = int(type[:(type.index(":"))])
+        # Load ticket types for this guild (from your database/cache)
+        types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
 
-            search_monitor = [
-                (channelID) for guildID, channelID, monitorType 
-                in self.bot.data_manager.monitored_channels
-                if (channelID == category.id)]
-            
-            if (len(search_monitor) == 0):
-                typeEmbed.description=f"❌ Category is not a tickets category"
-                typeEmbed.color=0xFF0000
-                await interaction.response.send_message(embed=typeEmbed)
-                return
-            
-            await self.bot.data_manager.set_type(guild.id, category.id, typeID)
-            await interaction.response.send_message(embed=typeEmbed)
+        if not types:
+            await ctx.send("❌ This server doesn't have any ticket types configured.")
+            return
 
-        except Exception as e:
-            logger.exception(e)
-            raise BotError(f"/set_type sent an error: {e}")
-
-
-    @set_type.autocomplete('type')
-    async def type_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        guild = interaction.guild
-        if not guild:
-            return []
-        
-        types = [
-            f"{typeID}: {name}" for typeID, name
-            in self.bot.data_manager.types
-            ]
-
-        matches = [
-            app_commands.Choice(name=type, value=type)
-            for type in types
-            if current.lower() in type.lower()]
-        
-        return matches[:25]
+        view = DMCategoryButtonView(self.bot)
+        ticketEmbed=discord.Embed(title="Need Support?", 
+                                  description="Click the button below to open a support ticket with staff "
+                                              "in your direct messages. The bot will guide you through the process!",
+                                  color=discord.Color.green())
+        await ctx.channel.send(embed=ticketEmbed, view=view)
     
 
 async def setup(bot):
-    await bot.add_cog(Tickets(bot))
+    await bot.add_cog(Tools(bot))

@@ -11,22 +11,6 @@ from utils import emojis, checks
 from utils.logger import *
 
 
-async def convert_mentions(bot, text, guild):
-    # Find all <#channel_id> patterns
-    matches = re.findall(r'<#(\d+)>', text)
-    for channel_id in matches:
-        channel = None
-        try:
-            channel = guild.get_channel(int(channel_id))
-            if channel is None:
-                channel = await asyncio.wait_for(bot.fetch_channel(channel_id), timeout=1)
-        except Exception:
-            pass
-        if channel:
-            text = text.replace(f'https://discord.com/channels/{guild.id}/{channel_id}', channel.mention)
-    return text
-
-
 class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -203,6 +187,22 @@ class Moderation(commands.Cog):
         except Exception as e:
             logger.exception(f"whitelist error: {e}")
             raise BotError(f"/whitelist sent an error: {e}")
+
+
+    async def convert_mentions(self, text, guild):
+        # Find all <#channel_id> patterns
+        matches = re.findall(r'<#(\d+)>', text)
+        for channel_id in matches:
+            channel = None
+            try:
+                channel = guild.get_channel(int(channel_id))
+                if channel is None:
+                    channel = await asyncio.wait_for(self.bot.fetch_channel(channel_id), timeout=1)
+            except Exception:
+                pass
+            if channel:
+                text = text.replace(f'https://discord.com/channels/{guild.id}/{channel_id}', channel.mention)
+        return text
         
 
     @commands.hybrid_command(name="verbal", description="Send a verbal warning to a user")
@@ -217,7 +217,7 @@ class Moderation(commands.Cog):
             sent_message = None
             dm_channel = user.dm_channel or await user.create_dm()
 
-            reason = await convert_mentions(self.bot, reason, guild)
+            reason = await self.convert_mentions(reason, guild)
 
             if (len(reason) > 800):
                 embed = discord.Embed(description="❌ Reason length is too long, it must be at most 800 characters"
@@ -283,7 +283,7 @@ class Moderation(commands.Cog):
             userID = None
             user = None
             old_reason = None
-            new_reason = await convert_mentions(self.bot, new_reason, guild)
+            new_reason = await self.convert_mentions(new_reason, guild)
 
             if (len(new_reason) > 800):
                 embed = discord.Embed(description="❌ New reason length is too long, it must be at most 800 characters"

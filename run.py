@@ -4,7 +4,9 @@ from discord.ext import commands, tasks
 import os
 from classes.data_manager import DataManager
 from classes.channel_status import ChannelStatus
-from classes.ticket_handler import DMCategoryButtonView
+from classes.cache import Cache
+# FIXME from classes.rate_limiter import RateLimiter
+from classes.ticket_creator import DMCategoryButtonView
 from classes.error_handler import *
 from utils import emojis, checks
 from utils.logger import *
@@ -18,11 +20,10 @@ ready = True
 
 class Mantid(commands.Bot):
     def __init__(self):
-        # guild, guild_messages, message_content, and dm_messages intents, plus all default intents
         intents = discord.Intents.default()  # Start with default intents
-        intents.messages = True  # Enable messages intent (to track messages)
-        intents.guilds = True  # Enable guild-related events
-        intents.dm_messages = True  # Enable direct message events
+        intents.messages = True  
+        intents.guilds = True  
+        intents.dm_messages = True  
         intents.message_content = True 
         description = ""
 
@@ -30,7 +31,8 @@ class Mantid(commands.Bot):
         super().__init__(command_prefix=commands.when_mentioned_or('$'), intents=intents, description=description, help_command=None)
         self.data_manager = DataManager(self)
         self.channel_status = ChannelStatus(self)
-
+        self.cache = Cache(self)
+        # FIXME self.rate = RateLimiter(self)
 
     # Loads cogs when bot is ready
     async def on_ready(self):

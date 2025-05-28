@@ -5,13 +5,12 @@ import os
 import io
 import re
 from discord.ext import commands
-from discord.errors import NotFound
 from datetime import datetime, timezone
 from roblox_data.helpers import *
 from classes.error_handler import *
 from classes.embeds import *
-from classes.ticket_handler import TicketSelectView
-from utils import emojis, checks
+from classes.ticket_creator import TicketSelectView
+from utils import emojis
 from utils.logger import *
 
 SERVER_TO_GAME = {
@@ -46,10 +45,13 @@ class Analytics(commands.Cog):
             # Prompt to open a ticket
             if tickets is None:
                 startEmbed = discord.Embed(title="Open a Ticket",
-                                        description="Type `/create_ticket` in this channel to open a ticket."
-                                        f"\n\n{self.bot.user.name} needs to know what servers you are in to open a ticket. "
-                                        "If you have not verified your servers yet: [CLICK HERE](https://x.com)",
+                                        description="Click the **\"Open a Ticket\"** button in a server you share with this bot to open a ticket!",
                                         color=discord.Color.blue())
+                # startEmbed = discord.Embed(title="Open a Ticket",
+                #                         description="Type `/create_ticket` in this channel to open a ticket."
+                #                         f"\n\n{self.bot.user.name} needs to know what servers you are in to open a ticket. "
+                #                         "If you have not verified your servers yet: [CLICK HERE](https://x.com)",
+                #                         color=discord.Color.blue())
                 await channel.send(embed=startEmbed)
 
             # Route message to open ticket
@@ -176,7 +178,7 @@ class Analytics(commands.Cog):
             logger.exception(f"route_to_server sent an error: {e}")
 
 
-    async def staff_message(self, message: discord.Message):
+    async def staff_message(self, message: discord.Message, anon: bool = None):
         logger.debug("entered staff message")
         channel = message.channel
         id_list = (channel.topic).split()
@@ -185,15 +187,18 @@ class Analytics(commands.Cog):
         userID = id_list[-3]
         
         # Process message to ticket opener
-        await self.route_to_dm(message, threadID, dm_channelID, userID)
+        await self.route_to_dm(message, threadID, dm_channelID, userID, anon)
 
 
-    async def route_to_dm(self, message: discord.Message, threadID: int, dm_channelID: int, userID: int, anon = None, interaction = None, interaction_content = None):
+    async def route_to_dm(self, message: discord.Message, 
+                          threadID: int, dm_channelID: int, userID: int, 
+                          anon: bool = None, interaction = None, interaction_content = None):
         logger.debug("entered route to dm")
         try:
             if message is not None:
+                print("MESSAGE IS", message.content)
                 channel = message.channel
-                content = re.sub(r"^\+\s*", "", message.content)
+                content = re.sub(r"^\+(?:areply|reply|ar|r)?\s*", "", message.content, flags=re.IGNORECASE)
                 author = message.author
             else:
                 channel = interaction.channel
@@ -212,32 +217,14 @@ class Analytics(commands.Cog):
                         anon = True
                     else:
                         anon = False
-                logger.debug("loaded config")
 
-            dm_channel = self.bot.get_channel(dm_channelID)
-            if not dm_channel:
-                logger.debug("dm channel via fetch")
-                try:
-                    dm_channel = await asyncio.wait_for(self.bot.fetch_channel(dm_channelID), timeout=1)
-                except Exception as e:
-                    if message is not None:
-                        await message.reply("❌ Could not find DM channel with user")
-                    # FIXME tell user the bot couldnt find their ticket channel
-                    print("channel fetch failed, must not exist")
-                    return
-            logger.debug("got the dm channel")
+            member = await self.bot.cache.get_guild_member(guild, userID)
 
-            try:
-                member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
-            except Exception:
-                try:
-                    member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
-                except Exception as e:
-                    if message is not None:
-                        await message.reply("❌ You are sending messages too fast")
-                    print("failed to fetch guild member", e)
+            if member is None:
+                await channel.send("❌ An error occurred, please try again")
                 return
-            logger.debug("got the member")
+            
+            dm_channel = member.dm_channel or await member.create_dm()
 
             logger.debug("started file process")
             # Process any attachments
@@ -692,6 +679,11 @@ class Analytics(commands.Cog):
         # Temp, allows Mantid to still work (allows Modmail message processing)
         if (message.author.bot and message.author.id != 575252669443211264):
             return
+        
+        # Ignore all prefix commands
+        prefixes = self.bot.command_prefix(self.bot, message)
+        if any(message.content.startswith(prefix) for prefix in prefixes):
+            return
 
         if (isinstance(message.channel, discord.DMChannel)):
             logger.debug("message was in DM ticket channel")
@@ -712,9 +704,15 @@ class Analytics(commands.Cog):
                     # Process comment
                     logger.debug("check if its a reply")
                     if (message.content.startswith("+")):
-                        logger.debug("its a staff message, function called")
-                        print("staff sent a message")
+                        logger.debug("its a staff message, function called") 
+                        if (message.content.startswith(("+r", "+reply"))):
+                            await self.staff_message(message, False)
+                            return
+                        elif (message.content.startswith(("+ar", "+areply"))):
+                            await self.staff_message(message, True)
+                            return
                         await self.staff_message(message)
+                        return
                     else:
                         # Process comment
                         print("staff sent comment")
@@ -862,7 +860,9 @@ class Analytics(commands.Cog):
         if (isinstance(message.channel, discord.TextChannel)):
             if (message.channel.topic):
                 if ("Ticket channel" in message.channel.topic):
-                    await self.delete_comment(message)
+                    print("ticket channel message deleted", message.content)
+                    if not (message.content.startswith("+")):
+                        await self.delete_comment(message)
 
 
 async def setup(bot):

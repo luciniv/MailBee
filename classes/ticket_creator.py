@@ -2,7 +2,7 @@ import discord
 import asyncio
 from discord import PartialEmoji, SelectOption
 from discord.ext import commands
-from discord.ui import View, Select
+from discord.ui import View, Button
 from datetime import datetime, timezone
 from classes.ticket_opener import TicketOpener
 import json
@@ -97,7 +97,7 @@ class ServerSelect(discord.ui.Select):
         # Check if user is in this guild
         try:
             member = await guild.fetch_member(interaction.user.id)
-        except discord.NotFound:
+        except discord.errors.NotFound:
             errorEmbed = discord.Embed(
                 description=f"❌ You are not in that server [this server is only visible during testing]",
                 color=discord.Color.red())
@@ -106,7 +106,7 @@ class ServerSelect(discord.ui.Select):
 
             try:
                 await interaction.message.delete()
-            except discord.HTTPException:
+            except discord.errors.HTTPException:
                 pass
 
             if self.view:
@@ -131,34 +131,6 @@ class ServerSelect(discord.ui.Select):
             if self.view:
                 self.view.stop()
             return
-        
-        # Check if guild has a ticket category --> dont think i need to do this
-        # config = await self.bot.data_manager.get_or_load_config(guildID)
-        # if config is not None:
-        #     inboxID = config["inboxID"]
-        #     if inboxID:
-        #         category = self.bot.get_channel(inboxID)
-        #         if not category:
-        #             try:
-        #                 category = await asyncio.wait_for(self.bot.fetch_channel(inboxID), timeout=1)
-        #             except Exception:
-        #                 category = None
-        # if not types:
-        #     errorEmbed = discord.Embed(
-        #         description=f"❌ **{guild.name}** has not set up any ticket types yet.\n\n"
-        #                     "Please contact a server admin if you believe this is a mistake.",
-        #         color=discord.Color.red())
-            
-        #     await interaction.channel.send(embed=errorEmbed)
-
-        #     try:
-        #         await interaction.message.delete()
-        #     except discord.HTTPException:
-        #         pass
-
-        #     if self.view:
-        #         self.view.stop()
-        #     return
 
         # Load available ticket types
         types = await self.bot.data_manager.get_or_load_guild_types(guildID)
@@ -178,8 +150,6 @@ class ServerSelect(discord.ui.Select):
             if self.view:
                 self.view.stop()
             return
-        
-        
         
         loadingEmbed = discord.Embed(description="Loading ticket types...", color=discord.Color.blue())
         await interaction.message.edit(embed=loadingEmbed)
@@ -220,7 +190,7 @@ class DMCategoryButtonView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="Open a Ticket", style=discord.ButtonStyle.blurple, custom_id="persistent_dm_button")
+    @discord.ui.button(label="Open a Ticket", style=discord.ButtonStyle.green, custom_id="persistent_dm_button", emoji="✉️")
     async def send_dm(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
 
@@ -236,7 +206,9 @@ class DMCategoryButtonView(discord.ui.View):
         try:
             tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id)
             if tickets and any(ticket["guildID"] == guild_id for ticket in tickets):
-                await interaction.followup.send("❌ You already have a ticket open with this server. DM me to reply to that ticket instead.", ephemeral=True)
+                await interaction.followup.send("❌ You already have a ticket open with this server. "
+                                                "Direct message me to reply to that ticket instead.", 
+                                                ephemeral=True)
                 return
 
             dm_channel = user.dm_channel or await user.create_dm()
@@ -260,13 +232,17 @@ class DMCategoryButtonView(discord.ui.View):
             sent_msg = await dm_channel.send(embed=embed, view=view)
             view.message = sent_msg
 
-            await interaction.followup.send(
-                f"✅ Ticket creation process started. Please navigate to your DMs: <#{dm_channel.id}>",
-                ephemeral=True
-            )
+            startView = View()
+            startView.add_item(Button(label="Jump to ticket", url=f"https://discord.com/channels/@me/{dm_channel.id}/{sent_msg.id}"))
+
+            startEmbed = discord.Embed(title="Ticket Started", description="A ticket has been started in your direct messages!",
+                                       color=discord.Color.green())
+
+            await interaction.followup.send(embed=startEmbed, view=startView, ephemeral=True)
 
         except discord.Forbidden:
-            await interaction.followup.send("❌ I couldn’t DM you! Please enable DMs and try again.", ephemeral=True)
+            errorEmbed = discord.Embed(description="❌ I couldn’t message you! Please enable direct messages and try again.")
+            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
 
 
 class CategorySelect(discord.ui.Select):

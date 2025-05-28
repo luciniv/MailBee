@@ -5,7 +5,7 @@ import time
 from utils import emojis
 from datetime import datetime, timezone, timedelta
 from utils.logger import *
-from cogs.tickets import close_ticket
+from cogs.tools import close_ticket
 
 
 # logger.debug = lambda *a, **kw: None  # No-op debug logging

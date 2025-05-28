@@ -1,11 +1,19 @@
-        
 import discord
 import asyncio
+import os
 from discord import Embed
 from discord.permissions import PermissionOverwrite
 from datetime import datetime, timezone
 from typing import Dict, List
 from utils.logger import *
+from roblox_data.helpers import *
+
+
+SERVER_TO_GAME = {
+    714722808009064492: ("Creatures of Sonaria", 1831550657, os.getenv("COS_KEY")),
+    346515443869286410: ("Dragon Adventures", 1235188606, os.getenv("DA_KEY")),
+    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY"))
+}
 
 
 async def get_overwrites(guild, roles) -> Dict:
@@ -56,19 +64,12 @@ class TicketOpener:
         channel = await self.create_ticket_channel(guild, category, user, dm_channelID, thread.id)
         logger.debug("created ticket channel")
 
-        dm_channel = self.bot.get_channel(dm_channelID)
-        logger.debug("got dm channel via bot")
-
-        if not dm_channel:
-            try:
-                dm_channel = await asyncio.wait_for(self.bot.fetch_channel(dm_channelID), timeout=1)
-                logger.debug("got dm channel via fetch BAD!!!!")
-            except Exception as e:
-                print("dm channel fetch failed, must not exist")
+        
+        dm_channel = user.dm_channel or await user.create_dm()
 
         if channel:
             # Send opening embed, and greeting if it exists
-            await self.send_opener(guild, dm_channel, user, values)
+            await self.send_opener(guild, dm_channel, user, values, title)
             logger.debug("sent opening embeds to user")
 
             # Send in-channel embeds
@@ -81,7 +82,6 @@ class TicketOpener:
             tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id, False)
             logger.debug("ticket creation done")
             return True
-
 
         else:
             print("failed to create ticket channel")
@@ -155,10 +155,10 @@ class TicketOpener:
             return None
         
 
-    async def send_opener(self, guild, dm_channel, user, values):
+    async def send_opener(self, guild, dm_channel, user, values, title):
         config = await self.bot.data_manager.get_or_load_config(guild.id)
 
-        dmEmbed = discord.Embed(title="New Ticket", 
+        dmEmbed = discord.Embed(title=f"New \"{title}\" Ticket", 
                                 description=f"You have opened a new ticket with {guild.name}\n\n"
                                             f"Send a message in this DM to speak to "
                                             f"the server's staff team. Run `/create_ticket` "
@@ -196,7 +196,7 @@ class TicketOpener:
             else:
                 greetingEmbed.set_footer(text=guild.name)
 
-        submissionEmbed = await self.create_submission_embed(guild, None, values)
+        submissionEmbed = await self.create_submission_embed(guild, None, values, title)
 
         await dm_channel.send(embed=dmEmbed)
         if greetingEmbed:
@@ -204,8 +204,8 @@ class TicketOpener:
         await dm_channel.send(embed=submissionEmbed)
 
 
-    async def create_submission_embed(self, guild, member, values):
-        submissionEmbed = discord.Embed(title="Form Submission", color=discord.Color.green())
+    async def create_submission_embed(self, guild, member, values, title):
+        submissionEmbed = discord.Embed(title=f"\"{title}\" Form Submission", color=discord.Color.green())
         submissionEmbed.timestamp = datetime.now(timezone.utc)
 
         for label, answer in values.items():
@@ -230,21 +230,20 @@ class TicketOpener:
 
     async def send_ticket_embeds(self, guild, channel, dm_channel, thread, user, values, title):
         print("user id is", user.id)
-        member = guild.get_member(user.id)
+        member = await self.bot.cache.get_guild_member(guild, user.id)
 
-        if not member:
-            try:
-                member = await asyncio.wait_for(guild.fetch_member(user.id), timeout=1)
-            except Exception as e:
-                print("failed to fetch guild member", e)
-                return
+        if member is None:
+            logger.error("Failed to find member object for user: ", user.id)
+            return
+           
         print("got the member", member)
+        await self.bot.cache.store_guild_member(guild.id, member)
          
         roles = member.roles
         default = guild.default_role
 
-        ticketEmbed = discord.Embed(title=f"New {title} Ticket",
-                                    description="To reply, send a message in this channel prefixed with `=`. "
+        ticketEmbed = discord.Embed(title=f"New \"{title}\" Ticket",
+                                    description="To reply, send a message in this channel prefixed with `+`. "
                                     "Any other messages will send as a comment (not visible to the ticket opener). "
                                     "To use commands, type `/` and select from the displayed list.\n\n`/close "
                                     "[reason]` will close a ticket. `/inactive [reason] [hours]` will close a "
@@ -270,13 +269,29 @@ class TicketOpener:
 
         ticketEmbed.add_field(name=f"Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name=f"Robux Spent", value=f"2,995", inline=True)
-        ticketEmbed.add_field(name=f"Hours Ingame", value=f"40.2", inline=True)
+        ticketEmbed.add_field(name=f"Robux Spent", value=f"No data", inline=True)
+        ticketEmbed.add_field(name=f"Hours Ingame", value=f"No data", inline=True)
 
-        submissionEmbed = await self.create_submission_embed(guild, None, values)
+        submissionEmbed = await self.create_submission_embed(guild, None, values, title)
             
         await channel.send(embed=ticketEmbed)
         await channel.send(embed=submissionEmbed)
 
         await thread.send(embed=ticketEmbed)
         await thread.send(embed=submissionEmbed)
+
+
+    async def priority(guild, openID):
+        priority_values = [-1,-1]
+        game_type = SERVER_TO_GAME.get(guild.id, None)
+        print(game_type)
+
+        if game_type is not None:
+            priority_values = await get_priority(game_type, guild.id, openID)
+            print(f"priority values: {priority_values}")
+
+        if not priority_values:
+            priority_values = [-1,-1]
+            print("priority values set to default")
+
+        print(f"ending priority values: {priority_values}")

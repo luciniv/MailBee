@@ -16,8 +16,7 @@ db_name = os.getenv("DB_NAME")
 db_host = os.getenv("DB_HOST")
 redis_url = os.getenv("REDIS_URL")
 
-REDIS_TTL = 60 * 3  # 3 minutes
-# Expected TTL: 12 hours 
+REDIS_TTL = 60 * 60 * 12  # 12 hours
 
 
 class DataManager:
@@ -419,7 +418,6 @@ class DataManager:
     #         """
     #     await self.execute_query(query, False)
     #     print("added verified user", userID, token)
-    
 
 
     # Get a verified user from database

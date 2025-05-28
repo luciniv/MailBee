@@ -6,7 +6,7 @@ from discord.ext import commands
 from discord import app_commands
 from discord.app_commands import Range
 from classes.ticket_opener import get_overwrites
-from classes.ticket_handler import DMCategoryButtonView
+from classes.ticket_creator import DMCategoryButtonView
 from classes.error_handler import *
 from classes.paginator import *
 from classes.embeds import *
@@ -42,8 +42,8 @@ def validate_and_clean_form_template(template: dict) -> dict:
         max_length = field.get("max_length", 256)
         required = field.get("required", True)
 
-        if not isinstance(label, str) or not isinstance(placeholder, str):
-            raise BotError(f"Field #{i + 1} must have a `label` and `placeholder` of type string.")
+        if not isinstance(label, str):
+            raise BotError(f"Field #{i + 1} must have a `label` of type string.")
 
         if style not in ("short", "paragraph"):
             raise BotError(f"Field #{i + 1} has invalid style `{style}`. Use `short` or `paragraph`.")
@@ -247,24 +247,6 @@ class Config(commands.Cog):
             
         except Exception as e:
             raise BotError(f"/setup2 sent an error: {e}")
-
-    @commands.hybrid_command(name="ticket_button", description="Creates a button users can click to open a ticket via DMs")
-    @commands.has_permissions(administrator=True)
-    async def post_ticket_button(self, ctx: commands.Context):
-        guild_id = ctx.guild.id
-
-        # Load ticket types for this guild (from your database/cache)
-        types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
-
-        if not types:
-            await ctx.send("❌ This server doesn't have any ticket types configured.")
-            return
-
-        view = DMCategoryButtonView(self.bot)
-        ticketEmbed=discord.Embed(title="Open a Ticket", 
-                                  description="Click the button below to open a support ticket via DMs:",
-                                  color=discord.Color.blue())
-        await ctx.channel.send(embed=ticketEmbed, view=view)
         
 
     @app_commands.command(name="type_add", description="Add a new ticket type and create a corresponding tickets category")
@@ -382,7 +364,128 @@ class Config(commands.Cog):
     @app_commands.describe(form_template="Form template JSON string")
     async def form_preview(self, ctx, form_template: str):
         await preview_form_template(ctx, form_template)
+ 
 
+    @commands.hybrid_command(name="greeting", description="Set the greeting message sent in new tickets")
+    @checks.is_guild()
+    @checks.is_user()
+    @app_commands.describe(greeting="Greeting text (max 4000 characters)")
+    async def greeting(self, ctx, *, greeting: str):
+        try:
+            guild = ctx.guild
+
+            moderation = self.bot.get_cog("Moderation")
+            if moderation is not None:
+                greeting = await moderation.convert_mentions(greeting, guild)
+
+            if len(greeting) > 4000:
+                errorEmbed = discord.Embed(description="❌ Greeting text is too long, must be at most 4000 characters", 
+                                           color=discord.Color.red())
+                await ctx.send(embed=errorEmbed)
+                return
+            
+            await self.bot.data_manager.set_greeting(guild.id, greeting)
+            await self.bot.data_manager.get_or_load_config(guild.id, False)
+
+            successEmbed = discord.Embed(description=f"✅ **Greeting set:**\n{greeting}",
+                                         color=discord.Color.green())
+            await ctx.send(embed=successEmbed)
+
+        except Exception as e:
+            logger.exception(f"/greeting error: {e}")
+            raise BotError(f"/greeting sent an error: {e}")
+        
+
+    @commands.hybrid_command(name="closing", description="Set the closing message sent in new tickets")
+    @checks.is_guild()
+    @checks.is_user()
+    @app_commands.describe(closing="Closing text (max 4000 characters)")
+    async def closing(self, ctx, *, closing: str):
+        try:
+            guild = ctx.guild
+
+            moderation = self.bot.get_cog("Moderation")
+            if moderation is not None:
+                closing = await moderation.convert_mentions(closing, guild)
+
+            if len(closing) > 4000:
+                errorEmbed = discord.Embed(description="❌ Closing text is too long, must be at most 4000 characters", 
+                                           color=discord.Color.red())
+                await ctx.send(embed=errorEmbed)
+                return
+            
+            await self.bot.data_manager.set_closing(guild.id, closing)
+            await self.bot.data_manager.get_or_load_config(guild.id, False)
+
+            successEmbed = discord.Embed(description=f"✅ **Closing set:**\n{closing}",
+                                         color=discord.Color.green())
+            await ctx.send(embed=successEmbed)
+
+        except Exception as e:
+            logger.exception(f"/closing error: {e}")
+            raise BotError(f"/closing sent an error: {e}")
+
+
+    @app_commands.command(name="set_type", description="Set the type of a tickets category")
+    @checks.is_guild()
+    @checks.is_user()
+    @app_commands.describe(category="Tickets category to set a type for")
+    @app_commands.describe(type="Select a type, or search by keyword")
+    async def set_type(self, interaction: discord.Interaction, category: discord.CategoryChannel, type: str):
+        try:
+            guild = interaction.guild
+            types = [
+                f"{typeID}: {name}" for typeID, name
+                in self.bot.data_manager.types]
+            
+            typeEmbed = discord.Embed(title="", 
+                                      description=f"Set **{category.name}** as type **{type}**", 
+                                      color=0x3ad407)
+
+            if type not in types:
+                typeEmbed.description=f"❌ Type **{type}** not found"
+                typeEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=typeEmbed)
+                return
+            
+            typeID = int(type[:(type.index(":"))])
+
+            search_monitor = [
+                (channelID) for guildID, channelID, monitorType 
+                in self.bot.data_manager.monitored_channels
+                if (channelID == category.id)]
+            
+            if (len(search_monitor) == 0):
+                typeEmbed.description=f"❌ Category is not a tickets category"
+                typeEmbed.color=0xFF0000
+                await interaction.response.send_message(embed=typeEmbed)
+                return
+            
+            await self.bot.data_manager.set_type(guild.id, category.id, typeID)
+            await interaction.response.send_message(embed=typeEmbed)
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/set_type sent an error: {e}")
+
+
+    @set_type.autocomplete('type')
+    async def type_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        if not guild:
+            return []
+        
+        types = [
+            f"{typeID}: {name}" for typeID, name
+            in self.bot.data_manager.types
+            ]
+
+        matches = [
+            app_commands.Choice(name=type, value=type)
+            for type in types
+            if current.lower() in type.lower()]
+        
+        return matches[:25]
 
 
     # @commands.hybrid_command(name="reset_form", description="View information on the bot and its command list")
