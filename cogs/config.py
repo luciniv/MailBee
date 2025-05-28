@@ -14,6 +14,8 @@ from utils import emojis, checks
 from utils.logger import *
 
 def compress_text(text: str) -> str:
+    if text == " ":
+        return
     # Remove excess whitespace and newlines from user input
     return re.sub(r"\s+", " ", text.strip())
 
@@ -37,7 +39,7 @@ def validate_and_clean_form_template(template: dict) -> dict:
             raise BotError(f"Field #{i + 1} must be a JSON object.")
 
         label = field.get("label")
-        placeholder = field.get("placeholder")
+        placeholder = field.get("placeholder", " ")
         style = field.get("style", "short")
         max_length = field.get("max_length", 256)
         required = field.get("required", True)
