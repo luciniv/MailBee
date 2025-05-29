@@ -771,6 +771,7 @@ class Config(commands.Cog):
                         """
                         await self.bot.data_manager.execute_query(query, False)
                         await self.bot.data_manager.update_cache(0)
+                        await self.bot.data_manager.get_or_load_permissions(this_guildID, False)
                         editEmbed.description=f"Updated permissions to **{level_name}** for <@&{this_roleID}>"
                 else:
                     query = f"""
@@ -781,6 +782,7 @@ class Config(commands.Cog):
                         """
                     await self.bot.data_manager.execute_query(query, False)
                     await self.bot.data_manager.update_cache(0)
+                    await self.bot.data_manager.get_or_load_permissions(this_guildID, False)
                     editEmbed.description=f"Added **{level_name}** permissions to <@&{this_roleID}>"
 
             # Check if user has access, if not do nothing
@@ -797,6 +799,7 @@ class Config(commands.Cog):
                             """
                         await self.bot.data_manager.execute_query(query, False)
                         await self.bot.data_manager.update_cache(0)
+                        await self.bot.data_manager.get_or_load_permissions(this_guildID, False)
                         editEmbed.description=f"Removed **{level_name}** permissions from <@&{this_roleID}>"
                 else:
                     editEmbed.description=f"Unable to remove permissions, <@&{this_roleID}> does not have this permission"
