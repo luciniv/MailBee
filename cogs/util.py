@@ -22,6 +22,12 @@ class Util(commands.Cog):
 
     @commands.command()
     @checks.is_owner()
+    async def refresh_types(self, ctx):
+        await self.bot.data_manager.get_or_load_guild_types(ctx.guild.id, False)
+        await ctx.send("Refreshed ticket types")
+
+    @commands.command()
+    @checks.is_owner()
     async def del_rticket(self, ctx, userID, guildID):
         await self.bot.data_manager.delete_user_ticket(userID, guildID)
         await ctx.send(f"Deleted ticket from redis, guild {guildID}")

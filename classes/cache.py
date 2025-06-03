@@ -76,4 +76,32 @@ class Cache:
             logger.exception(f"get_member sent an error: {e}")
 
 
+    async def store_ticket_channel(self, user: discord.User):
+        epoch_time = int(datetime.now(timezone.utc).timestamp())
+        self.user_cache[str(user.id)] = (user, epoch_time)
+        print("user cache keys are", self.user_cache.keys())
+
+
+    async def store_ticket_channel(self, userID: int):
+        try:
+            user = None
+            epoch = None
+
+            result = self.user_cache.get(str(userID), None)
+            if result is not None:
+                user, epoch = result
+                print("got cached user")
+                return user
+            else:
+                try:
+                    user = await asyncio.wait_for(self.bot.fetch_user(userID), timeout=1)
+                except Exception as e:
+                    print("failed to fetch global user", e)
+                    return None
+                print("fetched a user", user.name)
+                return user
+        except Exception as e:
+            logger.exception(f"get_user sent an error: {e}")
+
+
 

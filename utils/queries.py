@@ -58,6 +58,27 @@ def generate_fields(data: List[int], index: int, columns: List[str]) -> List[str
     return fields
 
 
+def closing_queries(channelID: int):
+    query = f"""
+        SELECT
+        (SELECT (TIMESTAMPDIFF(MINUTE, tickets_v2.dateOpen, tickets_v2.dateClose))
+            FROM tickets_v2
+            WHERE tickets_v2.channelID = {channelID}),
+                            
+        (SELECT (TIMESTAMPDIFF(MINUTE, tickets_v2.dateOpen, first_message.date))
+            FROM tickets_v2
+            INNER JOIN (
+                SELECT ticket_messages_v2.channelID, MIN(date) AS date
+                FROM ticket_messages_v2
+                WHERE type = 'Sent'
+                GROUP BY ticket_messages_v2.channelID
+            ) AS first_message
+            ON tickets_v2.channelID = first_message.channelID
+            WHERE tickets_v2.channelID = {channelID});
+        """
+    return query
+
+
 def hourly_queries(type: str, guildID: int, date: List[int], timezone: str):
     query = ""
     guild_str = ""

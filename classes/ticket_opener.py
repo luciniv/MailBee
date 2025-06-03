@@ -106,7 +106,7 @@ class TicketOpener:
                     print("log channel fetch failed, must not exist")
                     return
 
-            openLogEmbed = discord.Embed(title=f"New {title} Ticket", description="", 
+            openLogEmbed = discord.Embed(title=f"New \"{title}\" Ticket", description="", 
                                         color=discord.Color.green())
             openLogEmbed.timestamp = datetime.now(timezone.utc)
 
@@ -272,7 +272,7 @@ class TicketOpener:
         ticketEmbed.add_field(name=f"Robux Spent", value=f"No data", inline=True)
         ticketEmbed.add_field(name=f"Hours Ingame", value=f"No data", inline=True)
 
-        submissionEmbed = await self.create_submission_embed(guild, None, values, title)
+        submissionEmbed = await self.create_submission_embed(None, member, values, title)
             
         await channel.send(embed=ticketEmbed)
         await channel.send(embed=submissionEmbed)

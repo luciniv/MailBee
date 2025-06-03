@@ -2,6 +2,7 @@ import discord
 import time
 import asyncio
 import io
+import re
 import datetime
 from discord.ext import commands
 from discord import app_commands
@@ -9,25 +10,42 @@ from typing import List
 from classes.error_handler import *
 from classes.embeds import *
 from classes.ticket_creator import DMCategoryButtonView, TicketRatingView
-from utils import checks
+from utils import checks, queries
 from utils.logger import *
 
 
-async def close_ticket(bot, guild, 
+async def close_ticket(bot, guild, ticket_channel,
                         log_channel, dm_channel, thread, 
                         closer, opener, reason, closing_text,
                         anon):
     try:
+        await bot.data_manager.close_ticket(guild.id, opener.id, closer.id, closer.name)
+        await bot.data_manager.delete_user_ticket(opener.id, guild.id)
+        
         errorEmbed = discord.Embed(title="", description="", color=discord.Color.red())
                 
         closeLogEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
                                 color=discord.Color.red())
         closeLogEmbed.timestamp = datetime.now(timezone.utc)
 
-        # FIXME database call here
+        await bot.data_manager.flush_messages_v2()
+        logger.info(f"Called flush tickets_v2")
+        query = queries.closing_queries(ticket_channel.id)
+        result = await bot.data_manager.execute_query(query)
+        if (len(result) > 0):
+            data = result[0]
+            if data[0] is None:
+                duration = "N/A"
+            else:
+                duration = queries.format_time(data[0])
+            if data[1] is None:
+                response = "N/A"
+            else:
+                response = queries.format_time(data[1])
+
         closeLogEmbed.add_field(name="Logs", value=f"<#{thread.id}>", inline=False)
-        closeLogEmbed.add_field(name="Ticket Duration", value="Placeholder", inline=True)
-        closeLogEmbed.add_field(name="First Response Time", value="Placeholder", inline=True)
+        closeLogEmbed.add_field(name="Ticket Duration", value=duration, inline=True)
+        closeLogEmbed.add_field(name="First Response Time", value=response, inline=True)
 
         if (closer.avatar):
             closeLogEmbed.set_author(name=f"{closer.name} | {closer.id}", icon_url=closer.avatar.url)
@@ -69,6 +87,8 @@ async def close_ticket(bot, guild,
 
         await thread.send(embed=closeLogEmbed)
         await log_channel.send(embed=closeLogEmbed)
+
+        await thread.edit(archived=True, locked=True)
         
         return True
     
@@ -99,66 +119,91 @@ async def send_closing(bot, guild, dm_channel, threadID, user, closing_text):
     view.message = message
 
 
-# async def export_ticket_history(channel: discord.TextChannel,
-#                                 close_message: str = "",
-#                                 closer_username: str = "") -> discord.File:
-#     try:
-#         history = []
+async def export_ticket_history(channel: discord.TextChannel,
+                                close_message: str = "",
+                                closer_username: str = "") -> discord.File:
+    try:
+        history = []
 
-#         async for message in channel.history(oldest_first=True, limit=None):
-#             if message.author.bot and message.author.id != 1333954467519004673:
-#                 continue  # Skip other bot messages
+        async for message in channel.history(oldest_first=True, limit=200):
+            # Skip other bot messages
+            if message.author.bot and message.author.id != 1333954467519004673:
+                continue 
 
-#             timestamp = message.created_at.strftime("[%Y-%m-%d %H:%M:%S]")
-#             is_staff = False
-#             username = message.author.name
-#             content = message.clean_content
+            is_staff = False
+            content = None
 
-#             # Staff tag for =-style messages
-#             if content.startswith("="):
-#                 is_staff = True
+            if message.embeds:
+                embed = message.embeds[0]
+                # Embedded staff message
+                if "[STAFF]" in embed.title:
+                    is_staff = True
+                    if embed.description:
+                        content = embed.description
+                    break
+                
+                # Embedded user message
+                elif "Received" in embed.title:
+                    if embed.description:
+                        content = embed.description
+                    break
 
-#             # Embedded message parsing
-#             elif message.embeds:
-#                 for embed in message.embeds:
-#                     if embed.title and embed.title.strip() == "Message Sent [STAFF]":
-#                         is_staff = True
-#                         if embed.author and embed.author.name:
-#                             username = embed.author.name.split()[0]
-#                         if not content and embed.description:
-#                             content = embed.description
-#                         break
+            elif "[COMMENT]" in message.content:
+                text = """**luciniv** `[COMMENT]`
+                comment
+                more comment
+                -# `ID: 429711831695753237 | MSG: 1377379957126463579`"""
 
-#                     elif embed.title and embed.title.strip() == "Message Received":
-#                         if embed.footer and embed.footer.text:
-#                             username = embed.footer.text.split()[0]
-#                         if not content and embed.description:
-#                             content = embed.description
-#                         break
+                match = re.search(r"\[COMMENT\]\s*\n(.*?)(?:\n-#|$)", text, re.DOTALL)
+                if match:
+                    comment_text = match.group(1).strip()
+                    print(comment_text)
 
-#             role_label = "Staff" if is_staff else "User"
+                content = comment_text
 
-#             attachments = ""
-#             if message.attachments:
-#                 urls = [f"(Attachment: {a.url})" for a in message.attachments]
-#                 attachments = " " + " ".join(urls)
+            role_label = "Staff" if is_staff else "User"
 
-#             history.append(f"{timestamp} {username} ({role_label}): {content} {attachments}")
+            history.append(f"({role_label}): {content}")
 
-#         # Append the close message, if provided
-#         if close_message and closer_username:
-#             timestamp = datetime.utcnow().strftime("[%Y-%m-%d %H:%M:%S]")
-#             history.append(f"{timestamp} {closer_username} (Staff): {close_message.strip()}")
+        # Append the close message, if provided
+        if close_message and closer_username:
+            timestamp = datetime.utcnow().strftime("[%Y-%m-%d %H:%M:%S]")
+            history.append(f"{timestamp} {closer_username} (Staff): {close_message.strip()}")
 
-#         joined_history = "\n".join(history)
-#         file_bytes = io.BytesIO(joined_history.encode())
-#         file = discord.File(file_bytes, filename=f"ticket_log_{channel.id}.txt")
-#         return file
+        joined_history = "\n".join(history)
+        file_bytes = io.BytesIO(joined_history.encode())
+        file = discord.File(file_bytes, filename=f"ticket_log_{channel.id}.txt")
+        return file
 
-#     except Exception as e:
-#         print(f"export_ticket_history sent an error: {e}")
-#         logger.exception(e)
+    except Exception as e:
+        print(f"export_ticket_history sent an error: {e}")
+        logger.exception(e)
 
+
+class GenerateReplyView(discord.ui.View):
+        def __init__(self, reply_text, author, target_channel):
+            super().__init__(timeout=60)
+            self.reply_text = reply_text
+            self.author = author
+            self.target_channel = target_channel
+            self.message = None
+
+        @discord.ui.button(label="Send Reply", style=discord.ButtonStyle.success)
+        async def send_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if interaction.user != self.author:
+                return await interaction.response.send_message("You can't use this button.", ephemeral=True)
+
+            await self.target_channel.send(self.reply_text)
+            await interaction.response.edit_message(content="✅ Reply sent.", view=None)
+            self.stop()
+
+        @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+        async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if interaction.user != self.author:
+                return await interaction.response.send_message("You can't use this button.", ephemeral=True)
+
+            await interaction.response.edit_message(content="❌ Cancelled reply.", view=None)
+            self.stop()
 
 
 class Tools(commands.Cog):
@@ -199,7 +244,35 @@ class Tools(commands.Cog):
             raise BotError(f"/reply sent an error: {e}")
         
 
-    # FIXME aireply, air
+        @commands.command(name="ai_reply")
+        async def ai_reply(self, ctx):
+            await ctx.defer()
+
+            # Step 1: Fetch message history
+            history = await ctx.channel.history(limit=50, oldest_first=True).flatten()
+            transcript = ""
+            for msg in history:
+                transcript += f"{msg.author.display_name}: {msg.content}\n"
+
+            # Step 2: Write to file (optional for debugging or archiving)
+            file_buffer = io.StringIO(transcript)
+            file_buffer.seek(0)
+
+            # Step 3: Generate AI reply (replace this with actual logic)
+            await ctx.send("Generating reply from AI...")
+            ai_reply = await self.generate_ai_reply(transcript)
+
+            # Step 4: Show user the reply and ask for confirmation
+            view = GenerateReplyView(ai_reply, ctx.author, ctx.channel)
+            view.message = await ctx.send(
+                content=f"🧠 AI-generated reply:\n```{ai_reply}```\nWould you like to send this?",
+                view=view
+            )
+
+        async def generate_ai_reply(self, transcript: str) -> str:
+            # 🧠 Replace this with your AI call
+            # e.g., OpenAI, Claude, local model, etc.
+            return f"This is a placeholder reply based on the transcript of {len(transcript.splitlines())} lines."
     
 
     @commands.hybrid_command(name="close", description="Close the current ticket, with an optional reason")
@@ -277,17 +350,14 @@ class Tools(commands.Cog):
                         print("user fetch failed, oops")
                         pass
                 
-                    state = await close_ticket(self.bot, guild, 
+                    state = await close_ticket(self.bot, guild, ticket_channel,
                                               log_channel, dm_channel, thread, 
                                               closer, opener, reason, closing, 
                                               anon)
             
                     if not state:
                         await ctx.reply(embed=errorEmbed)
-                    else:
-                        await self.bot.data_manager.close_ticket(guild.id, userID, closer.id, closer.name)
-                        await self.bot.data_manager.delete_user_ticket(userID, guild.id)
-                        await thread.edit(archived=True, locked=True)
+                        
                     return
 
             errorEmbed.description=("❌ This command can only be used in ticket channels.")

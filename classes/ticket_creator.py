@@ -196,9 +196,11 @@ class DMCategoryButtonView(discord.ui.View):
 
         user = interaction.user
         guild = interaction.guild
+        errorEmbed = discord.Embed(description="❌ This button must be used in a server.", 
+                                   color=discord.Color.red())
 
         if not guild:
-            await interaction.followup.send("❌ This button must be used in a server.", ephemeral=True)
+            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
             return
 
         guild_id = guild.id
@@ -206,9 +208,9 @@ class DMCategoryButtonView(discord.ui.View):
         try:
             tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id)
             if tickets and any(ticket["guildID"] == guild_id for ticket in tickets):
-                await interaction.followup.send("❌ You already have a ticket open with this server. "
-                                                "Direct message me to reply to that ticket instead.", 
-                                                ephemeral=True)
+                errorEmbed.description=("❌ You already have a ticket open with this server. "
+                                        "Direct message me to reply to that ticket instead.")
+                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                 return
 
             dm_channel = user.dm_channel or await user.create_dm()
@@ -241,7 +243,7 @@ class DMCategoryButtonView(discord.ui.View):
             await interaction.followup.send(embed=startEmbed, view=startView, ephemeral=True)
 
         except discord.Forbidden:
-            errorEmbed = discord.Embed(description="❌ I couldn’t message you! Please enable direct messages and try again.")
+            errorEmbed.description="❌ I couldn’t message you! Please enable direct messages and try again."
             await interaction.followup.send(embed=errorEmbed, ephemeral=True)
 
 
@@ -256,9 +258,9 @@ class CategorySelect(discord.ui.Select):
 
 
     async def callback(self, interaction: discord.Interaction):
-        values = self.values[0].split()
-        selected_typeID = int(values[0])
-        selected_categoryID = int(values[1])
+        value = self.values[0].split()
+        selected_typeID = int(value[0])
+        selected_categoryID = int(value[1])
         dm_channelID = self.dm_channelID
         guild = self.guild
         subtypes = []
@@ -272,6 +274,13 @@ class CategorySelect(discord.ui.Select):
         else:
             selected_categoryID = self.parent_category_id
 
+        # NOTE, redirects dont have category ID's associated with them
+        # when created, id have to rely fully on the auto generated key
+        # when checking for subtypes of a redirect, i do a data pull and force them to select a redirect 
+        # this ensures i can link the subType redirects properly (if they exist)
+
+        # NOTE, subtypes have -1 as their category ID, but they always use the parent category ID
+
         # Safely fetch the selected category
         print("selected category id is", selected_categoryID)
         print("parent category id is", self.parent_category_id)
@@ -283,7 +292,8 @@ class CategorySelect(discord.ui.Select):
                 category = None
 
         # Only calls for parent types WITH subtypes
-        if subtypes:
+        if (len(subtypes) > 0):
+
             subtype_embed = discord.Embed(
                 title="Select a Ticket Sub-Type",
                 description=f"You selected ticket type **{category.name}**.\n\nPlease choose "
@@ -297,23 +307,48 @@ class CategorySelect(discord.ui.Select):
                 subtype_embed.set_author(name=guild.name)
 
             # Show subtypes select
-            view = CategorySelectView(self.bot, self.guild, self.dm_channelID, self.types, 
+            newView = CategorySelectView(self.bot, self.guild, self.dm_channelID, self.types, 
                                       parent_category_id=selected_categoryID)
-            await view.setup()
-            message = await interaction.response.edit_message(embed=subtype_embed, view=view)
-            view.message = message
+            await newView.setup()
+
+            await interaction.response.edit_message(embed=subtype_embed, view=newView)
+            newView.message = interaction.message
 
         else:
-            # No subtypes, proceed to modal
+            # No subtypes, proceed to modal OR reply with redirect
+            if selected_categoryID == 0:
+                redirect_text = next(
+                (entry["redirectText"] for entry in self.types if int(entry["typeID"]) == selected_typeID), 
+                None)
+
+                redirectEmbed = discord.Embed(title="Auto-Response [Ticket NOT Created]",
+                                              description=redirect_text,
+                                              color=discord.Color.blue())
+                if guild.icon:
+                    redirectEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
+                else:
+                    redirectEmbed.set_footer(text=guild.name)
+                
+                try:
+                    await interaction.message.delete()
+                except discord.HTTPException:
+                    pass
+
+                if self.view:
+                    self.view.stop()
+
+                await interaction.channel.send(embed=redirectEmbed)
+                return
+
             modal_template = next(
-                (entry["form"] for entry in self.types if int(entry["categoryID"]) == selected_categoryID), 
+                (entry["form"] for entry in self.types if int(entry["typeID"]) == selected_typeID), 
                 None)
             source_view = self.view
 
             if modal_template:
                 await send_dynamic_modal(
-                    self.bot, interaction, self.guild, selected_categoryID, selected_typeID, dm_channelID,
-                    modal_template, source_view, parent_category_id=self.parent_category_id)
+                    self.bot, interaction, self.guild, category, selected_typeID, dm_channelID,
+                    modal_template, source_view)
             else:
                 errorEmbed = discord.Embed(
                     description="❌ The server you are trying to contact has improperly set up this ticket type option. Please contact a server admin.",
@@ -361,23 +396,7 @@ class CategorySelectView(TimeoutSafeView):
         self.add_item(select)
 
 
-async def send_dynamic_modal(bot, interaction, guild, categoryID, typeID, dm_channelID, modal_template, view, parent_category_id=None):
-    category = bot.get_channel(categoryID)
-    if not category:
-        try:
-            category = await asyncio.wait_for(bot.fetch_channel(categoryID), timeout=1)
-        except Exception:
-            category = None
-
-    # Fallback to parent category if needed
-    if not category and parent_category_id:
-        category = bot.get_channel(parent_category_id)
-        if not category:
-            try:
-                category = await asyncio.wait_for(bot.fetch_channel(parent_category_id), timeout=1)
-            except Exception:
-                category = None
-
+async def send_dynamic_modal(bot, interaction, guild, category, typeID, dm_channelID, modal_template, view):
     if not category:
         errorEmbed = discord.Embed(
             description="❌ Couldn't find ticket category in the destination server. Please contact a server admin.",
@@ -486,20 +505,28 @@ class TicketRatingView(discord.ui.View):
         if self.message:
             await self.message.edit(view=self)
 
-    @discord.ui.button(label="Resolved", style=discord.ButtonStyle.success, row=0, custom_id="resolved")
+    @discord.ui.button(label="Satisfied", style=discord.ButtonStyle.success, row=0, emoji="👍", custom_id="resolved")
     async def resolved_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.rating_given:
             self.rating_given = True
             self.disable_rating_buttons()
-            await interaction.response.send_message("Glad to hear it was resolved!", ephemeral=True)
+            responseEmbed = discord.Embed(description="We're glad to hear you're satisfied with your ticket! "
+                                                      "You can leave feedback or report an issue using the buttons "
+                                                      "provided above.",
+                                    color=discord.Color.green()) 
+            await interaction.response.send_message(embed=responseEmbed, ephemeral=True)
             await interaction.message.edit(view=self)
 
-    @discord.ui.button(label="Not Resolved", style=discord.ButtonStyle.danger, row=0, custom_id="not_resolved")
+    @discord.ui.button(label="Dissatisfied", style=discord.ButtonStyle.danger, row=0, emoji="👎", custom_id="not_resolved")
     async def not_resolved_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.rating_given:
             self.rating_given = True
             self.disable_rating_buttons()
-            await interaction.response.send_message("Sorry to hear that. You can leave feedback or report the issue below.", ephemeral=True)
+            responseEmbed = discord.Embed(description="We're sorry to hear you're dissatisfied with your ticket. "
+                                                      "You can leave feedback or report an issue using the buttons "
+                                                      "provided above.",
+                                    color=discord.Color.green())
+            await interaction.response.send_message(embed=responseEmbed, ephemeral=True)
             await interaction.message.edit(view=self)
 
     @discord.ui.button(label="📝 Leave Feedback", style=discord.ButtonStyle.secondary, row=1, custom_id="feedback")
@@ -543,7 +570,9 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
             embed.set_author(name=f"{interaction.user.name} | {interaction.user.id}", icon_url=interaction.user.display_avatar.url)
             embed.add_field(name="Ticket Log", value=f"<#{self.view.threadID}>")
             await feedback_channel.send(embed=embed)
-        await interaction.response.send_message("Thanks for your feedback!", ephemeral=True)
+        feedbackEmbed = discord.Embed(description="Your feedback has been recorded. Thank you!",
+                                    color=discord.Color.green())
+        await interaction.response.send_message(embed=feedbackEmbed, ephemeral=True)
         self.view.feedback_sent = True
         self.view.disable_feedback_button()
         await interaction.message.edit(view=self.view)
@@ -578,7 +607,10 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
             embed.set_author(name=f"{interaction.user.name} | {interaction.user.id}", icon_url=interaction.user.display_avatar.url)
             embed.add_field(name="Ticket Log", value=f"<#{self.view.threadID}>")
             await report_channel.send(embed=embed)
-        await interaction.response.send_message("Your issue has been reported. Thank you!", ephemeral=True)
+
+        reportEmbed = discord.Embed(description="Your issue has been reported. Thank you!",
+                                    color=discord.Color.green())
+        await interaction.response.send_message(embed=reportEmbed, ephemeral=True)
         self.view.report_sent = True
         self.view.disable_report_button()
         await interaction.message.edit(view=self.view)

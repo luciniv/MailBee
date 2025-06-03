@@ -45,7 +45,11 @@ class Analytics(commands.Cog):
             # Prompt to open a ticket
             if tickets is None:
                 startEmbed = discord.Embed(title="Open a Ticket",
-                                        description="Click the **\"Open a Ticket\"** button in a server you share with this bot to open a ticket!",
+                                        description="Click the **\"Open a Ticket\"** button in a server you "
+                                                    "share with this bot to open a ticket!\n\nAlternatively, "
+                                                    "use the `/create_ticket` command in this DM channel to open "
+                                                    "a ticket with a selected server. You must be a member of the "
+                                                    "server you wish to open a ticket with.",
                                         color=discord.Color.blue())
                 # startEmbed = discord.Embed(title="Open a Ticket",
                 #                         description="Type `/create_ticket` in this channel to open a ticket."

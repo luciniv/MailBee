@@ -491,7 +491,7 @@ class DataManager:
         query = f"""
             SELECT * FROM ticket_types
             WHERE guildID = {guildID}
-            ORDER BY categoryID ASC;
+            ORDER BY typeID ASC;
             """
         types = await self.execute_query(query)
         return types
@@ -1068,7 +1068,7 @@ class DataManager:
         await self.redis.delete(redis_key)
 
 
-    def format_guild_type_entry(self, typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType):
+    def format_guild_type_entry(self, typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType, redirectText):
         return {
             "typeID": typeID,
             "categoryID": categoryID,
@@ -1076,32 +1076,32 @@ class DataManager:
             "typeDescrip": typeDescrip,
             "typeEmoji": typeEmoji,
             "form": form,
-            "subType": subType}
+            "subType": subType,
+            "redirectText": redirectText}
 
 
     async def get_or_load_guild_types(self, guildID, get = True):
         redis_key = f"ticket_types:{guildID}"
-        if get:
-            cached = await self.redis.hgetall(redis_key)
 
+        if get:
+            cached = await self.redis.get(redis_key)
             if cached:
-                print(f"[CACHE HIT] Ticket Types for {guildID}: {cached}")
-                return [json.loads(data) for data in cached.values()]
+                return json.loads(cached)
 
         types = await self.get_types_from_db(guildID)
-        print(f"[DB LOAD] Ticket Types for {guildID}: {types}")
+
         if not types:
             return []
 
         result = []
         for entry in types:
             print(entry)
-            typeID, _, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType = entry
+            typeID, _, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText = entry
             form = json.loads(formJson)
-            data = self.format_guild_type_entry(typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType)
-            await self.hset_field_with_expiry(redis_key, str(typeID), json.dumps(data))
+            data = self.format_guild_type_entry(typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType, redirectText)
             result.append(data)
 
+        await self.set_with_expiry(redis_key, json.dumps(result))
         return result
 
 
