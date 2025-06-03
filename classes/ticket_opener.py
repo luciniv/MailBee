@@ -242,6 +242,20 @@ class TicketOpener:
         roles = member.roles
         default = guild.default_role
 
+        priority_values = [-1,-1]
+        game_type = SERVER_TO_GAME.get(guild.id, None)
+        print(game_type)
+
+        if game_type is not None:
+            priority_values = await get_priority(game_type, guild.id, user.id)
+            print(f"priority values: {priority_values}")
+
+        if not priority_values:
+            priority_values = ["No data","No data"]
+            print("priority values set to default")
+
+        print(f"ending priority values: {priority_values}")
+
         ticketEmbed = discord.Embed(title=f"New \"{title}\" Ticket",
                                     description="To reply, send a message in this channel prefixed with `+`. "
                                     "Any other messages will send as a comment (not visible to the ticket opener). "
@@ -269,7 +283,7 @@ class TicketOpener:
 
         ticketEmbed.add_field(name=f"Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name=f"Robux Spent", value=f"No data", inline=True)
+        ticketEmbed.add_field(name=f"Robux Spent", value=priority_values[0], inline=True)
         ticketEmbed.add_field(name=f"Hours Ingame", value=f"No data", inline=True)
 
         submissionEmbed = await self.create_submission_embed(None, member, values, title)
