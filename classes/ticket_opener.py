@@ -284,7 +284,7 @@ class TicketOpener:
         ticketEmbed.add_field(name=f"Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
         ticketEmbed.add_field(name=f"Robux Spent", value=priority_values[0], inline=True)
-        ticketEmbed.add_field(name=f"Hours Ingame", value=f"No data", inline=True)
+        ticketEmbed.add_field(name=f"Hours Ingame", value=priority_values[1], inline=True)
 
         submissionEmbed = await self.create_submission_embed(None, member, values, title)
             
