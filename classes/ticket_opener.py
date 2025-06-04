@@ -245,6 +245,7 @@ class TicketOpener:
         priority_values = ["No data","No data"]
         game_type = SERVER_TO_GAME.get(guild.id, None)
 
+        result = None
         if game_type is not None:
             result = await get_priority(game_type, guild.id, user.id)
 
