@@ -80,16 +80,12 @@ class Analytics(commands.Cog):
 
     async def route_to_server(self, message: discord.Message, channelID: int):
         try:
-            server_channel = self.bot.get_channel(channelID)
+            server_channel = await self.bot.cache.get_channel(channelID)
             files = []
 
             if not server_channel:
-                try:
-                    server_channel = await asyncio.wait_for(self.bot.fetch_channel(channelID), timeout=1)
-                except Exception as e:
-                    await message.add_reaction("❌")
-                    print("channel fetch failed, must not exist")
-                    return
+                #FIXME
+                return
                 
             id_list = (server_channel.topic).split()
             threadID = id_list[-1]
@@ -157,13 +153,7 @@ class Analytics(commands.Cog):
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             await server_channel.send(embed=sendEmbed, files=files)
 
-            thread = self.bot.get_channel(threadID)
-            if not thread:
-                try:
-                    thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
-                except Exception as e:
-                    print("thread fetch failed, must not exist")
-                    return
+            thread = await self.bot.cache.get_channel(threadID)
             
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             await thread.send(embed=sendEmbed, files=files)
@@ -202,7 +192,7 @@ class Analytics(commands.Cog):
             if message is not None:
                 print("MESSAGE IS", message.content)
                 channel = message.channel
-                content = re.sub(r"^\+(?:areply|reply|ar|r)?\s*", "", message.content, flags=re.IGNORECASE)
+                content = re.sub(r"^\+(?:(?:areply|reply|ar|r)\s+|\s*)", "", message.content, flags=re.IGNORECASE)
                 author = message.author
             else:
                 channel = interaction.channel
@@ -314,14 +304,7 @@ class Analytics(commands.Cog):
             await dm_channel.send(embed=sendEmbed, files=files)
             logger.debug("sent message to dms")
 
-            thread = self.bot.get_channel(threadID)
-            if not thread:
-                logger.debug("thread via fetch")
-                try:
-                    thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
-                except Exception as e:
-                    print("thread fetch failed, must not exist")
-                    return
+            thread = await self.bot.cache.get_channel(threadID)
             logger.debug("got the thread")
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
@@ -348,14 +331,7 @@ class Analytics(commands.Cog):
         id_list = (channel.topic).split()
         threadID = id_list[-1]
 
-        thread = self.bot.get_channel(threadID)
-        if not thread:
-            logger.debug("thread via fetch")
-            try:
-                thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
-            except Exception as e:
-                print("thread fetch failed, must not exist")
-                return
+        thread = await self.bot.cache.get_channel(threadID)
         logger.debug("got the thread")
 
         # Process any attachments
@@ -387,14 +363,7 @@ class Analytics(commands.Cog):
         id_list = (channel.topic).split()
         threadID = id_list[-1]
 
-        thread = self.bot.get_channel(threadID)
-        if not thread:
-            logger.debug("thread via fetch")
-            try:
-                thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
-            except Exception as e:
-                print("thread fetch failed, must not exist")
-                return
+        thread = await self.bot.cache.get_channel(threadID)
         logger.debug("got the thread")
 
         async for thread_message in thread.history(limit=None, oldest_first=False):
@@ -412,14 +381,7 @@ class Analytics(commands.Cog):
         id_list = (channel.topic).split()
         threadID = id_list[-1]
 
-        thread = self.bot.get_channel(threadID)
-        if not thread:
-            logger.debug("thread via fetch")
-            try:
-                thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
-            except Exception as e:
-                print("thread fetch failed, must not exist")
-                return
+        thread = await self.bot.cache.get_channel(threadID)
         logger.debug("got the thread")
 
         async for thread_message in thread.history(limit=None, oldest_first=False):
@@ -709,10 +671,10 @@ class Analytics(commands.Cog):
                     logger.debug("check if its a reply")
                     if (message.content.startswith("+")):
                         logger.debug("its a staff message, function called") 
-                        if (message.content.startswith(("+r", "+reply"))):
+                        if re.match(r"^\+(r|reply)\b\s+", message.content, flags=re.IGNORECASE):
                             await self.staff_message(message, False)
                             return
-                        elif (message.content.startswith(("+ar", "+areply"))):
+                        elif re.match(r"^\+(r|reply|ar|areply)\b\s+", message.content, flags=re.IGNORECASE):
                             await self.staff_message(message, True)
                             return
                         await self.staff_message(message)

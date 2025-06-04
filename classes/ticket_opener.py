@@ -49,22 +49,21 @@ class TicketOpener:
     # if this returns false, failed to make the ticket
     # potentially supply context
 
-    async def open_ticket(self, interaction, guild, category, typeID, dm_channelID, values, title):
+    async def open_ticket(self, user, guild, category, typeID, dm_channelID, values, title):
         logger.debug("ticket creation started")
-        # Create ticket channel
-        user = interaction.user
 
         # Send log embed
         log_message = await self.send_log(guild, user, title)
         logger.debug("sent opening log")
 
+        # Create logging thread
         thread = await log_message.create_thread(name=f"Ticket {user.name} - {log_message.id}", auto_archive_duration=1440)
         logger.debug("created logging thread")
 
+        # Create ticket channel
         channel = await self.create_ticket_channel(guild, category, user, dm_channelID, thread.id)
         logger.debug("created ticket channel")
 
-        
         dm_channel = user.dm_channel or await user.create_dm()
 
         if channel:
@@ -96,15 +95,8 @@ class TicketOpener:
                 return
             
             logID = config["logID"] 
-            log_channel = guild.get_channel(logID)
+            log_channel = await self.bot.cache.get_channel(logID)
             logger.debug("got log channel")
-
-            if not log_channel:
-                try:
-                    log_channel = await asyncio.wait_for(guild.fetch_channel(logID), timeout=1)
-                except Exception as e:
-                    print("log channel fetch failed, must not exist")
-                    return
 
             openLogEmbed = discord.Embed(title=f"New \"{title}\" Ticket", description="", 
                                         color=discord.Color.green())

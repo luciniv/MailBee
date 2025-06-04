@@ -3,12 +3,10 @@ import asyncio
 import emoji
 import time
 from utils import emojis
-from datetime import datetime, timezone, timedelta
 from utils.logger import *
 from cogs.tools import close_ticket
 
 
-# logger.debug = lambda *a, **kw: None  # No-op debug logging
 MAX_RETRIES = 3
 
 
@@ -17,7 +15,7 @@ class ChannelStatus:
         self.bot = bot
         self.last_update_times = {}  # Stores only the latest update per channel
         self.pending_updates = {}  # Stores text newname 
-        self.cooldown = 300  # 1 update per 5 minutes
+        self.cooldown = 305  # 1 update per ~5 minutes
         self.worker_task = None
         self.timer_worker_task = None
         self.timers = {}  # Stores ticket close timers
@@ -67,22 +65,11 @@ class ChannelStatus:
                     if (now - last_update_time) >= self.cooldown:
                         channels_to_update.append((channel_id, new_name))
 
+                # NOTE look into this system sometime
                 # Apply updates for ready channels
                 for channel_id, new_name in channels_to_update:
-                    try:
-                        channel = self.bot.get_channel(channel_id)
-                        if channel is None:
-                            print("Channel not cached, attempting fetch")
-                            channel = await asyncio.wait_for(self.bot.fetch_channel(channel_id), timeout=2)
-                    except asyncio.TimeoutError:
-                        print("channel fetch timeout error")
-
-                    except discord.NotFound:
-                        print(f"Channel {channel_id} was deleted")
-                        
-                    except Exception as e:
-                        print(f"Fetching channel {channel_id} failed: {e}")
-                    
+                    print("trying to update channel")
+                    channel = await self.bot.cache.get_channel(channel_id)
                     try:
                         if channel:
                             for _ in range(MAX_RETRIES):
@@ -119,9 +106,12 @@ class ChannelStatus:
 
             for channel_id in expired_timers:
                 channel = self.bot.get_channel(channel_id)
+                guild = channel.guild
                 try:
                     if channel:
+                        reason = "Ticket closed due to inactivity"
                         await self.set_emoji(channel, "close")
+                        await close_ticket(self.bot, channel, None, reason, True)
                         logger.debug(f"Timer expired for channel {channel.id}")
                         
 

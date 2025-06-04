@@ -10,6 +10,7 @@ class Cache:
         self.bot = bot
         self.user_cache = {}
         self.member_cache = {}
+        self.channel_cache = {}
 
 
     async def store_user(self, user: discord.User):
@@ -76,30 +77,35 @@ class Cache:
             logger.exception(f"get_member sent an error: {e}")
 
 
-    async def store_ticket_channel(self, user: discord.User):
+    # For guild channels, including ticket channels, logs, and threads
+    async def store_channel(self, channel):
         epoch_time = int(datetime.now(timezone.utc).timestamp())
-        self.user_cache[str(user.id)] = (user, epoch_time)
-        print("user cache keys are", self.user_cache.keys())
+        self.channel_cache[str(channel.id)] = (channel, epoch_time)
+        print("channel cache keys are", self.channel_cache.keys())
 
 
-    async def store_ticket_channel(self, userID: int):
+    async def get_channel(self, channelID: int):
         try:
-            user = None
+            channel = None
             epoch = None
 
-            result = self.user_cache.get(str(userID), None)
+            result = self.channel_cache.get(str(channelID), None)
             if result is not None:
-                user, epoch = result
-                print("got cached user")
-                return user
+                channel, epoch = result
+                print("got cached cannel")
+                return channel
             else:
-                try:
-                    user = await asyncio.wait_for(self.bot.fetch_user(userID), timeout=1)
-                except Exception as e:
-                    print("failed to fetch global user", e)
-                    return None
-                print("fetched a user", user.name)
-                return user
+                channel = self.bot.get_channel(channelID)
+                if channel is not None:
+                    return channel
+                else:
+                    try:
+                        channel = await asyncio.wait_for(self.bot.fetch_channel(channelID), timeout=1)
+                    except Exception as e:
+                        print("failed to fetch global channel", e)
+                        return None
+                    print("fetched a channel", channel.name)
+                    return channel
         except Exception as e:
             logger.exception(f"get_user sent an error: {e}")
 

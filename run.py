@@ -5,6 +5,7 @@ import os
 from classes.data_manager import DataManager
 from classes.channel_status import ChannelStatus
 from classes.cache import Cache
+from classes.ticket_opener import TicketOpener
 # FIXME from classes.rate_limiter import RateLimiter
 from classes.ticket_creator import DMCategoryButtonView
 from classes.error_handler import *
@@ -32,6 +33,7 @@ class Mantid(commands.Bot):
         self.data_manager = DataManager(self)
         self.channel_status = ChannelStatus(self)
         self.cache = Cache(self)
+        self.opener = TicketOpener(self)
         # FIXME self.rate = RateLimiter(self)
 
     # Loads cogs when bot is ready
@@ -200,6 +202,7 @@ async def on_command_error(ctx, error):
             logger.exception(f"❌ General command error: {error}")
 
         elif isinstance(error, commands.CommandNotFound):
+            return
             errorMsg = "❌ This command does not exist, run /help to view available commands"
         
         else:
@@ -228,6 +231,7 @@ async def on_app_command_error(interaction: discord.Interaction, error):
             errorMsg = "❌ You do not have the required permissions to use this command"
 
         elif isinstance(error, app_commands.errors.CommandNotFound):
+            return
             errorMsg = "❌ This command does not exist, run /help to view available commands"
 
         elif isinstance(error, app_commands.errors.CommandOnCooldown):

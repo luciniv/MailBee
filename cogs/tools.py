@@ -6,7 +6,6 @@ import re
 import datetime
 from discord.ext import commands
 from discord import app_commands
-from typing import List
 from classes.error_handler import *
 from classes.embeds import *
 from classes.ticket_creator import DMCategoryButtonView, TicketRatingView
@@ -14,22 +13,50 @@ from utils import checks, queries
 from utils.logger import *
 
 
-async def close_ticket(bot, guild, ticket_channel,
-                        log_channel, dm_channel, thread, 
-                        closer, opener, reason, closing_text,
-                        anon):
+async def close_ticket(bot, ticket_channel, closer, reason, anon):
     try:
-        await bot.data_manager.close_ticket(guild.id, opener.id, closer.id, closer.name)
-        await bot.data_manager.delete_user_ticket(opener.id, guild.id)
+        guild = ticket_channel.guild
+        id_list = (ticket_channel.topic).split()
+        threadID = id_list[-1]
+        dm_channelID = id_list[-2]
+        userID = id_list[-3]
+        opener = None
+        closerID = None
+        closerName = None
+        config = await bot.data_manager.get_or_load_config(guild.id)
+
+        if config is None:
+            # FIXME
+            return False
+
+        if anon is None:
+            if (config["anon"] == 'true'):
+                anon = True
+            else:
+                anon = False
+
+        if closer is None:
+            closerID = -1
+            closerName = "Inactive"
+        else:
+            closerID = closer.id
+            closerName = closer.name
         
-        errorEmbed = discord.Embed(title="", description="", color=discord.Color.red())
+        closing = config["closing"]
+        logID = config["logID"] 
+        log_channel = await bot.cache.get_channel(logID)
+        thread = await bot.cache.get_channel(threadID)  
+        opener = await bot.cache.get_user(userID)
+        dm_channel = opener.dm_channel or await opener.create_dm()
+
+        await bot.data_manager.close_ticket(guild.id, opener.id, closerID, closerName)
+        await bot.data_manager.delete_user_ticket(opener.id, guild.id)
                 
         closeLogEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
                                 color=discord.Color.red())
         closeLogEmbed.timestamp = datetime.now(timezone.utc)
 
         await bot.data_manager.flush_messages_v2()
-        logger.info(f"Called flush tickets_v2")
         query = queries.closing_queries(ticket_channel.id)
         result = await bot.data_manager.execute_query(query)
         if (len(result) > 0):
@@ -61,19 +88,15 @@ async def close_ticket(bot, guild, ticket_channel,
         closeUserEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
                                         color=discord.Color.red())
         closeUserEmbed.timestamp = datetime.now(timezone.utc)
-
         if guild.icon:
             closeUserEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
         else:
             closeUserEmbed.set_footer(text=guild.name)
 
         # Check if command was anon
-        print("anon is", anon)
         if anon:
-            print("closing was anon")
             name = closeLogEmbed.author.name
             closeLogEmbed.author.name = f"{name} (Anonymous)"
-
         else:
             if (closer.avatar):
                 closeUserEmbed.set_author(name=f"{closer.name} | {closer.id}", icon_url=closer.avatar.url)
@@ -82,14 +105,12 @@ async def close_ticket(bot, guild, ticket_channel,
 
         await dm_channel.send(embed=closeUserEmbed)
 
-        if (len(closing_text) > 1):
-            await send_closing(bot, guild, dm_channel, thread.id, opener, closing_text)
+        if (len(closing) > 1):
+            await send_closing(bot, guild, dm_channel, thread.id, opener, closing)
 
         await thread.send(embed=closeLogEmbed)
         await log_channel.send(embed=closeLogEmbed)
-
         await thread.edit(archived=True, locked=True)
-        
         return True
     
     except Exception as e:
@@ -300,60 +321,8 @@ class Tools(commands.Cog):
                     await ctx.channel.send(embed=closingEmbed)
                     await self.bot.channel_status.set_emoji(ticket_channel, None)
                     await ticket_channel.delete(reason="Ticket channel closed")
-
-                    # FIXME add some more error checking later
-                    id_list = (ticket_channel.topic).split()
-                    threadID = id_list[-1]
-                    dm_channelID = id_list[-2]
-                    userID = id_list[-3]
-                    opener = None
-
-                    config = await self.bot.data_manager.get_or_load_config(guild.id)
-
-                    if config is None:
-                        # FIXME
-                        return False
                     
-                    closing = config["closing"]
-                    logID = config["logID"] 
-                    log_channel = guild.get_channel(logID)
-
-                    if not log_channel:
-                        try:
-                            log_channel = await asyncio.wait_for(guild.fetch_channel(logID), timeout=1)
-                        except Exception as e:
-                            print("log channel fetch failed, must not exist")
-                            return False
-
-                    dm_channel = guild.get_channel(dm_channelID)
-                    if not dm_channel:
-                        try:
-                            dm_channel = await asyncio.wait_for(self.bot.fetch_channel(dm_channelID), timeout=1)
-                        except Exception as e:
-                            print("dm channel fetch failed, must not exist")
-                            return False
-                        
-                    thread = self.bot.get_channel(threadID)
-                    if not thread:
-                        logger.debug("thread via fetch")
-                        try:
-                            thread = await asyncio.wait_for(self.bot.fetch_channel(threadID), timeout=1)
-                        except Exception as e:
-                            print("thread fetch failed, must not exist")
-                            return
-                    logger.debug("got the thread")
-                    
-                    try:
-                        print("FETCHING MEMBER", userID)
-                        opener = await asyncio.wait_for(guild.fetch_member(int(userID)), timeout=1)
-                    except Exception as e:
-                        print("user fetch failed, oops")
-                        pass
-                
-                    state = await close_ticket(self.bot, guild, ticket_channel,
-                                              log_channel, dm_channel, thread, 
-                                              closer, opener, reason, closing, 
-                                              anon)
+                    state = await close_ticket(self.bot, ticket_channel, closer, reason, anon)
             
                     if not state:
                         await ctx.reply(embed=errorEmbed)

@@ -145,8 +145,7 @@ class Moderation(commands.Cog):
                 lines = []
                 for row in entries:
                     user_id = int(row["userID"])
-                    user = guild.get_member(user_id) or await self.bot.fetch_user(user_id)
-                    lines.append(f"• {user.mention} (`{user_id}`)")
+                    lines.append(f"• <@{user_id}> (`{user_id}`)")
 
                 embed = discord.Embed(
                     title=f"Blacklisted Users ({len(entries)})",

@@ -99,7 +99,8 @@ class ServerSelect(discord.ui.Select):
             member = await guild.fetch_member(interaction.user.id)
         except discord.errors.NotFound:
             errorEmbed = discord.Embed(
-                description=f"❌ You are not in that server [this server is only visible during testing]",
+                description=f"❌ You are not in that server. If you would like to open a ticket there, "
+                             "please join the server first.",
                 color=discord.Color.red())
             
             await interaction.channel.send(embed=errorEmbed)
@@ -284,12 +285,7 @@ class CategorySelect(discord.ui.Select):
         # Safely fetch the selected category
         print("selected category id is", selected_categoryID)
         print("parent category id is", self.parent_category_id)
-        category = self.bot.get_channel(selected_categoryID)
-        if not category:
-            try:
-                category = await asyncio.wait_for(self.bot.fetch_channel(selected_categoryID), timeout=1)
-            except Exception:
-                category = None
+        category = await self.bot.cache.get_channel(selected_categoryID)
 
         # Only calls for parent types WITH subtypes
         if (len(subtypes) > 0):
@@ -324,6 +320,7 @@ class CategorySelect(discord.ui.Select):
                 redirectEmbed = discord.Embed(title="Auto-Response [Ticket NOT Created]",
                                               description=redirect_text,
                                               color=discord.Color.blue())
+                redirectEmbed.timestamp = datetime.now(timezone.utc)
                 if guild.icon:
                     redirectEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
                 else:
@@ -420,9 +417,10 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, dm_chann
             
         sendingEmbed = discord.Embed(description="Opening ticket...", color=discord.Color.blue())
         opening_message = await interaction.channel.send(embed=sendingEmbed)
+        user = interaction.user
 
         opener = TicketOpener(bot)
-        status = await opener.open_ticket(interaction, guild, category, typeID, dm_channelID, values, title)
+        status = await opener.open_ticket(user, guild, category, typeID, dm_channelID, values, title)
         await opening_message.delete()
 
         if not status:
