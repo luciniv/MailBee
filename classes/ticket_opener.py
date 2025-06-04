@@ -242,19 +242,15 @@ class TicketOpener:
         roles = member.roles
         default = guild.default_role
 
-        priority_values = [-1,-1]
+        priority_values = ["No data","No data"]
         game_type = SERVER_TO_GAME.get(guild.id, None)
-        print(game_type)
 
         if game_type is not None:
-            priority_values = await get_priority(game_type, guild.id, user.id)
-            print(f"priority values: {priority_values}")
+            result = await get_priority(game_type, guild.id, user.id)
 
-        if not priority_values:
-            priority_values = ["No data","No data"]
-            print("priority values set to default")
+        if result is not None:
+            priority_values = result
 
-        print(f"ending priority values: {priority_values}")
 
         ticketEmbed = discord.Embed(title=f"New \"{title}\" Ticket",
                                     description="To reply, send a message in this channel prefixed with `+`. "
