@@ -28,8 +28,8 @@ class Analytics(commands.Cog):
     async def cog_load(self):
         # refresh queue
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        #await self.catch_modmail_backlog()
-        #await self.process_queue()
+        await self.catch_modmail_backlog()
+        await self.process_queue()
 
     ### NOTE
     ### Modmail System Development --> Message event handling functions

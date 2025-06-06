@@ -160,23 +160,23 @@ class DataManager:
 
         # Pull DB data, send to redis
         # FIXME either keep this system, or brainstorm it
-        #await self.load_verified_users_from_db()
+        await self.load_verified_users_from_db()
 
         # FIXME change these to expire after 5 min
         # Pull redis data to local variables
-        #await self.load_status_dicts_from_redis() # keep local
-        #await self.load_timers_from_redis() # keep local
+        await self.load_status_dicts_from_redis() # keep local
+        await self.load_timers_from_redis() # keep local
 
         # NOTE this one stays, for mantid
-        #await self.load_mods_from_redis() 
+        await self.load_mods_from_redis() 
         await self.bot.channel_status.start_worker()
 
 
     async def data_shutdown(self):
         await self.bot.channel_status.shutdown()
-        #await self.save_status_dicts_to_redis()
-        #await self.save_timers_to_redis()
-        #await self.save_mods_to_redis()
+        await self.save_status_dicts_to_redis()
+        await self.save_timers_to_redis()
+        await self.save_mods_to_redis()
         await self.close_db()
         await self.close_redis()
                     
