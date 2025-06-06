@@ -430,7 +430,7 @@ class Tools(commands.Cog):
                             
                             result = await self.bot.channel_status.set_emoji(channel, "inactive", True)
                             statusEmbed = discord.Embed(title="", 
-                                            description=f"Status set to **inactive** 🕓 for {hours} hours(s).\n"
+                                            description=f"Status set to **inactive** 🕓 for {hours} hour(s).\n"
                                                         f"This ticket will **close** in <t:{int(end_time)}:R> "
                                                         "(alotting up to 1 minute of potential delay)",
                                                         color=discord.Color.green())
