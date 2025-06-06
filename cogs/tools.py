@@ -428,7 +428,7 @@ class Tools(commands.Cog):
                         else:
                             end_time = now + (hours * 3600)
                             
-                            result = await self.bot.channel_status.set_emoji(channel, "inactive")
+                            result = await self.bot.channel_status.set_emoji(channel, "inactive", True)
                             statusEmbed = discord.Embed(title="", 
                                             description=f"Status set to **inactive** 🕓 for {hours} hours(s).\n"
                                                         f"This ticket will **close** in <t:{int(end_time)}:R> "
@@ -437,7 +437,7 @@ class Tools(commands.Cog):
                             
                             if not result:
                                 statusEmbed.description=(f"Failed to change status to **inactive** 🕓, "
-                                                        "please try again later")
+                                                        "use `+active` to remove current inactive state")
                                 statusEmbed.color=discord.Color.red()
                                 await ctx.reply(embed=statusEmbed)
                                 return

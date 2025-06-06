@@ -165,6 +165,7 @@ class Analytics(commands.Cog):
                                                             message.author.id, 
                                                             format_time, 
                                                             "Received", True)
+            result = self.bot.channel_status.remove_timer(server_channel.id)
             await self.bot.channel_status.set_emoji(server_channel, "alert")
 
         except Exception as e:
