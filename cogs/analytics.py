@@ -709,7 +709,6 @@ class Analytics(commands.Cog):
             if (monitor_type == "Tickets category" or monitor_type == "Overflow category"):
 
                 # Check if channel is cached as a ticket
-                print("checking for ticket redis data")
                 modmail_messageID = (await self.bot.data_manager.get_ticket(this_channelID))
                 if (modmail_messageID is not None):
                     if (this_authorID == 575252669443211264):

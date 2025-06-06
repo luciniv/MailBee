@@ -389,13 +389,6 @@ class Tools(commands.Cog):
 
             if (ticket_channel.topic):
                 if ("Ticket channel" in ticket_channel.topic):
-
-                    closingEmbed = discord.Embed(description="Closing ticket...",
-                                         color=discord.Color.blue())
-                    await ctx.channel.send(embed=closingEmbed)
-                    await self.bot.channel_status.set_emoji(ticket_channel, None)
-                    await ticket_channel.delete(reason="Ticket channel closed")
-                    
                     state = await close_ticket(self.bot, ticket_channel, closer, reason, True)
             
                     if not state:
