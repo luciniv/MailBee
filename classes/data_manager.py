@@ -160,7 +160,7 @@ class DataManager:
 
         # Pull DB data, send to redis
         # FIXME either keep this system, or brainstorm it
-        await self.load_verified_users_from_db()
+        # await self.load_verified_users_from_db()
 
         # FIXME change these to expire after 5 min
         # Pull redis data to local variables
