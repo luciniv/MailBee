@@ -1,5 +1,6 @@
 import discord
 import asyncio
+import re
 import os
 from discord import Embed
 from discord.permissions import PermissionOverwrite
@@ -115,28 +116,35 @@ class TicketOpener:
         try:
             logger.warning("CALLED CREATE TICKET CHANNEL")
             # Check for any permitted roles (user or admin)
-            roles = []
-            permissions = await self.bot.data_manager.get_or_load_permissions(guild.id)
-            print("permissions is", permissions)
-            print("keys are", permissions.keys())
-            for roleID in permissions.keys():
-                print("roleID is", roleID)
-                role = guild.get_role(roleID)
-                roles.append(role)
+            # roles = []
+            # permissions = await self.bot.data_manager.get_or_load_permissions(guild.id)
+            # print("permissions is", permissions)
+            # print("keys are", permissions.keys())
+            # for roleID in permissions.keys():
+            #     print("roleID is", roleID)
+            #     role = guild.get_role(roleID)
+            #     roles.append(role)
             
-            overwrites = await get_overwrites(guild, roles)
-            print(overwrites)
+            # overwrites = await get_overwrites(guild, roles)
+            # print(overwrites)
+            # FIXME re-use this overwrites code to apply on category creation
 
-            # FIXME check if category has space
-            if (len(category.channels) > 2):
-                print("overflow hit, handle eventually, modify category as needed")
+            channel_name = re.sub(r"[./]", "", user.name.lower())
 
-            channel_name = f"{user.name}".lower().replace(".", "")
-            ticket_channel = await guild.create_text_channel(
-                name=channel_name,
-                category=category,
-                overwrites=overwrites,
-                topic=f"Ticket channel {user.id} {dm_channelID} {threadID}")
+            try:
+                ticket_channel = await guild.create_text_channel(
+                    name=channel_name,
+                    category=category,
+                    overwrites=category.overwrites,
+                    topic=f"Ticket channel {user.id} {dm_channelID} {threadID}")
+                
+            except discord.HTTPException as e:
+                if "Contains words not allowed" in e.text:
+                    ticket_channel = await guild.create_text_channel(
+                        name=str(user.id),
+                        category=category,
+                        overwrites=category.overwrites,
+                        topic=f"Ticket channel {user.id} {dm_channelID} {threadID}")
 
             # Set channel status
             await self.bot.channel_status.set_emoji(ticket_channel, "new")

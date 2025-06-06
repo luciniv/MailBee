@@ -96,7 +96,6 @@ class ChannelStatus:
     async def timer_worker(self):
         while True:
             await asyncio.sleep(60)  
-
             now = int(time.time())
             expired_timers = []
 
@@ -110,7 +109,6 @@ class ChannelStatus:
                 try:
                     if channel:
                         reason = "Ticket closed due to inactivity"
-                        await self.set_emoji(channel, "close")
                         await close_ticket(self.bot, channel, None, reason, True)
                         logger.debug(f"Timer expired for channel {channel.id}")
                         
@@ -195,3 +193,13 @@ class ChannelStatus:
     # Check if the input is a valid Unicode emoji
     def check_unicode(self, input_emoji: str) -> bool:
         return input_emoji in emoji.EMOJI_DATA
+    
+
+    def add_timer(self, channelID, time):
+        self.timers[channelID] = time
+
+
+    def remove_timer(self, channelID):
+        if self.timers.pop(channelID, None):
+            return True
+        return False

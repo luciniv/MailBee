@@ -164,19 +164,19 @@ class DataManager:
 
         # FIXME change these to expire after 5 min
         # Pull redis data to local variables
-        await self.load_status_dicts_from_redis() # keep local
-        await self.load_timers_from_redis() # keep local
+        #await self.load_status_dicts_from_redis() # keep local
+        #await self.load_timers_from_redis() # keep local
 
         # NOTE this one stays, for mantid
-        await self.load_mods_from_redis() 
+        #await self.load_mods_from_redis() 
         await self.bot.channel_status.start_worker()
 
 
     async def data_shutdown(self):
         await self.bot.channel_status.shutdown()
-        await self.save_status_dicts_to_redis()
-        await self.save_timers_to_redis()
-        await self.save_mods_to_redis()
+        #await self.save_status_dicts_to_redis()
+        #await self.save_timers_to_redis()
+        #await self.save_mods_to_redis()
         await self.close_db()
         await self.close_redis()
                     
@@ -345,6 +345,16 @@ class DataManager:
         return open_tickets
     
 
+    async def get_guild_and_log(self, channelID):
+        query = f"""
+            SELECT guildID, logID
+            FROM tickets_v2
+            WHERE channelID = {channelID};
+            """
+        result = await self.execute_query(query)
+        return result
+        
+
     async def get_ticket_history(self, guildID, userID):
         query = f"""
             SELECT channelID, logID, dateOpen, dateClose, closerID, state, typeName 
@@ -407,6 +417,16 @@ class DataManager:
             """
         await self.execute_query(query, False)
         print("close sucess")
+
+
+    async def update_rating(self, channelID, rating):
+        query = f"""
+            UPDATE tickets_v2
+            SET rating = %s
+            WHERE channelID = {channelID};
+            """
+        params = (rating)
+        await self.execute_query(query, False, False, params)
 
 
     # Add note to user / ticket

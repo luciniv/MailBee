@@ -21,12 +21,12 @@ class Snips(commands.Cog):
     async def snip(self, interaction: discord.Interaction, snip: str, anon: bool = None):
         try:
             channel = interaction.channel
+            author = interaction.user
 
             if (channel.topic):
                 if ("Ticket channel" in channel.topic):
                     id_list = (channel.topic).split()
                     threadID = id_list[-1]
-                    dm_channelID = id_list[-2]
                     userID = id_list[-3]
 
                     snip_content = ""
@@ -52,7 +52,7 @@ class Snips(commands.Cog):
 
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
-                        await analytics.route_to_dm(None, threadID, dm_channelID, userID, anon, interaction, snip_content)
+                        await analytics.route_to_dm(snip_content, channel, author, threadID, userID, anon, True)
                         await interaction.response.send_message("Snip sent", ephemeral=True)
                     return
 

@@ -7,7 +7,7 @@ from classes.channel_status import ChannelStatus
 from classes.cache import Cache
 from classes.ticket_opener import TicketOpener
 # FIXME from classes.rate_limiter import RateLimiter
-from classes.ticket_creator import DMCategoryButtonView
+from classes.ticket_creator import DMCategoryButtonView, TicketRatingView
 from classes.error_handler import *
 from utils import emojis, checks
 from utils.logger import *
@@ -29,7 +29,7 @@ class Mantid(commands.Bot):
         description = ""
 
         # Create bot instance with command prefix
-        super().__init__(command_prefix=commands.when_mentioned_or('$'), intents=intents, description=description, help_command=None)
+        super().__init__(command_prefix=commands.when_mentioned_or('+'), intents=intents, description=description, help_command=None)
         self.data_manager = DataManager(self)
         self.channel_status = ChannelStatus(self)
         self.cache = Cache(self)
@@ -42,6 +42,7 @@ class Mantid(commands.Bot):
         global startup
 
         logger.log("SYSTEM", "------- STARTUP INITIATED ----------------")
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="for tickets!"))  
 
         logger.log("SYSTEM", "------- FETCHING DATA --------------------")
         if startup and self.data_manager.db_pool is None:
@@ -53,9 +54,11 @@ class Mantid(commands.Bot):
                 await self.close()
             if self.data_manager.db_pool is not None:
                 await self.data_manager.data_startup()
-                bot.add_view(DMCategoryButtonView(bot))
-                await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="for tickets!"))
                 heartbeat.start()
+            if not hasattr(bot, "persistent_views_added"):
+                bot.add_view(DMCategoryButtonView(bot))
+                bot.add_view(TicketRatingView(bot))
+                bot.persistent_views_added = True
             startup = False
         
         logger.log("SYSTEM", "------- LOADING COGS ---------------------")
@@ -125,7 +128,7 @@ async def shutdown(ctx):
 
 
 # Hot-reload cogs command
-@bot.command(name="reload", aliases=["r"])
+@bot.command(name="reload", aliases=["rel"])
 @checks.is_owner()
 async def reload(ctx, cog: str):
     try:
@@ -183,7 +186,7 @@ async def on_command_error(ctx, error):
         if not check_perms():
             return
 
-        errorMsg = "❌ An unexpected error occurred. Please try again later"
+        errorMsg = "❌ An error occurred."
         
         if (ctx.author.id in owners):
                 errorMsg = f"❌ An unexpected error occurred: {error}"
@@ -195,7 +198,6 @@ async def on_command_error(ctx, error):
             errorMsg = f"❌ Access error: {error}"
 
         elif isinstance(error, BotError):
-            errorMsg = "❌ An error occurred. Please try again later"
 
             if (ctx.author.id in owners):
                 errorMsg = f"❌ An error occurred: {error}"
@@ -206,7 +208,7 @@ async def on_command_error(ctx, error):
             errorMsg = "❌ This command does not exist, run /help to view available commands"
         
         else:
-            logger.error(f"❌ Unexpected command error: {error}")
+            logger.error(f"❌ Command error: {error}")
 
         errorEmbed = discord.Embed(title="",
                                 description=f"{errorMsg}",
@@ -222,10 +224,10 @@ async def on_command_error(ctx, error):
 async def on_app_command_error(interaction: discord.Interaction, error):
     try:
 
-        errorMsg = "❌ An unexpected error occurred. Please try again later"
+        errorMsg = "❌ An error occurred."
 
         if interaction.user.id in owners:
-            errorMsg = f"❌ An unexpected error occurred: {error}"
+            errorMsg = f"❌ An error occurred: {error}"
 
         if isinstance(error, app_commands.errors.MissingPermissions):
             errorMsg = "❌ You do not have the required permissions to use this command"
@@ -244,7 +246,6 @@ async def on_app_command_error(interaction: discord.Interaction, error):
             errorMsg = f"❌ Access error: {error}"
 
         elif isinstance(error, BotError):
-            errorMsg = "❌ An error occurred. Please try again later"
 
             if interaction.user.id in owners:
                 errorMsg = f"❌ An error occurred: {error}"

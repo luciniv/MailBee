@@ -294,7 +294,7 @@ class CategorySelect(discord.ui.Select):
                 title="Select a Ticket Sub-Type",
                 description=f"You selected ticket type **{category.name}**.\n\nPlease choose "
                             "the ticket sub-type that best fits your situation below.",
-                color=discord.Color.yellow())
+                color=discord.Color.green())
             
             if guild.icon:
                 subtype_embed.set_author(name=guild.name, icon_url=guild.icon.url)
@@ -392,6 +392,44 @@ class CategorySelectView(TimeoutSafeView):
         select = await CategorySelect.create(self.bot, self.guild, self.dm_channelID, self.types, self.parent_category_id)
         self.add_item(select)
 
+        # Only add back button if viewing subtypes
+        if self.parent_category_id is not None:
+            self.add_item(BackButton(self.bot, self.guild, self.dm_channelID, self.types))
+
+
+class BackButton(discord.ui.Button):
+    def __init__(self, bot, guild, dm_channelID, types):
+        super().__init__(style=discord.ButtonStyle.success, label="⬅ Go Back")
+        self.bot = bot
+        self.guild = guild
+        self.dm_channelID = dm_channelID
+        self.types = types
+
+    async def callback(self, interaction: discord.Interaction):
+        categoryEmbed = discord.Embed(
+            title="Select a Ticket Type", 
+            description="Please select a type for your ticket with the drop-down menu below.\n\n"
+                        "If you are unsure what to choose, or your topic is not listed, select \"Other.\"",
+            color=discord.Color.blue())
+        if self.guild.icon:
+            categoryEmbed.set_author(name=self.guild.name, icon_url=self.guild.icon.url)
+            categoryEmbed.set_thumbnail(url=self.guild.icon.url)
+        else:
+            categoryEmbed.set_author(name=self.guild.name)
+
+
+        view = CategorySelectView(self.bot, self.guild, self.dm_channelID, self.types)
+        await view.setup()
+
+        try:
+            await interaction.response.defer(thinking=False)
+            message = await interaction.message.edit(embed=categoryEmbed, view=view)
+            view.message = message
+        except discord.HTTPException:
+            await interaction.response.defer(thinking=False)
+            message = await interaction.channel.send(embed=categoryEmbed, view=view)
+            view.message = message
+
 
 async def send_dynamic_modal(bot, interaction, guild, category, typeID, dm_channelID, modal_template, view):
     if not category:
@@ -433,6 +471,7 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, dm_chann
     # Send the modal
     await interaction.response.send_modal(DynamicFormModal(title, fields, handle_submit, view))
 
+
 class DynamicFormModal(discord.ui.Modal):
     def __init__(self, title, fields, on_submit_callback, view):
         super().__init__(title=title)
@@ -472,11 +511,9 @@ class DynamicFormModal(discord.ui.Modal):
 
 
 class TicketRatingView(discord.ui.View):
-    def __init__(self, bot, guildID: int, threadID: int, timeout=300):
-        super().__init__(timeout=timeout)
+    def __init__(self, bot):
+        super().__init__(timeout=None)
         self.bot = bot
-        self.guildID = guildID
-        self.threadID = threadID
         self.rating_given = False
         self.feedback_sent = False
         self.report_sent = False
@@ -515,6 +552,13 @@ class TicketRatingView(discord.ui.View):
             await interaction.response.send_message(embed=responseEmbed, ephemeral=True)
             await interaction.message.edit(view=self)
 
+            message = interaction.message
+            embed = message.embeds[0]
+            footer = (embed.footer.text).split()
+            ticketID = footer[-1]
+
+            await self.bot.data_manager.update_rating(ticketID, "Satisfied")
+
     @discord.ui.button(label="Dissatisfied", style=discord.ButtonStyle.danger, row=0, emoji="👎", custom_id="not_resolved")
     async def not_resolved_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.rating_given:
@@ -526,6 +570,13 @@ class TicketRatingView(discord.ui.View):
                                     color=discord.Color.green())
             await interaction.response.send_message(embed=responseEmbed, ephemeral=True)
             await interaction.message.edit(view=self)
+
+            message = interaction.message
+            embed = message.embeds[0]
+            footer = (embed.footer.text).split()
+            ticketID = footer[-1]
+
+            await self.bot.data_manager.update_rating(ticketID, "Dissatisfied")
 
     @discord.ui.button(label="📝 Leave Feedback", style=discord.ButtonStyle.secondary, row=1, custom_id="feedback")
     async def feedback_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -543,8 +594,6 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
         super().__init__()
         self.view = view
         self.bot = view.bot
-        self.guildID = view.guildID
-        self.threadID = view.threadID
         self.feedback = discord.ui.TextInput(
             label="Leave your feedback",
             style=discord.TextStyle.paragraph,
@@ -553,20 +602,36 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
         self.add_item(self.feedback)
 
     async def on_submit(self, interaction: discord.Interaction):
-        config = await self.bot.data_manager.get_or_load_config(self.guildID)
+        message = interaction.message
+        user = interaction.user
+        embed = message.embeds[0]
+        footer = (embed.footer.text).split()
+        ticketID = footer[-1]
+        guildID = None
+        threadID = None
+
+        data = await self.bot.data_manager.get_guild_and_log(ticketID)
+        if len(data) != 0:
+            print(data)
+            guildID = data[0][0]
+            threadID = data[0][1]
+
+        config = await self.bot.data_manager.get_or_load_config(guildID)
         if config is not None:
             feedbackID = config["feedbackID"]
-        #FIXME, error case
 
-        feedback_channel = interaction.client.get_channel(feedbackID)
+        feedback_channel = await self.bot.cache.get_channel(feedbackID)
         if feedback_channel:
             embed = discord.Embed(
                 title="New Feedback Submitted",
                 description=self.feedback.value,
                 color=discord.Color.blue()
             )
-            embed.set_author(name=f"{interaction.user.name} | {interaction.user.id}", icon_url=interaction.user.display_avatar.url)
-            embed.add_field(name="Ticket Log", value=f"<#{self.view.threadID}>")
+            url = None
+            if user.avatar:
+                url = user.avatar.url
+            embed.set_author(name=f"{user.name} | {user.id}", icon_url=url)
+            embed.add_field(name="Ticket Log", value=f"<#{threadID}>")
             await feedback_channel.send(embed=embed)
         feedbackEmbed = discord.Embed(description="Your feedback has been recorded. Thank you!",
                                     color=discord.Color.green())
@@ -581,29 +646,44 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
         super().__init__()
         self.view = view
         self.bot = view.bot
-        self.guildID = view.guildID
-        self.threadID = view.threadID
         self.issue = discord.ui.TextInput(
-            label="Describe the issue",
+            label="Describe your issue",
             style=discord.TextStyle.paragraph,
             required=True
         )
         self.add_item(self.issue)
 
     async def on_submit(self, interaction: discord.Interaction):
-        config = await self.bot.data_manager.get_or_load_config(self.guildID)
+        message = interaction.message
+        user = interaction.user
+        embed = message.embeds[0]
+        footer = (embed.footer.text).split()
+        ticketID = footer[-1]
+        guildID = None
+        threadID = None
+
+        data = await self.bot.data_manager.get_guild_and_log(ticketID)
+        if len(data) != 0:
+            print(data)
+            guildID = data[0][0]
+            threadID = data[0][1]
+
+        config = await self.bot.data_manager.get_or_load_config(guildID)
         if config is not None:
             reportID = config["reportID"]
-        #FIXME, error case
-        report_channel = interaction.client.get_channel(reportID)
+
+        report_channel = await self.bot.cache.get_channel(reportID)
         if report_channel:
             embed = discord.Embed(
                 title="New Issue Reported",
                 description=self.issue.value,
                 color=discord.Color.red()
             )
-            embed.set_author(name=f"{interaction.user.name} | {interaction.user.id}", icon_url=interaction.user.display_avatar.url)
-            embed.add_field(name="Ticket Log", value=f"<#{self.view.threadID}>")
+            url = None
+            if user.avatar:
+                url = user.avatar.url
+            embed.set_author(name=f"{user.name} | {user.id}", icon_url=url)
+            embed.add_field(name="Ticket Log", value=f"<#{threadID}>")
             await report_channel.send(embed=embed)
 
         reportEmbed = discord.Embed(description="Your issue has been reported. Thank you!",
@@ -620,5 +700,3 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
 # view = TicketRatingView(threadID=threadID)
 # message = await channel.send(embed=embed, view=view)
 # view.message = message
-
-

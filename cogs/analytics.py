@@ -28,8 +28,8 @@ class Analytics(commands.Cog):
     async def cog_load(self):
         # refresh queue
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        await self.catch_modmail_backlog()
-        await self.process_queue()
+        #await self.catch_modmail_backlog()
+        #await self.process_queue()
 
     ### NOTE
     ### Modmail System Development --> Message event handling functions
@@ -175,29 +175,29 @@ class Analytics(commands.Cog):
     async def staff_message(self, message: discord.Message, anon: bool = None):
         logger.debug("entered staff message")
         channel = message.channel
+        author = message.author
         id_list = (channel.topic).split()
         threadID = id_list[-1]
-        dm_channelID = id_list[-2]
         userID = id_list[-3]
         
         # Process message to ticket opener
-        await self.route_to_dm(message, threadID, dm_channelID, userID, anon)
+        await self.route_to_dm(message, channel, author, threadID, userID, anon, False)
 
 
-    async def route_to_dm(self, message: discord.Message, 
-                          threadID: int, dm_channelID: int, userID: int, 
-                          anon: bool = None, interaction = None, interaction_content = None):
+    async def route_to_dm(self, message, channel, author, threadID: int, userID: int, 
+                          anon: bool = None, snippet: bool = None):
         logger.debug("entered route to dm")
         try:
-            if message is not None:
-                print("MESSAGE IS", message.content)
-                channel = message.channel
-                content = re.sub(r"^\+(?:(?:areply|reply|ar|r)\s+|\s*)", "", message.content, flags=re.IGNORECASE)
-                author = message.author
-            else:
-                channel = interaction.channel
-                content = interaction_content
-                author = interaction.user
+            content = message
+            if isinstance(message, discord.Message):
+                content = message.content
+
+            # Clean remaining prefixes
+            content = re.sub(r"^\+(?:(?:areply|reply|ar|r)\s+|\s*)", "", message.content, flags=re.IGNORECASE)
+
+            # FIXME run formatter, add to tools for greeting / closing functions as well
+            if snippet:
+                pass
 
             guild = channel.guild
             timestamp = datetime.now(timezone.utc)
@@ -215,7 +215,7 @@ class Analytics(commands.Cog):
             member = await self.bot.cache.get_guild_member(guild, userID)
 
             if member is None:
-                await channel.send("❌ An error occurred, please try again")
+                await channel.send("❌ Ticket opener not found, please close this ticket or try again")
                 return
             
             dm_channel = member.dm_channel or await member.create_dm()
@@ -231,10 +231,9 @@ class Analytics(commands.Cog):
                                     "large (>20MB). For the fastest processing, upload large files to "
                                     "hosting websites and share links to the uploads instead.",
                                     color=discord.Color.blue())
-
-            if message:
+            
+            if isinstance(message, discord.Message):
                 attachments = message.attachments
-                print("attachments are", attachments)
 
                 if len(attachments) > 0:
                     fileMessage = await message.channel.send(embed=fileEmbed)
@@ -246,7 +245,7 @@ class Analytics(commands.Cog):
                     raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
             logger.debug("finished file process")
 
-            if message:
+            if isinstance(message, discord.Message):
                 await message.delete()
             logger.debug("deleted message")
 
@@ -259,14 +258,13 @@ class Analytics(commands.Cog):
                 receiptEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
             logger.debug("added attachment urls")
 
-            if (author.avatar):
-                receiptEmbed.set_author(name=f"{author.name} | {author.id}", icon_url=author.avatar.url)
-            else:
-                receiptEmbed.set_author(name=f"{author.name} | {author.id}")
-
+            name = f"{author.name} | {author.id}"
+            url = None
             if anon:
-                author_name = receiptEmbed.author.name
-                receiptEmbed.set_author(name=f"{author_name} (Anonymous)", icon_url=author.avatar.url)
+                name += " (Anonymous)"
+            if author.avatar:
+                url = author.avatar.url
+            receiptEmbed.set_author(name=name, icon_url=url)
 
             if member:
                 if member.avatar:
@@ -289,7 +287,7 @@ class Analytics(commands.Cog):
             for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
                 sendEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
 
-            if channel.guild.icon:
+            if guild.icon:
                 sendEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
             else:
                 sendEmbed.set_footer(text=guild.name)
@@ -320,7 +318,7 @@ class Analytics(commands.Cog):
             await self.bot.channel_status.set_emoji(channel, "wait")
 
         except Exception as e:
-            if message:
+            if isinstance(message, discord.Message):
                 await message.reply("❌ An error occurred, please try again")
             logger.exception(f"got_dm sent an error: {e}")
 
@@ -638,17 +636,14 @@ class Analytics(commands.Cog):
     # On-message event listener for messages in #modmail-log channels or modmail categories
     @commands.Cog.listener()
     async def on_message(self, message):
-        # Check to ensure Mantid doesnt respond to its own messages
-        if (message.author.id in [1304609006379073628, 1333954467519004673]):
-            return
         
         # Temp, allows Mantid to still work (allows Modmail message processing)
         if (message.author.bot and message.author.id != 575252669443211264):
             return
         
-        # Ignore all prefix commands
-        prefixes = self.bot.command_prefix(self.bot, message)
-        if any(message.content.startswith(prefix) for prefix in prefixes):
+        # Process valid commands
+        ctx = await self.bot.get_context(message)
+        if ctx.valid:
             return
 
         if (isinstance(message.channel, discord.DMChannel)):
@@ -667,18 +662,9 @@ class Analytics(commands.Cog):
         if (isinstance(this_channel, discord.TextChannel)):
             if (this_channel.topic):
                 if ("Ticket channel" in this_channel.topic):
-                    # Process comment
-                    logger.debug("check if its a reply")
                     if (message.content.startswith("+")):
-                        logger.debug("its a staff message, function called") 
-                        if re.match(r"^\+(r|reply)\b\s+", message.content, flags=re.IGNORECASE):
-                            await self.staff_message(message, False)
-                            return
-                        elif re.match(r"^\+(r|reply|ar|areply)\b\s+", message.content, flags=re.IGNORECASE):
-                            await self.staff_message(message, True)
-                            return
-                        await self.staff_message(message)
-                        return
+                        await self.staff_message(message, None)
+                        
                     else:
                         # Process comment
                         print("staff sent comment")
