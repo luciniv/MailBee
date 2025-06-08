@@ -354,15 +354,13 @@ class DataManager:
 
     async def get_ticket_history(self, guildID, userID):
         query = f"""
-            SELECT channelID, logID, dateOpen, dateClose, closerID, state, typeName 
+            SELECT ticketID, logID, dateOpen, dateClose, closerID, state, typeName 
             FROM tickets_v2 INNER JOIN ticket_types ON tickets_v2.type = ticket_types.typeID
             WHERE tickets_v2.guildID = {guildID}
             AND tickets_v2.openerID = {userID}
             ORDER BY dateOpen Desc;
             """
-        print(query)
         history = await self.execute_query(query)
-        print(history)
         print("got history from db")
         return history
     
