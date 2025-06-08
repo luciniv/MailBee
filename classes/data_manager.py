@@ -159,9 +159,6 @@ class DataManager:
         await self.connect_to_redis()
 
         # Pull DB data, send to redis
-        # FIXME either keep this system, or brainstorm it
-        # await self.load_verified_users_from_db()
-
         # FIXME change these to expire after 5 min
         # Pull redis data to local variables
         await self.load_status_dicts_from_redis() # keep local
@@ -371,49 +368,44 @@ class DataManager:
     
 
     # Create a new ticket entry in the database
-    async def create_ticket(self, guildID, channelID, memberID, threadID, typeID):
+    async def create_ticket(self, guildID, ticketID, channelID, memberID, threadID, typeID,
+                            time_taken, robux, hours, queue = 0):
         print("attempting to store ticket in database")
         timestamp = datetime.now(timezone.utc)
         dateOpen = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
         query = f"""
-            INSERT IGNORE INTO tickets_v2 (guildID, channelID, logID, dateOpen, openerID, state, type) VALUES
+            INSERT IGNORE INTO tickets_v2 (guildID, ticketID, channelID, logID, 
+            dateOpen, openerID, state, type, time, robux, hours, queue) VALUES
             ({guildID},
+            {ticketID},
             {channelID},
             {threadID},
             '{dateOpen}',
             {memberID},
             'open',
-            {typeID});
+            {typeID},
+            {time_taken},
+            {robux},
+            {hours},
+            {queue});
             """
         await self.execute_query(query, False)
         print("storage success")
         
 
     # Update an open database entry as closed
-    async def close_ticket(self, guildID, userID, closeID, closeUN):
+    async def close_ticket(self, channelID, closeID, closeUN):
         timestamp = datetime.now(timezone.utc)
         dateClose = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
         query = f"""
             UPDATE tickets_v2
-            JOIN (
-                SELECT *
-                FROM (
-                    SELECT channelID
-                    FROM tickets_v2
-                    WHERE guildID = {guildID}
-                    AND openerID = {userID}
-                    AND state = 'open'
-                    ORDER BY dateOpen ASC
-                    LIMIT 1
-                ) AS inner_subquery
-            ) AS target ON tickets_v2.channelID = target.channelID
-            SET
-                dateClose = '{dateClose}',
+            SET dateClose = '{dateClose}',
                 closerID = {closeID},
                 closerUN = '{closeUN}',
-                state = 'closed';
+                state = 'closed'
+            WHERE channelID = {channelID};
             """
         await self.execute_query(query, False)
         print("close sucess")
@@ -946,6 +938,12 @@ class DataManager:
         except Exception as e:
             logger.error(f"Error loading mod ids from Redis: {e}")
 
+   
+    # Returns the next auto-incrementing ticket ID for the given guild
+    async def get_next_ticket_id(self, guildID: int) -> int:
+        key = f"ticket_counter:{guildID}"
+        return await self.redis.incr(key)
+
 
     def format_config(self, guildID, logID, inboxID, 
                       responsesID, feedbackID, reportID,
@@ -1051,13 +1049,8 @@ class DataManager:
         await self.redis.delete(redis_key)
 
 
-    def format_blacklist_entry(self, guildID, userID, reason, date, modID):
-        return {
-            "guildID": guildID,
-            "userID": userID,
-            "reason": reason,
-            "date": date,
-            "modID": modID}
+    def format_blacklist_entry(self, userID):
+        return {"userID": userID}
 
 
     async def get_or_load_blacklist_entry(self, guildID: int, userID: int, get = True):
@@ -1068,13 +1061,14 @@ class DataManager:
             if cached:
                 print(f"[CACHE HIT] Blacklist Entry {guildID}-{userID}: {cached}")
                 return json.loads(cached)
+            return None
 
         entry = await self.get_blacklist_from_db(guildID, userID)
         print(f"[DB LOAD] Blacklist Entry {guildID}-{userID}: {entry}")
-        if not entry:
+        if len(entry) < 1:
             return None
 
-        formatted = self.format_blacklist_entry(*entry)
+        formatted = self.format_blacklist_entry(entry[0][0])
         await self.set_with_expiry(redis_key, json.dumps(formatted))
         return formatted
 

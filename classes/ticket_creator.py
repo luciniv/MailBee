@@ -1,17 +1,17 @@
 import discord
-import asyncio
+import time
 from discord import PartialEmoji, SelectOption
 from discord.ext import commands
 from discord.ui import View, Button
 from datetime import datetime, timezone
 from classes.ticket_opener import TicketOpener
-import json
 
 
 class TimeoutSafeView(discord.ui.View):
     def __init__(self, timeout=500):
         super().__init__(timeout=timeout)
         self.message = None
+
 
     async def on_timeout(self):
         try:
@@ -87,22 +87,20 @@ class ServerSelect(discord.ui.Select):
         self.bot = bot
         self.dm_channelID = dm_channelID
 
+
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
 
         guildID = int(self.values[0])
         guild = self.bot.get_guild(guildID)
         dm_channelID = self.dm_channelID
+        user = interaction.user
 
-        # Check if user is in this guild
-        try:
-            member = await guild.fetch_member(interaction.user.id)
-        except discord.errors.NotFound:
+        existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id)
+        if existing is not None:
             errorEmbed = discord.Embed(
-                description=f"❌ You are not in that server. If you would like to open a ticket there, "
-                             "please join the server first.",
+                description=f"❌ You are blacklisted from opening tickets with this server.",
                 color=discord.Color.red())
-            
             await interaction.channel.send(embed=errorEmbed)
 
             try:
@@ -113,6 +111,27 @@ class ServerSelect(discord.ui.Select):
             if self.view:
                 self.view.stop()
             return
+
+        # Check if user is in this guild
+        try:
+            member = await guild.fetch_member(interaction.user.id)
+        except discord.errors.NotFound:
+            errorEmbed = discord.Embed(
+                description=f"❌ You are not in that server. If you would like to open a ticket there, "
+                             "please join the server first.",
+                color=discord.Color.red())
+            await interaction.channel.send(embed=errorEmbed)
+
+            try:
+                await interaction.message.delete()
+            except discord.errors.HTTPException:
+                pass
+
+            if self.view:
+                self.view.stop()
+            return
+        
+        await self.bot.cache.store_guild_member(guildID, member)
 
         # Check if user already has a ticket open with this guild
         tickets = await self.bot.data_manager.get_or_load_user_tickets(interaction.user.id)
@@ -191,6 +210,7 @@ class DMCategoryButtonView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
+
     @discord.ui.button(label="Open a Ticket", style=discord.ButtonStyle.green, custom_id="persistent_dm_button", emoji="✉️")
     async def send_dm(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
@@ -205,6 +225,12 @@ class DMCategoryButtonView(discord.ui.View):
             return
 
         guild_id = guild.id
+
+        existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild_id, user.id)
+        if existing is not None:
+            errorEmbed.description="❌ You are blacklisted from opening tickets with this server."
+            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+            return
 
         try:
             tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id)
@@ -275,16 +301,7 @@ class CategorySelect(discord.ui.Select):
         else:
             selected_categoryID = self.parent_category_id
 
-        # NOTE, redirects dont have category ID's associated with them
-        # when created, id have to rely fully on the auto generated key
-        # when checking for subtypes of a redirect, i do a data pull and force them to select a redirect 
-        # this ensures i can link the subType redirects properly (if they exist)
-
-        # NOTE, subtypes have -1 as their category ID, but they always use the parent category ID
-
         # Safely fetch the selected category
-        print("selected category id is", selected_categoryID)
-        print("parent category id is", self.parent_category_id)
         category = await self.bot.cache.get_channel(selected_categoryID)
 
         # Only calls for parent types WITH subtypes
@@ -388,6 +405,7 @@ class CategorySelectView(TimeoutSafeView):
         self.types = types
         self.parent_category_id = parent_category_id
 
+
     async def setup(self):
         select = await CategorySelect.create(self.bot, self.guild, self.dm_channelID, self.types, self.parent_category_id)
         self.add_item(select)
@@ -405,6 +423,7 @@ class BackButton(discord.ui.Button):
         self.dm_channelID = dm_channelID
         self.types = types
 
+
     async def callback(self, interaction: discord.Interaction):
         categoryEmbed = discord.Embed(
             title="Select a Ticket Type", 
@@ -416,7 +435,6 @@ class BackButton(discord.ui.Button):
             categoryEmbed.set_thumbnail(url=self.guild.icon.url)
         else:
             categoryEmbed.set_author(name=self.guild.name)
-
 
         view = CategorySelectView(self.bot, self.guild, self.dm_channelID, self.types)
         await view.setup()
@@ -442,9 +460,11 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, dm_chann
 
     title = modal_template.get("title", "Form")
     fields = modal_template.get("fields", [])
+    start_time = int(time.time())
 
     # Modal submission handler
     async def handle_submit(interaction: discord.Interaction, values: dict):
+        time_taken = int(time.time()) - start_time
         try:
             # Delete the original DM message with the view
             await view.message.delete()
@@ -458,7 +478,7 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, dm_chann
         user = interaction.user
 
         opener = TicketOpener(bot)
-        status = await opener.open_ticket(user, guild, category, typeID, dm_channelID, values, title)
+        status = await opener.open_ticket(user, guild, category, typeID, dm_channelID, values, title, time_taken)
         await opening_message.delete()
 
         if not status:
@@ -490,6 +510,7 @@ class DynamicFormModal(discord.ui.Modal):
             )
             self.add_item(input)
 
+
     async def on_submit(self, interaction: discord.Interaction):
         for child in self.children:
             self.values[child.label] = child.value
@@ -519,26 +540,31 @@ class TicketRatingView(discord.ui.View):
         self.report_sent = False
         self.message = None
 
+
     def disable_rating_buttons(self):
         for child in self.children:
             if child.custom_id in ("resolved", "not_resolved"):
                 child.disabled = True
+
 
     def disable_feedback_button(self):
         for child in self.children:
             if child.custom_id == "feedback":
                 child.disabled = True
 
+
     def disable_report_button(self):
         for child in self.children:
             if child.custom_id == "report":
                 child.disabled = True
+
 
     async def on_timeout(self):
         for child in self.children:
             child.disabled = True
         if self.message:
             await self.message.edit(view=self)
+
 
     @discord.ui.button(label="Satisfied", style=discord.ButtonStyle.success, row=0, emoji="👍", custom_id="resolved")
     async def resolved_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -559,6 +585,7 @@ class TicketRatingView(discord.ui.View):
 
             await self.bot.data_manager.update_rating(ticketID, "Satisfied")
 
+
     @discord.ui.button(label="Dissatisfied", style=discord.ButtonStyle.danger, row=0, emoji="👎", custom_id="not_resolved")
     async def not_resolved_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.rating_given:
@@ -578,10 +605,12 @@ class TicketRatingView(discord.ui.View):
 
             await self.bot.data_manager.update_rating(ticketID, "Dissatisfied")
 
+
     @discord.ui.button(label="📝 Leave Feedback", style=discord.ButtonStyle.secondary, row=1, custom_id="feedback")
     async def feedback_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.feedback_sent:
             await interaction.response.send_modal(FeedbackModal(view=self))
+
 
     @discord.ui.button(label="🚩 Report Issue", style=discord.ButtonStyle.secondary, row=1, custom_id="report")
     async def report_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -600,6 +629,7 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
             required=True
         )
         self.add_item(self.feedback)
+
 
     async def on_submit(self, interaction: discord.Interaction):
         message = interaction.message
@@ -652,6 +682,7 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
             required=True
         )
         self.add_item(self.issue)
+
 
     async def on_submit(self, interaction: discord.Interaction):
         message = interaction.message

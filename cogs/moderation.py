@@ -16,7 +16,8 @@ class Moderation(commands.Cog):
         self.bot = bot
 
 
-    @commands.hybrid_command(name="ticket_history", description="View a user's ticketing history")
+    @commands.hybrid_command(name="ticket_history", description="View a user's ticketing history", 
+                             aliases=["tickets", "history", "th"])
     @checks.is_user()
     @app_commands.describe(user="User to view history of")
     async def ticket_history(self, ctx, user: discord.Member):
@@ -100,45 +101,45 @@ class Moderation(commands.Cog):
         pass
 
 
-    @commands.hybrid_command(name="blacklist", description="Blacklist a user from opening tickets")
+    @commands.hybrid_command(name="blacklist", description="Blacklist a user from opening tickets", 
+                             aliases=["b"])
     @app_commands.describe(user="User to blacklist", reason="Reason for blacklisting (required)")
     @checks.is_guild()
     @checks.is_user()
-    async def blacklist(self, ctx: commands.Context, user: discord.Member, *, reason: str):
+    async def blacklist(self, ctx: commands.Context, user: discord.User, *, reason: str):
         try:
             guild = ctx.guild
-            existing = await self.bot.data_manager.get_blacklist_from_db(guild.id, user.id)
-
-            if existing:
-                embed = discord.Embed(
-                    description=f"❌ **{user.mention}** is already blacklisted.",
-                    color=discord.Color.red()
-                )
-            else:
+            existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id)
+            resultEmbed = discord.Embed(description=f"❌ **{user.name}** ({user.id}) is already blacklisted",
+                                        color=discord.Color.red())
+            
+            if existing is None:
                 await self.bot.data_manager.add_blacklist_to_db(guild.id, user.id, reason, ctx.author.id)
-                embed = discord.Embed(
-                    description=f"✅ **{user.mention}** has been blacklisted from opening tickets\nReason: {reason}",
-                    color=discord.Color.green()
-                )
+                await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id, False)
+                resultEmbed.description=(f"✅ **{user.name}** ({user.id}) has been blacklisted from "
+                                         f"opening tickets\n**Reason:** {reason}")
+                resultEmbed.color=discord.Color.green()
 
-            await ctx.send(embed=embed)
+            await ctx.send(embed=resultEmbed)
 
         except Exception as e:
             logger.exception(f"blacklist error: {e}")
             raise BotError(f"/blacklist sent an error: {e}")
 
     # FIXME pagination
-    @commands.hybrid_command(name="view_blacklist", description="View all blacklisted users in this server")
+    @commands.hybrid_command(name="blacklist_view", description="View all blacklisted users in this server",
+                             aliases=["bv"])
     @checks.is_guild()
     @checks.is_user()
-    async def view_blacklist(self, ctx: commands.Context):
+    async def blacklist_view(self, ctx: commands.Context):
         try:
+
             guild = ctx.guild
             entries = await self.bot.data_manager.get_all_blacklist_from_db(guild.id)
 
             if not entries:
                 embed = discord.Embed(
-                    description="✅ No users are currently blacklisted in this server.",
+                    description="✅ No users are currently blacklisted in this server",
                     color=discord.Color.green()
                 )
             else:
@@ -156,52 +157,32 @@ class Moderation(commands.Cog):
             await ctx.send(embed=embed)
 
         except Exception as e:
-            logger.exception(f"view_blacklist error: {e}")
-            raise BotError(f"/view_blacklist sent an error: {e}")
+            logger.exception(f"blacklist_view error: {e}")
+            raise BotError(f"/blacklist_view sent an error: {e}")
         
 
-    @commands.hybrid_command(name="whitelist", description="Remove a user from the ticket blacklist")
+    @commands.hybrid_command(name="whitelist", description="Remove a user from the ticket blacklist", 
+                             aliases=["w"])
     @app_commands.describe(user="User to remove from blacklist")
     @checks.is_guild()
     @checks.is_user()
-    async def whitelist(self, ctx: commands.Context, user: discord.Member):
+    async def whitelist(self, ctx: commands.Context, user: discord.User):
         try:
             guild = ctx.guild
-            existing = await self.bot.data_manager.get_blacklist_from_db(guild.id, user.id)
+            existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id)
+            resultEmbed = discord.Embed(description=f"❌ **{user.name}** ({user.id}) is not blacklisted",
+                                        color=discord.Color.red())
 
-            if not existing:
-                embed = discord.Embed(
-                    description=f"❌ **{user.mention}** is not blacklisted.",
-                    color=discord.Color.red()
-                )
-            else:
-                await self.bot.data_manager.delete_blacklist_from_db(guild.id, user.id)
-                embed = discord.Embed(
-                    description=f"✅ **{user.mention}** has been removed from the blacklist.",
-                    color=discord.Color.green()
-                )
-
-            await ctx.send(embed=embed)
+            if existing is not None:
+                await self.bot.data_manager.delete_blacklist_entry(guild.id, user.id)
+                resultEmbed.description=f"✅ **{user.name}** ({user.id}) has been removed from the blacklist"
+                resultEmbed.color=discord.Color.green()
+                
+            await ctx.send(embed=resultEmbed)
 
         except Exception as e:
             logger.exception(f"whitelist error: {e}")
             raise BotError(f"/whitelist sent an error: {e}")
-
-
-    async def convert_mentions(self, text, guild):
-        # Find all <#channel_id> patterns
-        matches = re.findall(r'<#(\d+)>', text)
-        for channel_id in matches:
-            channel = None
-            try:
-                channel = guild.get_channel(int(channel_id))
-                if channel is None:
-                    channel = await asyncio.wait_for(self.bot.fetch_channel(channel_id), timeout=1)
-            except Exception:
-                pass
-            if channel:
-                text = text.replace(f'https://discord.com/channels/{guild.id}/{channel_id}', channel.mention)
-        return text
         
 
     @commands.hybrid_command(name="verbal", description="Send a verbal warning to a user")
@@ -216,7 +197,7 @@ class Moderation(commands.Cog):
             sent_message = None
             dm_channel = user.dm_channel or await user.create_dm()
 
-            reason = await self.convert_mentions(reason, guild)
+            reason = await self.bot.helper.convert_mentions(reason, guild)
 
             if (len(reason) > 800):
                 embed = discord.Embed(description="❌ Reason length is too long, it must be at most 800 characters"
@@ -282,7 +263,7 @@ class Moderation(commands.Cog):
             userID = None
             user = None
             old_reason = None
-            new_reason = await self.convert_mentions(new_reason, guild)
+            new_reason = await self.bot.helper.convert_mentions(new_reason, guild)
 
             if (len(new_reason) > 800):
                 embed = discord.Embed(description="❌ New reason length is too long, it must be at most 800 characters"
@@ -439,7 +420,6 @@ class Moderation(commands.Cog):
         
 
     @commands.hybrid_command(name="verbal_history", description="View a user's verbal warning history")
-    @app_commands.describe(user="User to remove from blacklist")
     @checks.is_guild()
     @checks.is_user()
     async def verbal_history(self, ctx: commands.Context, user: discord.Member):

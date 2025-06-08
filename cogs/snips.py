@@ -148,7 +148,7 @@ class Snips(commands.Cog):
     @checks.is_user()
     @app_commands.describe(abbreviation="Short-form name for the snip (24 char max)")
     @app_commands.describe(summary="Summary of the snip's purpose (100 char max)")
-    @app_commands.describe(message_id="ID of the message to use as the snip (1800 char max)")
+    @app_commands.describe(message_id="ID of the message to use as the snip (3000 char max)")
     async def snip_add(self, interaction: discord.Interaction, abbreviation: str, summary: str, message_id: str):
         try:
             await interaction.response.defer()
@@ -203,13 +203,16 @@ class Snips(commands.Cog):
                 await interaction.followup.send(embed=snipEmbed, ephemeral=True)
                 return
             
-            if (len(message.content) > 1800):
-                snipEmbed.description="❌ Your snip message is too many characters long (max is 1800)"
+            if (len(message.content) > 3000):
+                snipEmbed.description=("❌ Your snip message is too many characters long (max is 3000). "
+                                       "Note that channel links add around 70 characters.")
                 snipEmbed.color=discord.Color.red()
                 await interaction.followup.send(embed=snipEmbed, ephemeral=True)
                 return
+            
+            text = await self.bot.helper.convert_mentions(message.content, guild)
 
-            await self.bot.data_manager.add_snip(guild.id, interaction.user.id, abbreviation.lower(), summary, message.content)
+            await self.bot.data_manager.add_snip(guild.id, interaction.user.id, abbreviation.lower(), summary, text)
             await interaction.followup.send(embed=snipEmbed)
 
         except Exception as e:

@@ -68,17 +68,17 @@ class Util(commands.Cog):
 
 
     # Displays current tickets in cache
-    @commands.command()
-    @checks.is_owner()
-    async def tickets(self, ctx):
-        tickets = await self.bot.data_manager.get_all_channel_ids()
-        message = "**Tickets**\n"
-        if len(tickets) != 0:
-            for key in tickets:
-                message += f"<#{key}> {key}\n"
-            await ctx.send(f"{message}")
-        else:
-            await ctx.send("No tickets found!")
+    # @commands.command()
+    # @checks.is_owner()
+    # async def tickets(self, ctx):
+    #     tickets = await self.bot.data_manager.get_all_channel_ids()
+    #     message = "**Tickets**\n"
+    #     if len(tickets) != 0:
+    #         for key in tickets:
+    #             message += f"<#{key}> {key}\n"
+    #         await ctx.send(f"{message}")
+    #     else:
+    #         await ctx.send("No tickets found!")
 
 
     # Displays current messages in cache

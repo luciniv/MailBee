@@ -1,7 +1,7 @@
 # FIXME make caches to reduce all fetches
 import discord
 import asyncio
-from datetime import datetime, timezone
+import time
 from utils.logger import *
 
 
@@ -14,7 +14,7 @@ class Cache:
 
 
     async def store_user(self, user: discord.User):
-        epoch_time = int(datetime.now(timezone.utc).timestamp())
+        epoch_time = int(time.time())
         self.user_cache[str(user.id)] = (user, epoch_time)
         print("user cache keys are", self.user_cache.keys())
 
@@ -30,19 +30,21 @@ class Cache:
                 print("got cached user")
                 return user
             else:
+                epoch_time = int(time.time())
                 try:
                     user = await asyncio.wait_for(self.bot.fetch_user(userID), timeout=1)
                 except Exception as e:
                     print("failed to fetch global user", e)
                     return None
                 print("fetched a user", user.name)
+                self.user_cache[str(user.id)] = (user, epoch_time)
                 return user
         except Exception as e:
             logger.exception(f"get_user sent an error: {e}")
 
 
     async def store_guild_member(self, guildID: int, member: discord.Member):
-        epoch_time = int(datetime.now(timezone.utc).timestamp())
+        epoch_time = int(time.time())
         self.member_cache[(str(member.id), str(guildID))] = (member, epoch_time)
         print("member cache keys are", self.member_cache.keys())
 
@@ -58,7 +60,7 @@ class Cache:
                 print("got cached member")
                 return member
             else:
-                epoch_time = int(datetime.now(timezone.utc).timestamp())
+                epoch_time = int(time.time())
                 member = guild.get_member(memberID)
                 if member is None:
                     try:
@@ -79,7 +81,7 @@ class Cache:
 
     # For guild channels, including ticket channels, logs, and threads
     async def store_channel(self, channel):
-        epoch_time = int(datetime.now(timezone.utc).timestamp())
+        epoch_time = int(time.time())
         self.channel_cache[str(channel.id)] = (channel, epoch_time)
         print("channel cache keys are", self.channel_cache.keys())
 
@@ -95,8 +97,10 @@ class Cache:
                 print("got cached cannel")
                 return channel
             else:
+                epoch_time = int(time.time())
                 channel = self.bot.get_channel(channelID)
                 if channel is not None:
+                    self.channel_cache[str(channel.id)] = (channel, epoch_time)
                     return channel
                 else:
                     try:
@@ -105,9 +109,7 @@ class Cache:
                         print("failed to fetch global channel", e)
                         return None
                     print("fetched a channel", channel.name)
+                    self.channel_cache[str(channel.id)] = (channel, epoch_time)
                     return channel
         except Exception as e:
             logger.exception(f"get_user sent an error: {e}")
-
-
-

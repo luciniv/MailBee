@@ -40,29 +40,25 @@ class TicketOpener:
     def __init__(self, bot):
         self.bot = bot
 
-    # create ticket
-    # create channel --> given category
-    # storage is now viable --> given channel + whatever else
-    # create and send embeds --> given destination channel 
-    # (ticket channel info and submission embed)
-    # (dm channel info, submission embed, greeting (if real))
 
-    # if this returns false, failed to make the ticket
-    # potentially supply context
-
-    async def open_ticket(self, user, guild, category, typeID, dm_channelID, values, title):
+    async def open_ticket(self, user, guild, category, typeID, dm_channelID, values, title, time_taken):
         logger.debug("ticket creation started")
+
+        # Generate ticket ID
+        ticketID = await self.bot.data_manager.get_next_ticket_id(guild.id)
 
         # Send log embed
         log_message = await self.send_log(guild, user, title)
         logger.debug("sent opening log")
 
         # Create logging thread
-        thread = await log_message.create_thread(name=f"Ticket {user.name} - {log_message.id}", auto_archive_duration=1440)
+        thread = await log_message.create_thread(name=f"Ticket {user.name} - {ticketID}", auto_archive_duration=1440)
+        await self.bot.cache.store_channel(thread)
         logger.debug("created logging thread")
 
         # Create ticket channel
         channel = await self.create_ticket_channel(guild, category, user, dm_channelID, thread.id)
+        await self.bot.cache.store_channel(channel)
         logger.debug("created ticket channel")
 
         dm_channel = user.dm_channel or await user.create_dm()
@@ -72,12 +68,23 @@ class TicketOpener:
             await self.send_opener(guild, dm_channel, user, values, title)
             logger.debug("sent opening embeds to user")
 
+            priority_values = [-1,-1]
+            game_type = SERVER_TO_GAME.get(guild.id, None)
+
+            result = None
+            if game_type is not None:
+                result = await get_priority(game_type, guild.id, user.id)
+
+            if result is not None:
+                priority_values = result
+
             # Send in-channel embeds
-            await self.send_ticket_embeds(guild, channel, dm_channel, thread, user, values, title)
+            await self.send_ticket_embeds(guild, channel, thread, user, values, title, time_taken, priority_values)
             logger.debug("sent ticket channel embeds")
 
             # Add new ticket to database
-            await self.bot.data_manager.create_ticket(guild.id, channel.id, user.id, thread.id, typeID)
+            await self.bot.data_manager.create_ticket(guild.id, ticketID, channel.id, user.id, thread.id, typeID, 
+                                                      time_taken, priority_values[0], priority_values[1])
             logger.debug("added ticket to DB")
             tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id, False)
             logger.debug("ticket creation done")
@@ -228,40 +235,28 @@ class TicketOpener:
         return submissionEmbed
 
 
-    async def send_ticket_embeds(self, guild, channel, dm_channel, thread, user, values, title):
+    async def send_ticket_embeds(self, guild, channel, thread, user, values, title, time_taken, priority_values):
         print("user id is", user.id)
         member = await self.bot.cache.get_guild_member(guild, user.id)
 
         if member is None:
             logger.error("Failed to find member object for user: ", user.id)
             return
-           
-        print("got the member", member)
-        await self.bot.cache.store_guild_member(guild.id, member)
          
         roles = member.roles
         default = guild.default_role
-
-        priority_values = ["No data","No data"]
-        game_type = SERVER_TO_GAME.get(guild.id, None)
-
-        result = None
-        if game_type is not None:
-            result = await get_priority(game_type, guild.id, user.id)
-
-        if result is not None:
-            priority_values = result
-
+        if priority_values == [-1,-1]:
+            priority_values = ["No data", "No data"]
 
         ticketEmbed = discord.Embed(title=f"New \"{title}\" Ticket",
                                     description="To reply, send a message in this channel prefixed with `+`. "
                                     "Any other messages will send as a comment (not visible to the ticket opener). "
-                                    "To use commands, type `/` and select from the displayed list.\n\n`/close "
-                                    "[reason]` will close a ticket. `/inactive [reason] [hours]` will close a "
-                                    "ticket after X hours of inactivity from the ticket opener.")
+                                    "To use commands, prefix with `+` or type `/` and select from the displayed "
+                                    "list.\n\n`+close [reason]` will close a ticket. `+inactive [hours]` will close "
+                                    "a ticket after X hours of inactivity from the ticket opener.")
         ticketEmbed.timestamp = datetime.now(timezone.utc)
  
-        ticketEmbed.add_field(name="Opener", value=f"<@{user.id}>\n{user.name}\n{user.id}", inline=True)
+        ticketEmbed.add_field(name="Opener", value=f"<@{user.id}> {user.name}\n({user.id})", inline=True)
         ticketEmbed.add_field(
                         name="Roles",
                         value=(
@@ -277,11 +272,14 @@ class TicketOpener:
                         ),
                         inline=True
                     )
-
+        ticketEmbed.add_field(name="", value="", inline=False)
+        ticketEmbed.add_field(name=f"Join Date", value=f"<t:{int(member.joined_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name=f"Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
         ticketEmbed.add_field(name=f"Robux Spent", value=priority_values[0], inline=True)
         ticketEmbed.add_field(name=f"Hours Ingame", value=priority_values[1], inline=True)
+        ticketEmbed.add_field(name="", value="", inline=False)
+        ticketEmbed.add_field(name=f"Time Taken on Form", value=f"`{time_taken}` seconds", inline=True)
 
         submissionEmbed = await self.create_submission_embed(None, member, values, title)
             
@@ -295,14 +293,9 @@ class TicketOpener:
     async def priority(guild, openID):
         priority_values = [-1,-1]
         game_type = SERVER_TO_GAME.get(guild.id, None)
-        print(game_type)
 
         if game_type is not None:
             priority_values = await get_priority(game_type, guild.id, openID)
-            print(f"priority values: {priority_values}")
 
         if not priority_values:
             priority_values = [-1,-1]
-            print("priority values set to default")
-
-        print(f"ending priority values: {priority_values}")

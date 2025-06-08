@@ -55,7 +55,7 @@ async def close_ticket(bot, ticket_channel, closer, reason, anon):
         opener = await bot.cache.get_user(userID)
         dm_channel = opener.dm_channel or await opener.create_dm()
 
-        await bot.data_manager.close_ticket(guild.id, opener.id, closerID, closerName)
+        await bot.data_manager.close_ticket(ticket_channel.id, closerID, closerName)
         await bot.data_manager.delete_user_ticket(opener.id, guild.id)
                 
         closeLogEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
@@ -111,7 +111,7 @@ async def close_ticket(bot, ticket_channel, closer, reason, anon):
 
         try:
             await dm_channel.send(embed=closeUserEmbed)
-            await send_closing(bot, guild, dm_channel, ticket_channel.id, thread.id, opener, closing)
+            await send_closing(bot, guild, dm_channel, ticket_channel.id, opener, closing)
         except Exception:
             logger.exception("Failed to DM closing messages to a user")
             pass
@@ -126,7 +126,7 @@ async def close_ticket(bot, ticket_channel, closer, reason, anon):
             logger.exception(e)
 
 
-async def send_closing(bot, guild, dm_channel, channelID, threadID, user, closing_text):
+async def send_closing(bot, guild, dm_channel, channelID, user, closing_text):
     try:
         if (closing_text is None or len(closing_text) <= 1):
             closing_text = ("Thank you for reaching out to us! Your ticket has been closed. "
@@ -224,18 +224,18 @@ class GenerateReplyView(discord.ui.View):
         @discord.ui.button(label="Send Reply", style=discord.ButtonStyle.success)
         async def send_button(self, interaction: discord.Interaction, button: discord.ui.Button):
             if interaction.user != self.author:
-                return await interaction.response.send_message("You can't use this button.", ephemeral=True)
+                return await interaction.response.send_message("You can't use this button", ephemeral=True)
 
             await self.target_channel.send(self.reply_text)
-            await interaction.response.edit_message(content="✅ Reply sent.", view=None)
+            await interaction.response.edit_message(content="✅ Reply sent", view=None)
             self.stop()
 
         @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
         async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
             if interaction.user != self.author:
-                return await interaction.response.send_message("You can't use this button.", ephemeral=True)
+                return await interaction.response.send_message("You can't use this button", ephemeral=True)
 
-            await interaction.response.edit_message(content="❌ Cancelled reply.", view=None)
+            await interaction.response.edit_message(content="❌ Cancelled reply", view=None)
             self.stop()
 
 
@@ -244,7 +244,8 @@ class Tools(commands.Cog):
         self.bot = bot
         
 
-    @commands.hybrid_command(name="reply", description="Send a reply in the current ticket", aliases=["r"])
+    @commands.hybrid_command(name="reply", description="Send a reply in the current ticket", 
+                             aliases=["r"])
     @checks.is_guild()
     @checks.is_user()
     @app_commands.describe(message="The content of your reply")
@@ -267,7 +268,7 @@ class Tools(commands.Cog):
                     return
 
             errorEmbed = discord.Embed(title="", 
-                                       description="❌ This command can only be used in ticket channels.",
+                                       description="❌ This command can only be used in ticket channels",
                                        color=discord.Color.red())
             await channel.send_message(embed=errorEmbed)
             
@@ -276,7 +277,8 @@ class Tools(commands.Cog):
             raise BotError(f"/reply sent an error: {e}")
         
 
-    @commands.hybrid_command(name="areply", description="Send an anonymous reply in the current ticket", aliases=["ar"])
+    @commands.hybrid_command(name="areply", description="Send an anonymous reply in the current ticket", 
+                             aliases=["ar"])
     @checks.is_guild()
     @checks.is_user()
     @app_commands.describe(message="The content of your reply")
@@ -298,7 +300,7 @@ class Tools(commands.Cog):
                     return
 
             errorEmbed = discord.Embed(title="", 
-                                       description="❌ This command can only be used in ticket channels.",
+                                       description="❌ This command can only be used in ticket channels",
                                        color=discord.Color.red())
             await channel.send_message(embed=errorEmbed)
             
@@ -335,10 +337,11 @@ class Tools(commands.Cog):
     async def generate_ai_reply(self, transcript: str) -> str:
         # 🧠 Replace this with your AI call
         # e.g., OpenAI, Claude, local model, etc.
-        return f"This is a placeholder reply based on the transcript of {len(transcript.splitlines())} lines."
+        return f"This is a placeholder reply based on the transcript of {len(transcript.splitlines())} lines"
     
 
-    @commands.hybrid_command(name="close", description="Close the current ticket, with an optional reason", aliases=["c"])
+    @commands.hybrid_command(name="close", description="Close the current ticket, with an optional reason", 
+                             aliases=["c"])
     @checks.is_guild()
     @checks.is_user()
     @app_commands.describe(reason="Reason for closing the ticket. This will be shared with the ticket opener")
@@ -352,7 +355,7 @@ class Tools(commands.Cog):
 
             errorEmbed = discord.Embed(title="", 
                                        description=("❌ Error closing ticket. Please contact a"
-                                                    " server admin with this error."),
+                                                    " server admin with this error"),
                                        color=discord.Color.red())
 
             if (ticket_channel.topic):
@@ -360,19 +363,20 @@ class Tools(commands.Cog):
                     state = await close_ticket(self.bot, ticket_channel, closer, reason, anon)
             
                     if not state:
-                        await ctx.reply(embed=errorEmbed)
+                        await ticket_channel.send(embed=errorEmbed)
                         
                     return
 
-            errorEmbed.description=("❌ This command can only be used in ticket channels.")
-            await ctx.reply(embed=errorEmbed)
+            errorEmbed.description=("❌ This command can only be used in ticket channels")
+            await ticket_channel.send(embed=errorEmbed)
 
         except Exception as e:
             logger.exception(e)
             raise BotError(f"/close sent an error: {e}")
         
 
-    @commands.hybrid_command(name="aclose", description="Close the current ticket anonymously, with an optional reason", aliases=["ac"])
+    @commands.hybrid_command(name="aclose", description="Close the current ticket anonymously, with an optional reason", 
+                             aliases=["ac"])
     @checks.is_guild()
     @checks.is_user()
     @app_commands.describe(reason="Reason for closing the ticket. This will be shared with the ticket opener")
@@ -384,7 +388,7 @@ class Tools(commands.Cog):
 
             errorEmbed = discord.Embed(title="", 
                                        description=("❌ Error closing ticket. Please contact a"
-                                                    " server admin with this error."),
+                                                    " server admin with this error"),
                                        color=discord.Color.red())
 
             if (ticket_channel.topic):
@@ -392,12 +396,12 @@ class Tools(commands.Cog):
                     state = await close_ticket(self.bot, ticket_channel, closer, reason, True)
             
                     if not state:
-                        await ctx.reply(embed=errorEmbed)
+                        await ticket_channel.send(embed=errorEmbed)
                         
                     return
 
-            errorEmbed.description=("❌ This command can only be used in ticket channels.")
-            await ctx.reply(embed=errorEmbed)
+            errorEmbed.description=("❌ This command can only be used in ticket channels")
+            await ticket_channel.send(embed=errorEmbed)
 
         except Exception as e:
             logger.exception(e)
@@ -406,7 +410,8 @@ class Tools(commands.Cog):
 
     # Set a ticket as inactive for a period of time, then mark to close
     # Remove inactive / close marker if the user responds
-    @commands.hybrid_command(name="inactive", description="Mark current ticket to close after X hours of non-response")
+    @commands.hybrid_command(name="inactive", description="Mark current ticket to close after X hours of non-response", 
+                             aliases=["inact"])
     @checks.is_guild()
     @checks.is_user()
     @app_commands.describe(hours="(Default is 24) Hours to wait before marking to close")
@@ -431,27 +436,27 @@ class Tools(commands.Cog):
                             result = await self.bot.channel_status.set_emoji(channel, "inactive", True)
                             statusEmbed = discord.Embed(title="", 
                                             description=f"Status set to **inactive** 🕓 for {hours} hour(s).\n"
-                                                        f"This ticket will **close** in <t:{int(end_time)}:R> "
-                                                        "(alotting up to 1 minute of potential delay)",
+                                                        f"This ticket will **close** <t:{int(end_time)}:R> "
+                                                        "(allowing up to 1 minute of potential delay)",
                                                         color=discord.Color.green())
                             
                             if not result:
                                 statusEmbed.description=(f"Failed to change status to **inactive** 🕓, "
                                                         "use `+active` to remove current inactive state")
                                 statusEmbed.color=discord.Color.red()
-                                await ctx.reply(embed=statusEmbed)
+                                await channel.send(embed=statusEmbed)
                                 return
                             
                             self.bot.channel_status.add_timer(channelID, end_time)
                             await self.bot.data_manager.save_timers_to_redis()
 
-                            await ctx.reply(embed=statusEmbed)
+                            await channel.send(embed=statusEmbed)
                             return
 
             errorEmbed = discord.Embed(title="", 
                                 description="❌ Channel is not a ticket", 
                                 color=discord.Color.red())
-            await ctx.send(embed=errorEmbed, ephemeral=True)
+            await channel.send(embed=errorEmbed, ephemeral=True)
             return
 
         except Exception as e:
@@ -461,7 +466,8 @@ class Tools(commands.Cog):
 
     # Set a ticket as inactive for a period of time, then mark to close
     # Remove inactive / close marker if the user responds
-    @commands.hybrid_command(name="active", description="Remove inactivity status from a ticket")
+    @commands.hybrid_command(name="active", description="Remove inactivity status from a ticket", 
+                             aliases=["act"])
     @checks.is_guild()
     @checks.is_user()
     async def active(self, ctx):
@@ -480,7 +486,7 @@ class Tools(commands.Cog):
                             errorEmbed = discord.Embed(title="", 
                                                 description="❌ Ticket was not inactive", 
                                                 color=discord.Color.red())
-                            await ctx.send(embed=errorEmbed, ephemeral=True)
+                            await channel.send(embed=errorEmbed, ephemeral=True)
                             return
                         else:
                             await self.bot.data_manager.save_timers_to_redis()
@@ -488,13 +494,13 @@ class Tools(commands.Cog):
                                             description=f"Removed **inactive** timer, status set to **waiting**",
                                                         color=discord.Color.green())
                             result = await self.bot.channel_status.set_emoji(channel, "wait", True)
-                            await ctx.reply(embed=successEmbed)
+                            await channel.send(embed=successEmbed)
                             return
 
             errorEmbed = discord.Embed(title="", 
                                 description="❌ Channel is not a ticket", 
                                 color=discord.Color.red())
-            await ctx.send(embed=errorEmbed, ephemeral=True)
+            await channel.send(embed=errorEmbed, ephemeral=True)
             return
 
         except Exception as e:
@@ -511,47 +517,25 @@ class Tools(commands.Cog):
     @app_commands.choices(status=[
         app_commands.Choice(name=f"🆕 - new ticket", value="new"),
         app_commands.Choice(name=f"❗️ - pending moderator response", value="alert"),
-        app_commands.Choice(name=f"⏳ - waiting for user response", value="wait")])
-    @app_commands.describe(emoji="Enter a default Discord emoji (only works without status choice)")
-    async def status(self, ctx, status: discord.app_commands.Choice[str] = None, emoji: str = None):
+        app_commands.Choice(name=f"⏳ - waiting for user response", value="wait"),
+        app_commands.Choice(name=f"🔎 - under review", value="review")])
+
+    async def status(self, ctx, status: discord.app_commands.Choice[str]):
         try:    
-            status_flag = False
             channel = ctx.channel
-            emoji_name = None
-            emoji_str = None
-
-            if status is None and emoji is None:
-                errorEmbed = discord.Embed(title=f"", 
-                                    description="❌ You must select a status or provide an emoji", 
-                                    color=0xFF0000)
-
-                await ctx.send(embed=errorEmbed, ephemeral=True)
-                return
-
-            # Prioritizes status selection over custom emojis
-            if status is not None:
-                status_flag = True
-                emoji_name = status.name
-                emoji_str = status.value
-
-            if emoji_str is None:
-                if (self.bot.channel_status.check_unicode(emoji)):
-                    emoji_str = emoji
+            emoji_name = status.name
+            emoji_str = status.value
 
             result = await self.bot.channel_status.set_emoji(channel, emoji_str, True)
 
-            # Fix for outputting readable explanation of what the emoji is for
-            if status_flag:
-                emoji_str = emoji_name
-
-            statusEmbed = Embeds(self.bot, title="", 
-                                description=f"Channel status set to {emoji_str}\n*Please wait up to 5 minutes for edits to appear*")
-
+            statusEmbed = discord.Embed(description=f"Channel status set to **{emoji_name}**."
+                                        "(*Please wait up to 5 minutes for edits to appear*)",
+                                        color=discord.Color.green())
             if not result:
-                statusEmbed.description=f"Failed to set channel status to {emoji_str}, current or pending status is already set as this"
-                statusEmbed.color=0xFF0000
-
-            await ctx.reply(embed=statusEmbed)
+                statusEmbed.description=(f"Failed to set channel status to {emoji_str}, current "
+                                         "or pending status is already set as this")
+                statusEmbed.color=discord.Color.red()
+            await channel.send(embed=statusEmbed)
 
         except Exception as e:
             logger.exception(e)
@@ -559,14 +543,15 @@ class Tools(commands.Cog):
         
 
     @commands.hybrid_command(name="ticket_button", description="Creates a button users can click to open a ticket via DMs")
-    @commands.has_permissions(administrator=True)
+    @checks.is_guild()
+    @checks.is_admin()
     async def post_ticket_button(self, ctx: commands.Context):
         guild_id = ctx.guild.id
 
         types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
 
         if not types:
-            await ctx.send("❌ This server doesn't have any ticket types configured.")
+            await ctx.send("❌ This server doesn't have any ticket types configured")
             return
 
         view = DMCategoryButtonView(self.bot)

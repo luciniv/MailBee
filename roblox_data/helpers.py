@@ -20,13 +20,11 @@ MAX_RETRIES = 3
 
 async def get_roblox_username(guild_id, discord_id, api_key):
     try:
-        print("entered get roblox username")
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
             # Get Roblox ID from Bloxlink API
             bloxlink_url = f"https://api.blox.link/v4/public/guilds/{guild_id}/discord-to-roblox/{discord_id}"
             headers = {"Authorization": api_key}
             async with session.get(bloxlink_url, headers=headers) as response:
-                print(f"Bloxlink API Status: {response.status}")
                 if response.status != 200:
                     return None
                 
@@ -38,7 +36,6 @@ async def get_roblox_username(guild_id, discord_id, api_key):
             # Get Roblox username from Roblox API
             roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
             async with session.get(roblox_url) as response:
-                print(f"Roblox API Status: {response.status}")
                 if response.status != 200:
                     return None
 
@@ -55,12 +52,10 @@ async def get_roblox_username(guild_id, discord_id, api_key):
 
 async def get_roblox_user_info(username):
     try:
-        print("entered get_roblox_user_info")
         url = "https://users.roblox.com/v1/usernames/users"
 
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
             async with session.post(url, json={"usernames": [username]}) as response:
-                print(f"Roblox API Status: {response.status}")
 
                 if response.status == 200:
                     data = await response.json()
@@ -82,13 +77,11 @@ async def get_roblox_user_info(username):
 
 async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='global'):
     try:
-        print("entered get_datastore_entry")
         url = f'https://apis.roblox.com/datastores/v1/universes/{universe_id}/standard-datastores/datastore/entries/entry'
         params = {'datastoreName': datastore_name, 'entryKey': entry_key, 'scope': scope}
 
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
             async with session.get(url, params=params, headers=HEADERS) as response:
-                print(f"Datastore API Status: {response.status}")
 
                 if response.status == 200:
                     return await response.text()  # Successful response
@@ -105,14 +98,12 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
 
 async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
     try:
-        print("entered list_ordered_data_store_entries")
         ordered_datastore = urllib.parse.quote(ordered_datastore, safe='')
         url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
         params = {'max_page_size': 1, 'order_by': 'desc'}
 
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
             async with session.get(url, params=params, headers=HEADERS) as response:
-                print(f"Ordered Datastore API Status: {response.status}")
 
                 if response.status == 200:
                     return await response.json()  # Parse JSON response
@@ -129,7 +120,6 @@ async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope=
 
 async def get_player_data(game_type, game_id, user_id):
     try: 
-        print("entered get_player_data")
         game_config = CONFIG[game_type]
 
         if 'keys_prefix' in game_config:
@@ -157,7 +147,6 @@ async def get_player_data(game_type, game_id, user_id):
 
 async def get_user_and_player_data(user: str, game_type: discord.app_commands.Choice[int]):
     try:
-        print("entered get user and player data")
         game_config = CONFIG[game_type.name]
         user_info = await get_roblox_user_info(user)
         
@@ -217,7 +206,6 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
 async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: int):
     try:
-        print("entered get user and player data")
         game_config = CONFIG[game_name]
         user_info = await get_roblox_user_info(user)
         
@@ -275,11 +263,9 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
 async def get_priority(game_type: tuple, guildID: int, openID: int):
     try:
         roblox_username = await get_roblox_username(guildID, openID, game_type[2])
-        print(roblox_username)
 
         if roblox_username:
             values, file_path, error = await ticket_get_user_and_player_data(roblox_username, game_type[0], game_type[1])
-            print(values)
             return values
         return None
     except Exception as e:

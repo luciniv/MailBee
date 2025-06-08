@@ -50,6 +50,8 @@ class Public(commands.Cog):
             channelID = channel.id
             user = ctx.author
             errorEmbed = discord.Embed(title="", description="", color=discord.Color.red())
+
+            await self.bot.cache.store_user(user)
             
             # Ensure command is DM only
             if (isinstance(channel, discord.DMChannel) or not ctx.guild):

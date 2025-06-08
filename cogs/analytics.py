@@ -61,9 +61,10 @@ class Analytics(commands.Cog):
             # Route message to open ticket
             elif (len(tickets) == 1):
                 print("one ticket found, sending message to channel")
-                for ticket in tickets:
-                    channelID = ticket["channelID"]
-                    await self.route_to_server(message, channelID)
+                ticket = tickets[0]
+                guildID = ticket["guildID"]
+                channelID = ticket["channelID"]
+                await self.route_to_server(message, guildID, channelID)
 
             # Selection menu for where to route ticket message
             elif (len(tickets) > 1):
@@ -78,13 +79,36 @@ class Analytics(commands.Cog):
             logger.exception(f"bot_dm sent an error: {e}")
 
 
-    async def route_to_server(self, message: discord.Message, channelID: int):
+    async def route_to_server(self, message: discord.Message, guildID: int, channelID: int):
         try:
-            server_channel = await self.bot.cache.get_channel(channelID)
-            files = []
+            errorEmbed = discord.Embed(description="❌ You are blacklisted from sending messages "
+                                       "to this server.",
+                                       color=discord.Color.red())
+            # Check blacklist
+            author = message.author
+            entry = await self.bot.data_manager.get_or_load_blacklist_entry(guildID, author.id)
+            if entry is not None:
+                await message.channel.send(embed=errorEmbed)
+                return
 
+            guild = self.bot.get_guild(guildID)
+            if guild is None:
+                errorEmbed.description=("❌ You're no longer in this server. Please rejoin "
+                                        "it to continue your ticket or open a new one.")
+                await message.channel.send(embed=errorEmbed)
+                return
+            
+            server_channel = guild.get_channel(channelID)
+            if server_channel is None:
+                try:
+                    server_channel = await asyncio.wait_for(guild.fetch_channel(channelID))
+                except Exception:
+                    errorEmbed.description=("❌ Could not find your ticket channel in this server. "
+                                            "Please contact staff if this error persists.")
+                    await message.channel.send(embed=errorEmbed)
+                    return
             if not server_channel:
-                #FIXME
+                await message.channel.send(embed=errorEmbed)
                 return
                 
             id_list = (server_channel.topic).split()
@@ -92,11 +116,15 @@ class Analytics(commands.Cog):
             guild = server_channel.guild
             timestamp = datetime.now(timezone.utc)
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            text = await self.bot.helper.convert_mentions(message.content, guild)
+
+            #FIXME check if over 4000 characters
 
             logger.debug("started file process")
             # Process any attachments
             attachments = []
             raw_files = []  # <-- store raw data
+            files = []
             fileMessage = None
             fileEmbed = discord.Embed(title="", 
                                     description="**Processing files...**\n"
@@ -118,7 +146,7 @@ class Analytics(commands.Cog):
                     raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
 
             replyEmbed = discord.Embed(title="Message Sent", 
-                                    description=message.content,
+                                    description=text,
                                     color=discord.Color.green())
             replyEmbed.timestamp = datetime.now(timezone.utc)
             # Add attachment URLs to embed
@@ -138,17 +166,17 @@ class Analytics(commands.Cog):
                 await fileMessage.delete()
 
             sendEmbed = discord.Embed(title="Message Received", 
-                                    description=message.content,
+                                    description=text,
                                     color=discord.Color.green())
             sendEmbed.timestamp = datetime.now(timezone.utc)
             # Add attachment URLs to embed
             for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
                 sendEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
 
-            if message.author.avatar:
-                sendEmbed.set_footer(text=f"{message.author.name} | {message.author.id}", icon_url=message.author.avatar.url)
+            if author.avatar:
+                sendEmbed.set_footer(text=f"{author.name} | {author.id}", icon_url=author.avatar.url)
             else:
-                sendEmbed.set_footer(text=f"{message.author.name} | {message.author.id}")
+                sendEmbed.set_footer(text=f"{author.name} | {author.id}")
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             await server_channel.send(embed=sendEmbed, files=files)
@@ -162,7 +190,7 @@ class Analytics(commands.Cog):
             await self.bot.data_manager.add_ticket_message(sent_message.id, 
                                                             None, 
                                                             message.channel.id, 
-                                                            message.author.id, 
+                                                            author.id, 
                                                             format_time, 
                                                             "Received", True)
             result = self.bot.channel_status.remove_timer(server_channel.id)
@@ -189,18 +217,38 @@ class Analytics(commands.Cog):
                           anon: bool = None, snippet: bool = None):
         logger.debug("entered route to dm")
         try:
+            member = None
+            guild = channel.guild
+            errorEmbed = discord.Embed(description="❌ Ticket opener is no longer in this server. "
+                                       "Use `+close [reason]` to close this ticket.",
+                                       color=discord.Color.red())
+            try:
+                member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
+            except discord.NotFound:
+                await channel.send(embed=errorEmbed)
+                return
+            except Exception:
+                errorEmbed.description="❌ Error fetching ticket opener. Please try again."
+                return
+
+            # Check if blacklisted
+            entry = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, userID)
+            if entry is not None:
+                errorEmbed.description=("❌ Ticket opener is blacklisted. `+whitelist` them before "
+                                        "attempting to send a message.")
+                await message.channel.send(embed=errorEmbed)
+                return
+            
             content = message
             if isinstance(message, discord.Message):
                 content = message.content
 
             # Clean remaining prefixes
             content = re.sub(r"^\+(?:(?:areply|reply|ar|r)\s+|\s*)", "", message.content, flags=re.IGNORECASE)
+            content = await self.bot.helper.convert_mentions(content, guild)
 
-            # FIXME run formatter, add to tools for greeting / closing functions as well
-            if snippet:
-                pass
+            #FIXME check if over 4000 characters
 
-            guild = channel.guild
             timestamp = datetime.now(timezone.utc)
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
             files = []
@@ -212,12 +260,6 @@ class Analytics(commands.Cog):
                         anon = True
                     else:
                         anon = False
-
-            member = await self.bot.cache.get_guild_member(guild, userID)
-
-            if member is None:
-                await channel.send("❌ Ticket opener not found, please close this ticket or try again")
-                return
             
             dm_channel = member.dm_channel or await member.create_dm()
 
