@@ -428,7 +428,7 @@ class Tools(commands.Cog):
                             errorEmbed = discord.Embed(title="", 
                                                 description="❌ Hours must be between 1 to 72 (inclusive)", 
                                                 color=discord.Color.red())
-                            await ctx.send(embed=errorEmbed, ephemeral=True)
+                            await ctx.send(embed=errorEmbed)
                             return
                         else:
                             end_time = now + (hours * 3600)
@@ -456,7 +456,7 @@ class Tools(commands.Cog):
             errorEmbed = discord.Embed(title="", 
                                 description="❌ Channel is not a ticket", 
                                 color=discord.Color.red())
-            await channel.send(embed=errorEmbed, ephemeral=True)
+            await channel.send(embed=errorEmbed)
             return
 
         except Exception as e:
@@ -486,7 +486,7 @@ class Tools(commands.Cog):
                             errorEmbed = discord.Embed(title="", 
                                                 description="❌ Ticket was not inactive", 
                                                 color=discord.Color.red())
-                            await channel.send(embed=errorEmbed, ephemeral=True)
+                            await channel.send(embed=errorEmbed)
                             return
                         else:
                             await self.bot.data_manager.save_timers_to_redis()
@@ -500,12 +500,12 @@ class Tools(commands.Cog):
             errorEmbed = discord.Embed(title="", 
                                 description="❌ Channel is not a ticket", 
                                 color=discord.Color.red())
-            await channel.send(embed=errorEmbed, ephemeral=True)
+            await channel.send(embed=errorEmbed)
             return
 
         except Exception as e:
             logger.exception(e)
-            raise BotError(f"/inactive sent an error: {e}")
+            raise BotError(f"/active sent an error: {e}")
 
 
     # Manually update the status of a ticket channel
