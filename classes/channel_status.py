@@ -200,6 +200,10 @@ class ChannelStatus:
 
 
     def remove_timer(self, channelID):
-        if self.timers.pop(channelID, None):
+        if self.timers.pop(channelID, None) is not None:
             return True
         return False
+    
+    def get_timer(self, channelID):
+        timer = self.timers.get(channelID, None)
+        return timer

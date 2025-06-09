@@ -432,21 +432,21 @@ class Tools(commands.Cog):
                             return
                         else:
                             end_time = now + (hours * 3600)
-                            
-                            result = await self.bot.channel_status.set_emoji(channel, "inactive", True)
+                            timer = self.bot.channel_status.get_timer(channelID)
                             statusEmbed = discord.Embed(title="", 
                                             description=f"Status set to **inactive** 🕓 for {hours} hour(s).\n"
                                                         f"This ticket will **close** <t:{int(end_time)}:R> "
                                                         "(allowing up to 1 minute of potential delay)",
                                                         color=discord.Color.green())
                             
-                            if not result:
+                            if timer is not None:
                                 statusEmbed.description=(f"Failed to change status to **inactive** 🕓, "
                                                         "use `+active` to remove current inactive state")
                                 statusEmbed.color=discord.Color.red()
                                 await channel.send(embed=statusEmbed)
                                 return
                             
+                            await self.bot.channel_status.set_emoji(channel, "inactive", True)
                             self.bot.channel_status.add_timer(channelID, end_time)
                             await self.bot.data_manager.save_timers_to_redis()
 
@@ -493,7 +493,7 @@ class Tools(commands.Cog):
                             successEmbed = discord.Embed(title="", 
                                             description=f"Removed **inactive** timer, status set to **waiting**",
                                                         color=discord.Color.green())
-                            result = await self.bot.channel_status.set_emoji(channel, "wait", True)
+                            await self.bot.channel_status.set_emoji(channel, "wait", True)
                             await channel.send(embed=successEmbed)
                             return
 
