@@ -65,6 +65,9 @@ def horse_life_decoder(player_data):
     
     new_data = simplify_data(json.loads(decoded_data))
 
+    with open("test.json", "w") as file:
+        file.write(json.dumps(prettify_json(json.dumps(new_data)), indent=2))
+
     return prettify_json(json.dumps(new_data))
 
 
