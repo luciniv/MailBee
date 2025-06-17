@@ -20,6 +20,7 @@ class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+
     @commands.command()
     @checks.is_owner()
     async def refresh_types(self, ctx):
