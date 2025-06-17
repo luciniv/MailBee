@@ -186,6 +186,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
         with open("output.json", "w") as file:
             file.write(json.dumps(result, indent=2))
+        print(result)
 
         result_dict = json.loads(result)
         values = []
