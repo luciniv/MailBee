@@ -1,4 +1,5 @@
 import discord
+import re
 from discord.ext import commands
 from discord import app_commands
 from discord.app_commands import Range
@@ -401,7 +402,8 @@ class Snips(commands.Cog):
                 await interaction.followup.send(embed=errorEmbed)
                 return
                 
-            if not (abbrev.isalnum()):
+            
+            if not bool(re.fullmatch(r"[A-Za-z0-9 ]+", abbrev.casefold())):
                 errorEmbed.description="❌ Snip abbreviations must be alphanumeric only"
                 await interaction.followup.send(embed=errorEmbed)
                 return
@@ -450,7 +452,7 @@ class Snips(commands.Cog):
             snipEmbed = discord.Embed(description=f"✅ Added snip **`{abbrev}`**\n**Content:**\n{text}",
                                     color=discord.Color.green())
 
-            await self.bot.data_manager.add_snip(guild.id, interaction.user.id, abbrev, text, summary)
+            await self.bot.data_manager.add_snip(guild.id, interaction.user.id, abbrev.casefold(), text, summary)
             await self.bot.data_manager.get_or_load_snips(guild.id, False)
             await interaction.followup.send(embed=snipEmbed)
 

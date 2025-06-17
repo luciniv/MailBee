@@ -85,7 +85,8 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
 
                 if response.status == 200:
                     data = await response.text()
-                    print(data)
+                    with open("output.json", "w") as file:
+                        file.write(data)
                     return data  # Successful response
 
         return None
@@ -184,8 +185,8 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
         else:
             result = player_data
 
-        with open("output.json", "w") as file:
-            file.write(result)
+        # with open("output.json", "w") as file:
+        #     file.write(result)
 
         result_dict = json.loads(result)
         values = []
