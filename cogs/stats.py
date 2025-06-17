@@ -328,7 +328,7 @@ class Stats(commands.Cog):
 
             statsEmbed = Embeds(self.bot, title=f"Moderator Activity", 
                                 description=f"(selected mod's data / all mods in this server's data)")
-            statsEmbed.set_author(name=member.name, icon_url=member.avatar.url)
+            statsEmbed.set_author(name=member.name, icon_url=member.display_avatar.url)
             
             query = queries.mod_activity(guildID, closeByID, intervals)
             result = await self.bot.data_manager.execute_query(query)
@@ -364,6 +364,7 @@ class Stats(commands.Cog):
     # essentially using the same queries, but just outputting the data (no formatting)
     # gives the option to output one person's data, or everyone's data, and then select the timeframe
     # might use the same query gen commands, not sure
+    
 
     @commands.hybrid_command(name="export_week", description="Output a CSV file of one week's data")
     @checks.is_admin()
@@ -469,6 +470,68 @@ class Stats(commands.Cog):
 
         except Exception as e:
             raise BotError(f"/export_week sent an error: {e}")
+
+
+    @commands.hybrid_command(name="export_week_v2", description="Output a CSV file of one week's data")
+    @checks.is_admin()
+    @app_commands.describe(year="Select the year")
+    @app_commands.choices(year=[
+        app_commands.Choice(name="2025", value="2025")])
+    @app_commands.describe(week="Enter a week number (ISO 8601)")
+    @app_commands.describe(guild_id="The ID of the guild to export data for")
+    async def export_week_v2(self, ctx, year: discord.app_commands.Choice[str], week: int, guild_id: str):
+        try:
+            await ctx.defer()
+            await self.bot.data_manager.flush_messages()
+
+            if week < 1 or week > 53:
+                errorEmbed = discord.Embed(
+                    description="❌ Week number must be in the range 1–53",
+                    color=discord.Color.red()
+                )
+                await ctx.send(embed=errorEmbed, ephemeral=True)
+                return
+
+            weekISO = f"{year.value}{week:02d}"
+            # guild = self.bot.get_guild(guild_id)
+            # if guild is None:
+            #     guild = await self.bot.fetch_guild(guild_id)
+
+            # if guild is None:
+            #     await ctx.send(
+            #         embed=discord.Embed(
+            #             description=f"❌ Guild with ID `{guild_id}` not found in bot's cache.",
+            #             color=discord.Color.red()
+            #         ),
+            #         ephemeral=True
+            #     )
+            #     return
+
+            statsEmbed = Embeds(
+                self.bot,
+                title="Weekly Statistics Export",
+                description="Download the attached CSV file to view data"
+            )
+            # statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
+            result_list = []
+
+            # Generate and execute query
+            query, headers = await queries.week_CSV_v2(self, guild_id, int(weekISO))
+            result = await self.bot.data_manager.execute_query(query)
+
+            file = None
+            if result:
+                row = [guild_id] + list(result[0])
+                result_list.append(row)
+                file = csv_write.make_file(headers, result_list)
+            else:
+                statsEmbed.add_field(name="No data found", value="", inline=False)
+
+            await ctx.send(embed=statsEmbed, file=file)
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/export_week_v2 sent an error: {e}")
 
 
     @commands.hybrid_command(name="export_server_stats", description="Output a CSV file of every server's statistics,"

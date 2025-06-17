@@ -7,7 +7,7 @@ from utils.logger import *
 from cogs.tools import close_ticket
 
 
-MAX_RETRIES = 3
+MAX_RETRIES = 2
 
 
 class ChannelStatus:
@@ -68,13 +68,13 @@ class ChannelStatus:
                 # NOTE look into this system sometime
                 # Apply updates for ready channels
                 for channel_id, new_name in channels_to_update:
-                    print("trying to update channel")
                     channel = await self.bot.cache.get_channel(channel_id)
+
                     try:
                         if channel:
                             for _ in range(MAX_RETRIES):
                                 try:
-                                    await asyncio.wait_for(channel.edit(name=new_name), timeout=2)
+                                    await asyncio.wait_for(channel.edit(name=new_name), timeout=1)
                                     break
                                 except asyncio.TimeoutError:
                                     continue
@@ -95,30 +95,50 @@ class ChannelStatus:
     # Timer worker, handles scheduled name changes
     async def timer_worker(self):
         while True:
-            await asyncio.sleep(60)  
-            now = int(time.time())
-            expired_timers = []
+            try:
+                await asyncio.sleep(60)  
+                now = int(time.time())
+                expired_timers = []
 
-            for channel_id, end_time in self.timers.items():
-                if now >= end_time:
-                    expired_timers.append(channel_id)
+                for channelID, fields in self.timers.items():
+                    end_time, modID, openerID, reason = fields
+                    if now >= int(end_time):
+                        expired_timers.append((channelID, modID, openerID, reason))
 
-            for channel_id in expired_timers:
-                channel = self.bot.get_channel(channel_id)
-                guild = channel.guild
-                try:
-                    if channel:
-                        reason = "Ticket closed due to inactivity"
-                        await close_ticket(self.bot, channel, None, reason, True)
-                        logger.debug(f"Timer expired for channel {channel.id}")
-                        
+                for channelID, modID, openerID, reason in expired_timers:
+                    premature_delete = False
+                    channel = self.bot.get_channel(channelID)
+                    if channel is None:
+                        try:
+                            channel = await asyncio.wait_for(self.bot.fetch_channel(channelID), timeout=1)
+                        except discord.NotFound:
+                            premature_delete = True
+                        except Exception:
+                            pass
+
+                    if channel is not None:
+                        try:
+                            guild = channel.guild
+                            member = await self.bot.cache.get_guild_member(guild, modID)
+                            
+                            await close_ticket(self.bot, channel, member, openerID, guild.id, reason, None, True)
+                            logger.debug(f"Timer expired for channel {channel.id}")
+
+                        except Exception as e:
+                            logger.error(f"Failed to update channel {channel.id} after timer expired: {e}")
+
+                    elif premature_delete:
+                        pass
+                        # FIXME edge case, channel with timer is deleted
+                        # user = await self.bot.cache.get_user(userID)
+                        # await close_ticket(self.bot, channelID, user, reason, None, True)
 
                     # Remove expired timer
-                    del self.timers[channel_id]
+                    self.timers.pop(channelID, None)
+                    await asyncio.sleep(0.5)
+            except Exception:
+                await asyncio.sleep(5)
                     
-                except Exception as e:
-                    logger.error(f"Failed to update channel {channel.id} after timer expired: {e}")
-
 
     # Queues a channel name update, replacing any previous updates for that channel
     def queue_update(self, channel: discord.TextChannel, new_name: str, manual: bool) -> bool:
@@ -126,18 +146,12 @@ class ChannelStatus:
             if new_name is None:
                 self.pending_updates.pop(channel.id, None)
                 return False
-
-            print("channel name is", channel.name)
-            print("new name is", new_name)
             
             if channel.name == new_name:
                 self.pending_updates.pop(channel.id, None)
                 return False
             
             current_name = self.pending_updates.get(channel.id, channel.name)
-
-            print("current name is", current_name)
-            print("new name is", new_name)
 
             # Drop update if it's the same as the current one
             if current_name == new_name:
@@ -154,17 +168,15 @@ class ChannelStatus:
             if not manual:
                 for old_status, log_msg in restricted_updates.items():
                     if current_name.startswith(emojis.emoji_map.get(old_status[0], "")) and new_name.startswith(emojis.emoji_map.get(old_status[1], "")):
-                        logger.debug(log_msg)
                         return False
 
                 # Handle special case: deleting timer if switching from inactive/close to alert
                 if current_name.startswith((emojis.emoji_map.get("inactive", ""), emojis.emoji_map.get("close", ""))) and new_name.startswith(emojis.emoji_map.get("alert", "")):
                     if self.timers.pop(channel.id, None):
-                        logger.debug("timer deleted, set inactive or close to alert")
+                        pass
 
             # Queue the update
             self.pending_updates[channel.id] = new_name
-            logger.debug(f"Queued update for {channel.name} {channel.id}: setting to {new_name}")
             return True
 
         except Exception as e:
@@ -195,8 +207,8 @@ class ChannelStatus:
         return input_emoji in emoji.EMOJI_DATA
     
 
-    def add_timer(self, channelID, time):
-        self.timers[channelID] = time
+    def add_timer(self, channelID, time, modID, openerID, reason):
+        self.timers[channelID] = [time, modID, openerID, reason]
 
 
     def remove_timer(self, channelID):

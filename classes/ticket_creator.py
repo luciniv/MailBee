@@ -1,5 +1,6 @@
 import discord
 import time
+import asyncio
 from discord import PartialEmoji, SelectOption
 from discord.ext import commands
 from discord.ui import View, Button
@@ -31,7 +32,7 @@ class TimeoutSafeView(discord.ui.View):
                 except discord.Forbidden:
                     pass
         except Exception:
-            print("embed timeout exception")
+            pass
 
 
 class TicketSelect(discord.ui.Select):
@@ -113,23 +114,41 @@ class ServerSelect(discord.ui.Select):
             return
 
         # Check if user is in this guild
-        try:
-            member = await guild.fetch_member(interaction.user.id)
-        except discord.errors.NotFound:
-            errorEmbed = discord.Embed(
-                description=f"❌ You are not in that server. If you would like to open a ticket there, "
-                             "please join the server first.",
-                color=discord.Color.red())
-            await interaction.channel.send(embed=errorEmbed)
-
+        member = guild.get_member(interaction.user.id)
+        if member is None:
             try:
-                await interaction.message.delete()
-            except discord.errors.HTTPException:
-                pass
+                member = await asyncio.wait_for(guild.fetch_member(interaction.user.id), timeout=1)
 
-            if self.view:
-                self.view.stop()
-            return
+            except discord.errors.NotFound:
+                errorEmbed = discord.Embed(
+                    description=f"❌ You are not in that server. If you would like to open a ticket there, "
+                                "please join the server first.",
+                    color=discord.Color.red())
+                await interaction.channel.send(embed=errorEmbed)
+
+                try:
+                    await interaction.message.delete()
+                except discord.errors.HTTPException:
+                    pass
+
+                if self.view:
+                    self.view.stop()
+                return
+            
+            except Exception:
+                errorEmbed = discord.Embed(
+                    description=f"❌ An error occurred with Discord's API. Please try again.",
+                    color=discord.Color.red())
+                await interaction.channel.send(embed=errorEmbed)
+
+                try:
+                    await interaction.message.delete()
+                except discord.errors.HTTPException:
+                    pass
+
+                if self.view:
+                    self.view.stop()
+                return
         
         await self.bot.cache.store_guild_member(guildID, member)
 
@@ -642,7 +661,6 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
 
         data = await self.bot.data_manager.get_guild_and_log(ticketID)
         if len(data) != 0:
-            print(data)
             guildID = data[0][0]
             threadID = data[0][1]
 
@@ -657,10 +675,7 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
                 description=self.feedback.value,
                 color=discord.Color.blue()
             )
-            url = None
-            if user.avatar:
-                url = user.avatar.url
-            embed.set_author(name=f"{user.name} | {user.id}", icon_url=url)
+            embed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
             embed.add_field(name="Ticket Log", value=f"<#{threadID}>")
             await feedback_channel.send(embed=embed)
         feedbackEmbed = discord.Embed(description="Your feedback has been recorded. Thank you!",
@@ -695,7 +710,6 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
 
         data = await self.bot.data_manager.get_guild_and_log(ticketID)
         if len(data) != 0:
-            print(data)
             guildID = data[0][0]
             threadID = data[0][1]
 
@@ -710,10 +724,8 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
                 description=self.issue.value,
                 color=discord.Color.red()
             )
-            url = None
-            if user.avatar:
-                url = user.avatar.url
-            embed.set_author(name=f"{user.name} | {user.id}", icon_url=url)
+        
+            embed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
             embed.add_field(name="Ticket Log", value=f"<#{threadID}>")
             await report_channel.send(embed=embed)
 

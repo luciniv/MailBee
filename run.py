@@ -92,6 +92,7 @@ class Mantid(commands.Bot):
         discord.Guild.fetch_member = queued_fetch_member
         discord.Client.fetch_user = queued_fetch_user
         discord.Client.fetch_channel = queued_fetch_channel
+        # FIXME discord.Message.fetch
     
     
     async def on_ready(self):
@@ -205,7 +206,7 @@ async def reload(ctx, cog: str):
 
 
 # Sync slash commands
-@bot.command(name="sync", aliases=["s"])
+@bot.command(name="sync")
 @checks.is_owner()
 async def sync_commands(ctx):
     message = await ctx.send(f"{emojis.mantis} Syncing global tree...")

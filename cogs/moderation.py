@@ -29,21 +29,15 @@ class Moderation(commands.Cog):
             historyEmbed = discord.Embed(title="Ticket History",
                                   description="User has not opened any tickets",
                                   color=discord.Color.green())
-            if (user.avatar):
-                historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.avatar.url)
-            else:
-                historyEmbed.set_author(name=f"{user.name} | {user.id}")
+            historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
             
             history = await self.bot.data_manager.get_ticket_history(ctx.guild.id, user.id)
-            print("history", history)
-
             if history is not None:
                 if len(history) == 0:
                     await ctx.send(embed=historyEmbed)
                     return
                 else:
                     page_counts = build_subsections(len(history), 4)
-                    print(page_counts)
                     for page_count in page_counts:
                         limit += page_count
                         historyEmbed = discord.Embed(title="Ticket History",
@@ -51,26 +45,23 @@ class Moderation(commands.Cog):
                                 "Logs may appear as `#unknown` before being accessed.",
                                 color=discord.Color.green())
                         
-                        if (user.avatar):
-                            historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.avatar.url)
-                        else:
-                            historyEmbed.set_author(name=f"{user.name} | {user.id}")
+                        historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
 
                         while (count < limit):
                             ticket = history[count]
 
                             ticketID = ticket[0]
                             logID = ticket[1]
-                            date_open = ticket[2].strftime("%m/%d/%Y")
+                            date_open = int(ticket[2].timestamp())
                             date_close = None
                             close = ticket[3]
                             if close is not None:
-                                date_close = close.strftime("%m/%d/%Y")
+                                date_close = f"<t:{int(close.timestamp())}:D>"
                             state = (ticket[5]).upper()
                             typeName = ticket[6]
 
                             historyEmbed.add_field(name=f"{count + 1}) {typeName} Ticket: {state}", 
-                                            value=f"`ID: {ticketID}`\n**Opened:** {date_open}\n**Closed:** {date_close}\n**Logs:** <#{logID}>\n{'⎯' * 20}", 
+                                            value=f"`ID: {ticketID}`\n**Opened:** <t:{date_open}:D>\n**Closed:** {date_close}\n**Logs:** <#{logID}>\n{'⎯' * 20}", 
                                             inline=False)
                             count += 1
                         pages.append(historyEmbed)
@@ -114,7 +105,7 @@ class Moderation(commands.Cog):
                                         color=discord.Color.red())
             
             if existing is None:
-                await self.bot.data_manager.add_blacklist_to_db(guild.id, user.id, reason, ctx.author.id)
+                await self.bot.data_manager.add_blacklist_to_db(guild.id, user.id, reason, ctx.author)
                 await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id, False)
                 resultEmbed.description=(f"✅ **{user.name}** ({user.id}) has been blacklisted from "
                                          f"opening tickets\n**Reason:** {reason}")
@@ -133,28 +124,60 @@ class Moderation(commands.Cog):
     @checks.is_user()
     async def blacklist_view(self, ctx: commands.Context):
         try:
-
+            pages = []
+            count = 0
+            limit = 0
             guild = ctx.guild
+
+            blacklistEmbed = discord.Embed(title=f"Server Blacklist",
+                                  description="No blacklisted members found",
+                                  color=discord.Color.green())
+            url = None
+            if (guild.icon):
+                url = guild.icon.url
+            blacklistEmbed.set_author(name=guild.name, icon_url=url)
+
             entries = await self.bot.data_manager.get_all_blacklist_from_db(guild.id)
+            if entries is not None:
+                if len(entries) == 0:
+                    await ctx.send(embed=blacklistEmbed)
+                    return
+                else:
+                    page_counts = build_subsections(len(entries), 5)
+                    for page_count in page_counts:
+                        limit += page_count
+                        blacklistEmbed = discord.Embed(title=f"Server Blacklist",
+                                description="",
+                                color=discord.Color.green())
+                        blacklistEmbed.set_author(name=guild.name, icon_url=url)
 
-            if not entries:
-                embed = discord.Embed(
-                    description="✅ No users are currently blacklisted in this server",
-                    color=discord.Color.green()
-                )
-            else:
-                lines = []
-                for row in entries:
-                    user_id = int(row["userID"])
-                    lines.append(f"• <@{user_id}> (`{user_id}`)")
+                        while (count < limit):
+                            entry = entries[count]
 
-                embed = discord.Embed(
-                    title=f"Blacklisted Users ({len(entries)})",
-                    description="\n".join(lines),
-                    color=discord.Color.orange()
-                )
+                            userID = entry[1]
+                            reason = entry[2]
+                            modID = entry[3]
+                            modName = entry[4]
+                            date = entry[5]
 
-            await ctx.send(embed=embed)
+                            if len(reason) > 800:
+                                reason = reason[:797] + "..."
+
+                            blacklistEmbed.add_field(name=f"Case {count + 1}", 
+                                            value=f"**User:** <@{userID}> ({userID})\n"
+                                            f"**Moderator:** {modName} ({modID})\n"
+                                            f"**Date:** <t:{date}:D> (<t:{date}:R>)\n"
+                                            f"**Reason:** {reason}\n{'⎯' * 20}", 
+                                            inline=False)
+                            count += 1
+                        pages.append(blacklistEmbed)
+
+            for page in range(len(pages)):
+                pages[page].set_footer(text=f"Use the buttons below to navigate (Page {page + 1}/{len(pages)})")
+
+            # Create an instance of the pagination view
+            view = Paginator(pages)
+            view.message = await ctx.send(embed=pages[0], view=view)
 
         except Exception as e:
             logger.exception(f"blacklist_view error: {e}")
@@ -432,14 +455,11 @@ class Moderation(commands.Cog):
             historyEmbed = discord.Embed(title=f"Verbal history for {user.name}",
                                   description="User does not have any verbals",
                                   color=discord.Color.green())
-            if (user.avatar):
-                historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.avatar.url)
-            else:
-                historyEmbed.set_author(name=f"{user.name} | {user.id}")
+            
+            historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
             
             history = await self.bot.data_manager.get_verbal_history(guild.id, user.id)
             print("verbal history", history)
-
             if history is not None:
                 if len(history) == 0:
                     await ctx.send(embed=historyEmbed)
@@ -453,10 +473,7 @@ class Moderation(commands.Cog):
                                 description="",
                                 color=discord.Color.green())
                         
-                        if (user.avatar):
-                            historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.avatar.url)
-                        else:
-                            historyEmbed.set_author(name=f"{user.name} | {user.id}")
+                        historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
 
                         while (count < limit):
                             verbal = history[count]
@@ -474,7 +491,9 @@ class Moderation(commands.Cog):
                             #     await asyncio.wait_for(self.bot.fetch_channel(inboxID), timeout=1)
 
                             historyEmbed.add_field(name=f"Case {count + 1}", 
-                                            value=f"**Moderator:** {authorName} ({authorID})\n**Date:** <t:{date}:D> (<t:{date}:R>)\n**Reason:** {content}\n**Verbal ID:**```{verbalID}```{'⎯' * 20}", 
+                                            value=f"**Moderator:** {authorName} ({authorID})\n"
+                                            f"**Date:** <t:{date}:D> (<t:{date}:R>)\n**Reason:** {content}\n"
+                                            f"**Verbal ID:**```{verbalID}```{'⎯' * 20}", 
                                             inline=False)
                             historyEmbed.add_field
                             count += 1

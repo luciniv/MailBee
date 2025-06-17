@@ -13,113 +13,127 @@ from utils import checks, queries
 from utils.logger import *
 
 
-async def close_ticket(bot, ticket_channel, closer, reason, anon):
+async def close_ticket(bot, ticket_channel, closer, 
+                       userID, guildID, 
+                       reason, anon, inactive = False):
     try:
-        closingEmbed = discord.Embed(description="Closing ticket...",
-                                         color=discord.Color.blue())
-        await ticket_channel.send(embed=closingEmbed)
-        await bot.channel_status.set_emoji(ticket_channel, None)
-        await ticket_channel.delete(reason="Ticket channel closed")
-        
-        guild = ticket_channel.guild
-        id_list = (ticket_channel.topic).split()
-        threadID = id_list[-1]
-        dm_channelID = id_list[-2]
-        userID = id_list[-3]
-        opener = None
-        closerID = None
-        closerName = None
-        config = await bot.data_manager.get_or_load_config(guild.id)
-
-        if config is None:
-            # FIXME
-            return False
-
-        if anon is None:
-            if (config["anon"] == 'true'):
-                anon = True
-            else:
-                anon = False
-
-        if closer is None:
-            closerID = -1
-            closerName = "Inactive"
-        else:
+        deleted = False
+        closerID = -1
+        closerName = "Unknown"
+        if closer is not None:
             closerID = closer.id
             closerName = closer.name
+        closingEmbed = discord.Embed(description="Closing ticket...",
+                                         color=discord.Color.blue())
         
-        closing = config["closing"]
-        logID = config["logID"] 
-        log_channel = await bot.cache.get_channel(logID)
-        thread = await bot.cache.get_channel(threadID)  
-        opener = await bot.cache.get_user(userID)
-        dm_channel = opener.dm_channel or await opener.create_dm()
+        if isinstance(ticket_channel, discord.TextChannel):
+            try:
+                await ticket_channel.send(embed=closingEmbed)
+            except discord.NotFound:
+                deleted = True
+            except Exception:
+                pass
 
-        await bot.data_manager.close_ticket(ticket_channel.id, closerID, closerName)
-        await bot.data_manager.delete_user_ticket(opener.id, guild.id)
+            await bot.data_manager.close_ticket(ticket_channel.id, closerID, closerName)
+            await bot.data_manager.delete_user_ticket(userID, guildID)
+            await bot.channel_status.set_emoji(ticket_channel, None)
+
+            if not deleted:
+                await ticket_channel.delete(reason="Ticket closed due to inactivity")
+
+            guild = ticket_channel.guild
+            id_list = (ticket_channel.topic).split()
+            threadID = id_list[-1]
+            opener = None
+            config = await bot.data_manager.get_or_load_config(guild.id)
+
+            if config is None:
+                # FIXME
+                return False
+
+            if anon is None:
+                if (config["anon"] == 'true'):
+                    anon = True
+                else:
+                    anon = False
+            
+            closing = config["closing"]
+            logID = config["logID"] 
+            log_channel = await bot.cache.get_channel(logID)
+            thread = await bot.cache.get_channel(threadID)
+            opener = await bot.cache.get_guild_member(guild, userID)
+                    
+            closeLogEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
+                                    color=discord.Color.red())
+            closeLogEmbed.timestamp = datetime.now(timezone.utc)
+
+            await bot.data_manager.flush_messages_v2()
+            query = queries.closing_queries(ticket_channel.id)
+            try:
+                result = await bot.data_manager.execute_query(query)
+            except Exception:
+                result = []
                 
-        closeLogEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
-                                color=discord.Color.red())
-        closeLogEmbed.timestamp = datetime.now(timezone.utc)
+            if (len(result) > 0):
+                data = result[0]
+                if data[0] is None:
+                    duration = "N/A"
+                else:
+                    duration = queries.format_time(data[0])
+                if data[1] is None:
+                    response = "N/A"
+                else:
+                    response = queries.format_time(data[1])
 
-        await bot.data_manager.flush_messages_v2()
-        query = queries.closing_queries(ticket_channel.id)
-        result = await bot.data_manager.execute_query(query)
-        if (len(result) > 0):
-            data = result[0]
-            if data[0] is None:
-                duration = "N/A"
-            else:
-                duration = queries.format_time(data[0])
-            if data[1] is None:
-                response = "N/A"
-            else:
-                response = queries.format_time(data[1])
+            closeLogEmbed.add_field(name="Logs", value=f"<#{thread.id}>", inline=False)
+            closeLogEmbed.add_field(name="Ticket Duration", value=duration, inline=True)
+            closeLogEmbed.add_field(name="First Response Time", value=response, inline=True)
 
-        closeLogEmbed.add_field(name="Logs", value=f"<#{thread.id}>", inline=False)
-        closeLogEmbed.add_field(name="Ticket Duration", value=duration, inline=True)
-        closeLogEmbed.add_field(name="First Response Time", value=response, inline=True)
-
-        if opener:
-            if opener.avatar:
-                closeLogEmbed.set_footer(text=f"{opener.name} | {opener.id}", icon_url=opener.avatar.url)
-            else:
-                closeLogEmbed.set_footer(text=f"{opener.name} | {opener.id}")
-
-        closeUserEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
-                                        color=discord.Color.red())
-        closeUserEmbed.timestamp = datetime.now(timezone.utc)
-        if guild.icon:
-            closeUserEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
-        else:
-            closeUserEmbed.set_footer(text=guild.name)
-
-        if closer is not None:
-            name = f"{closer.name} | {closer.id}"
-            url = None
+            name = f"{closerName} | {closerID}"
+            url = closer.display_avatar.url
             if anon:
-                name += " (Anonymous)"
-            if closer.avatar:
-                url = closer.avatar.url
+                name = f"{name} (Anonymous)"
             closeLogEmbed.set_author(name=name, icon_url=url)
 
-            if not anon:
-                if (closer.avatar):
-                    closeUserEmbed.set_author(name=f"{closer.name} | {closer.id}", icon_url=closer.avatar.url)
+            if inactive:
+                closeLogEmbed.title="Ticket Closed (Inactivity)"
+
+            if opener:
+                closeLogEmbed.set_footer(text=f"{opener.name} | {opener.id}", icon_url=opener.display_avatar.url)
+
+                dm_channel = opener.dm_channel or await opener.create_dm()
+                if dm_channel:
+                    closeUserEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
+                                            color=discord.Color.red())
+                    closeUserEmbed.timestamp = datetime.now(timezone.utc)
+                    if guild.icon:
+                        closeUserEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
+                    else:
+                        closeUserEmbed.set_footer(text=guild.name)
+                    if not anon:
+                        closeUserEmbed.set_author(name=name, icon_url=url)
+                    try:
+                        await dm_channel.send(embed=closeUserEmbed)
+                        await send_closing(bot, guild, dm_channel, ticket_channel.id, opener, closing)
+                    except Exception:
+                        logger.exception("Failed to DM closing messages to a user")
+                        pass
                 else:
-                    closeUserEmbed.set_author(name=f"{closer.name} | {closer.id}")
+                    pass
+            else:
+                closeLogEmbed.set_footer(text=f"Member not found | {userID}")
 
-        try:
-            await dm_channel.send(embed=closeUserEmbed)
-            await send_closing(bot, guild, dm_channel, ticket_channel.id, opener, closing)
-        except Exception:
-            logger.exception("Failed to DM closing messages to a user")
+            await thread.send(embed=closeLogEmbed)
+            await log_channel.send(embed=closeLogEmbed)
+            await thread.edit(archived=True, locked=True)
+            return True
+        
+        else:
             pass
-
-        await thread.send(embed=closeLogEmbed)
-        await log_channel.send(embed=closeLogEmbed)
-        await thread.edit(archived=True, locked=True)
-        return True
+            # FIXME edge case, channel with timer is deleted (aka ticket closed but channel doesn't exist)
+            # await bot.data_manager.close_ticket(ticket_channel.id, closerID, closerName)
+            # await bot.data_manager.delete_user_ticket(userID, guild.id)
+            # await bot.channel_status.set_emoji(ticket_channel, None)
     
     except Exception as e:
             print(f"close_ticket sent an error: {e}")
@@ -244,13 +258,11 @@ class Tools(commands.Cog):
         self.bot = bot
         
 
-    @commands.hybrid_command(name="reply", description="Send a reply in the current ticket", 
+    @commands.command(name="reply", description="Send a reply in the current ticket", 
                              aliases=["r"])
     @checks.is_guild()
     @checks.is_user()
-    @app_commands.describe(message="The content of your reply")
-    @app_commands.describe(anon="Whether your message is anonymous or not (default is not)")
-    async def reply(self, ctx, *, message, anon: bool = False):
+    async def reply(self, ctx, *, message):
         try:
             channel = ctx.channel
             author = ctx.author
@@ -264,24 +276,22 @@ class Tools(commands.Cog):
 
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
-                        await analytics.route_to_dm(full_message, channel, author, threadID, userID, anon, False)
+                        await analytics.route_to_dm(full_message, channel, author, threadID, userID, None, False)
                     return
 
-            errorEmbed = discord.Embed(title="", 
-                                       description="❌ This command can only be used in ticket channels",
+            errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
                                        color=discord.Color.red())
             await channel.send_message(embed=errorEmbed)
             
         except Exception as e:
             logger.exception(e)
-            raise BotError(f"/reply sent an error: {e}")
+            raise BotError(f"+reply sent an error: {e}")
         
 
-    @commands.hybrid_command(name="areply", description="Send an anonymous reply in the current ticket", 
+    @commands.command(name="areply", description="Send an anonymous reply in the current ticket", 
                              aliases=["ar"])
     @checks.is_guild()
     @checks.is_user()
-    @app_commands.describe(message="The content of your reply")
     async def areply(self, ctx, *, message):
         try:
             channel = ctx.channel
@@ -299,14 +309,43 @@ class Tools(commands.Cog):
                         await analytics.route_to_dm(full_message, channel, author, threadID, userID, True, False)
                     return
 
-            errorEmbed = discord.Embed(title="", 
-                                       description="❌ This command can only be used in ticket channels",
+            errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
                                        color=discord.Color.red())
             await channel.send_message(embed=errorEmbed)
             
         except Exception as e:
             logger.exception(e)
-            raise BotError(f"/areply sent an error: {e}")
+            raise BotError(f"+areply sent an error: {e}")
+        
+
+    @commands.command(name="nonareply", description="Send an NON-anonymous reply in the current ticket", 
+                             aliases=["nar"])
+    @checks.is_guild()
+    @checks.is_user()
+    async def nonareply(self, ctx, *, message):
+        try:
+            channel = ctx.channel
+            author = ctx.author
+
+            if (channel.topic):
+                if ("Ticket channel" in channel.topic):
+                    id_list = (channel.topic).split()
+                    threadID = id_list[-1]
+                    userID = id_list[-3]
+                    full_message = ctx.message if hasattr(ctx, "message") else message
+
+                    analytics = self.bot.get_cog("Analytics")
+                    if analytics is not None:
+                        await analytics.route_to_dm(full_message, channel, author, threadID, userID, False, False)
+                    return
+
+            errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
+                                       color=discord.Color.red())
+            await channel.send_message(embed=errorEmbed)
+            
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"+nonareply sent an error: {e}")
         
 
     @commands.command(name="ai_reply")
@@ -340,27 +379,162 @@ class Tools(commands.Cog):
         return f"This is a placeholder reply based on the transcript of {len(transcript.splitlines())} lines"
     
 
-    @commands.hybrid_command(name="close", description="Close the current ticket, with an optional reason", 
+    async def find_message(self, channel, search_channel, locator, output = True):
+        errorEmbed = discord.Embed(description="N/A", color=discord.Color.red())
+        try:
+            async for message in search_channel.history(limit=50, oldest_first=False):
+                if message.embeds:
+                    embed = message.embeds[0]
+                    if embed.footer and locator in (embed.footer.text or ""):
+                        target_message = message
+                        break
+
+        except discord.NotFound:
+            if output:
+                errorEmbed.description="❌ Message not found in the most recent 50 DMs to user"
+                await channel.send(embed=errorEmbed)
+            return
+
+        except discord.Forbidden:
+            if output:
+                errorEmbed.description="❌ Unable to edit message, user may not be accepting DMs"
+                await channel.send(embed=errorEmbed)
+            return
+
+        except Exception:
+            if output:
+                errorEmbed.description="❌ Unable to find message",
+                await channel.send(embed=errorEmbed)
+            return
+
+    
+    @commands.hybrid_command(name="reply_edit", description="Edit a ticket reply",
+                             aliases=["edit"])
+    @app_commands.describe(reply_id="The message ID of the ticket reply")
+    @app_commands.describe(new_content="The new content of the ticket reply")
+    @checks.is_guild()
+    @checks.is_user()
+    async def reply_edit(self, ctx, reply_id: str, *, new_content: str):
+        try:
+            guild = ctx.guild
+            channel = ctx.channel
+            author = ctx.author
+            userID = None
+            user = None
+            old_content = None
+            new_content = await self.bot.helper.convert_mentions(new_content, guild)
+
+            errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
+                                          color=discord.Color.red())
+
+            if (channel.topic):
+                if ("Ticket channel" in channel.topic):
+                    id_list = (channel.topic).split()
+                    threadID = id_list[-1]
+                    userID = id_list[-3]
+
+                    if (len(new_content) > 4000):
+                        errorEmbed.description=("❌ Content must be at most 4000 characters. Note that "
+                                                "channel links add ~70 additional characters each")
+                        await ctx.send(embed=errorEmbed)
+                        return
+                    
+                    gif_links = re.findall(r'https?://[^\s)]+', new_content, flags=re.IGNORECASE)
+                    gif = None
+
+                    for link in gif_links:
+                        gif_candidate = await self.bot.helper.convert_to_direct_gif(link)
+                        if gif_candidate:
+                            gif = gif_candidate
+                            break
+                    
+                    member = await self.bot.cache.get_guild_member(guild, userID)
+                    if member is None:
+                        errorEmbed.description=("❌ User not found, if this command fails again the user "
+                                                "does not exist (or Discord's API is down)")
+                        await ctx.send(embed=errorEmbed)
+                        return
+                
+                    dm_channel = user.dm_channel or await user.create_dm()
+                    thread = await self.bot.cache.get_channel(threadID)
+                    target_message = None
+                    if dm_channel:
+                        target_message = await self.find_message(channel, dm_channel, reply_id)
+                    else:
+                        errorEmbed.description="❌ Could not create a DM channel with the user"
+                        await ctx.send(embed=errorEmbed)
+                        return
+
+                    if target_message is not None:
+                        if target_message.embeds:
+                            embed = target_message.embeds[0]
+                            embed.description=new_content
+                            embed.set_image(url=gif)
+
+                            await target_message.edit(embed=embed)
+
+                            if thread is not None:
+                                thread_message = await self.find_message(channel, thread, reply_id, False)
+                                if thread_message.embeds:
+                                    embed = thread_message.embeds[0]
+                                    embed.description=new_content
+                                    embed.set_image(url=gif)
+
+                                    await thread_message.edit(embed=embed)
+                    else:
+                        return
+                    
+
+
+                    if len(new_content) > 1024:
+                        new_content = new_content[:1021] + "..."
+
+                    if len(old_content) > 1024:
+                        old_content = old_content[:1021] + "..."
+
+                    successEmbed = discord.Embed(description=f"✅ **Updated ticket reply to <@{user.id}> ({user.name})**",
+                                                color=discord.Color.green())
+                    successEmbed.add_field(name="Old Message", value=new_content, inline=False)
+                    successEmbed.add_field(name="New Message", value=old_content, inline=False)
+                    await ctx.send(embed=successEmbed)
+                    return
+            
+            await ctx.send(embed=errorEmbed)
+
+        except Exception as e:
+            logger.exception(f"reply_edit error: {e}")
+            raise BotError(f"/reply_edit sent an error: {e}")
+
+
+    @commands.command(name="close", description="Close the current ticket, with an optional reason", 
                              aliases=["c"])
     @checks.is_guild()
     @checks.is_user()
-    @app_commands.describe(reason="Reason for closing the ticket. This will be shared with the ticket opener")
-    @app_commands.describe(anon="Toggle if closing is anonymous or not (default is per server)")
-    async def close(self, ctx, *, reason: str = "No reason provided", anon: bool = None):
+    async def close(self, ctx, *, reason: str = "No reason provided"):
         try:
             ticket_channel = ctx.channel
-            guild = ctx.guild
+            guild = ticket_channel.guild
             closer = ctx.author
             state = None
 
-            errorEmbed = discord.Embed(title="", 
-                                       description=("❌ Error closing ticket. Please contact a"
+            errorEmbed = discord.Embed(description=("❌ Error closing ticket. Please contact a"
                                                     " server admin with this error"),
                                        color=discord.Color.red())
 
             if (ticket_channel.topic):
                 if ("Ticket channel" in ticket_channel.topic):
-                    state = await close_ticket(self.bot, ticket_channel, closer, reason, anon)
+                    text = await self.bot.helper.convert_mentions(reason, guild)
+                    if len(text) > 3000:
+                        errorEmbed.description=("❌ Reason must be at most 3000 characters. Note that "
+                                                "channel links add ~70 additional characters each.")
+                        await ticket_channel.send(embed=errorEmbed)
+                        return
+                    
+                    id_list = (ticket_channel.topic).split()
+                    userID = id_list[-3]
+
+                    self.bot.channel_status.remove_timer(ticket_channel.id)
+                    state = await close_ticket(self.bot, ticket_channel, closer, userID, guild.id, text, None)
             
                     if not state:
                         await ticket_channel.send(embed=errorEmbed)
@@ -375,25 +549,34 @@ class Tools(commands.Cog):
             raise BotError(f"/close sent an error: {e}")
         
 
-    @commands.hybrid_command(name="aclose", description="Close the current ticket anonymously, with an optional reason", 
+    @commands.command(name="aclose", description="Close the current ticket anonymously, with an optional reason", 
                              aliases=["ac"])
     @checks.is_guild()
     @checks.is_user()
-    @app_commands.describe(reason="Reason for closing the ticket. This will be shared with the ticket opener")
     async def aclose(self, ctx, *, reason: str = "No reason provided"):
         try:
             ticket_channel = ctx.channel
+            guild = ticket_channel.guild
             closer = ctx.author
             state = None
 
-            errorEmbed = discord.Embed(title="", 
-                                       description=("❌ Error closing ticket. Please contact a"
+            errorEmbed = discord.Embed(description=("❌ Error closing ticket. Please contact a"
                                                     " server admin with this error"),
                                        color=discord.Color.red())
 
             if (ticket_channel.topic):
                 if ("Ticket channel" in ticket_channel.topic):
-                    state = await close_ticket(self.bot, ticket_channel, closer, reason, True)
+                    text = await self.bot.helper.convert_mentions(reason, guild)
+                    if len(text) > 3000:
+                        errorEmbed.description=("❌ Reason must be at most 3000 characters. Note that "
+                                                "channel links add ~70 additional characters each.")
+                        await ticket_channel.send(embed=errorEmbed)
+                        return
+                    id_list = (ticket_channel.topic).split()
+                    userID = id_list[-3]
+
+                    self.bot.channel_status.remove_timer(ticket_channel.id)
+                    state = await close_ticket(self.bot, ticket_channel, closer, userID, guild.id, text, True)
             
                     if not state:
                         await ticket_channel.send(embed=errorEmbed)
@@ -406,37 +589,87 @@ class Tools(commands.Cog):
         except Exception as e:
             logger.exception(e)
             raise BotError(f"/aclose sent an error: {e}")
+        
+
+    @commands.command(name="nonaclose", description="Close the current ticket NON-anonymously, with an optional reason", 
+                             aliases=["nac"])
+    @checks.is_guild()
+    @checks.is_user()
+    async def nonaclose(self, ctx, *, reason: str = "No reason provided"):
+        try:
+            ticket_channel = ctx.channel
+            guild = ticket_channel.guild
+            closer = ctx.author
+            state = None
+
+            errorEmbed = discord.Embed(description=("❌ Error closing ticket. Please contact a"
+                                                    " server admin with this error"),
+                                       color=discord.Color.red())
+
+            if (ticket_channel.topic):
+                if ("Ticket channel" in ticket_channel.topic):
+                    text = await self.bot.helper.convert_mentions(reason, guild)
+                    if len(text) > 3000:
+                        errorEmbed.description=("❌ Reason must be at most 3000 characters. Note that "
+                                                "channel links add ~70 additional characters each.")
+                        await ticket_channel.send(embed=errorEmbed)
+                        return
+                    id_list = (ticket_channel.topic).split()
+                    userID = id_list[-3]
+
+                    self.bot.channel_status.remove_timer(ticket_channel.id)
+                    state = await close_ticket(self.bot, ticket_channel, closer, userID, guild.id, text, False)
+            
+                    if not state:
+                        await ticket_channel.send(embed=errorEmbed)
+                        
+                    return
+
+            errorEmbed.description=("❌ This command can only be used in ticket channels")
+            await ticket_channel.send(embed=errorEmbed)
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/nonaclose sent an error: {e}")
     
 
     # Set a ticket as inactive for a period of time, then mark to close
     # Remove inactive / close marker if the user responds
-    @commands.hybrid_command(name="inactive", description="Mark current ticket to close after X hours of non-response", 
+    @commands.command(name="inactive", description="Mark current ticket to close after X hours of non-response", 
                              aliases=["inact"])
     @checks.is_guild()
     @checks.is_user()
-    @app_commands.describe(hours="(Default is 24) Hours to wait before marking to close")
-    async def inactive(self, ctx, hours: int = 24):
+    async def inactive(self, ctx, hours: int = 24, *, reason: str = "Ticket closed due to inactivity"):
         try:    
+            author = ctx.author
             channel = ctx.channel
             channelID = channel.id
+            guild = channel.guild
             now = time.time()
+
+            errorEmbed = discord.Embed(description="❌ Hours must be between 1 to 72 (inclusive)", 
+                                       color=discord.Color.red())
 
             if (isinstance(channel, discord.TextChannel)):
                 if (channel.topic):
                     if ("Ticket channel" in channel.topic):
                         if ((hours < 1) or (hours > 72)):
-                            errorEmbed = discord.Embed(title="", 
-                                                description="❌ Hours must be between 1 to 72 (inclusive)", 
-                                                color=discord.Color.red())
-                            await ctx.send(embed=errorEmbed)
+                            await channel.send(embed=errorEmbed)
                             return
                         else:
+                            text = await self.bot.helper.convert_mentions(reason, guild)
+                            if len(text) > 3000:
+                                errorEmbed.description=("❌ Reason must be at most 3000 characters. Note that "
+                                                        "channel links add ~70 additional characters each.")
+                                await channel.send(embed=errorEmbed)
+                                return
                             end_time = now + (hours * 3600)
                             timer = self.bot.channel_status.get_timer(channelID)
                             statusEmbed = discord.Embed(title="", 
                                             description=f"Status set to **inactive** 🕓 for {hours} hour(s).\n"
                                                         f"This ticket will **close** <t:{int(end_time)}:R> "
-                                                        "(allowing up to 1 minute of potential delay)",
+                                                        "(allowing up to 1 minute of potential delay)\n\n"
+                                                        f"**Reason:** {text}",
                                                         color=discord.Color.green())
                             
                             if timer is not None:
@@ -446,8 +679,15 @@ class Tools(commands.Cog):
                                 await channel.send(embed=statusEmbed)
                                 return
                             
+                            await self.bot.cache.store_guild_member(guild.id, author)
+                            await self.bot.cache.store_user(author)
+
+                            id_list = (channel.topic).split()
+                            userID = id_list[-3]
+                        
                             await self.bot.channel_status.set_emoji(channel, "inactive", True)
-                            self.bot.channel_status.add_timer(channelID, end_time)
+                            self.bot.channel_status.add_timer(channelID, end_time, 
+                                                              author.id, userID, reason)
                             await self.bot.data_manager.save_timers_to_redis()
 
                             await channel.send(embed=statusEmbed)
@@ -466,7 +706,7 @@ class Tools(commands.Cog):
 
     # Set a ticket as inactive for a period of time, then mark to close
     # Remove inactive / close marker if the user responds
-    @commands.hybrid_command(name="active", description="Remove inactivity status from a ticket", 
+    @commands.command(name="active", description="Remove inactivity status from a ticket", 
                              aliases=["act"])
     @checks.is_guild()
     @checks.is_user()

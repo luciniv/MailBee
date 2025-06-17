@@ -42,31 +42,36 @@ class TicketOpener:
 
 
     async def open_ticket(self, user, guild, category, typeID, dm_channelID, values, title, time_taken):
-        logger.debug("ticket creation started")
 
         # Generate ticket ID
         ticketID = await self.bot.data_manager.get_next_ticket_id(guild.id)
 
         # Send log embed
         log_message = await self.send_log(guild, user, title)
-        logger.debug("sent opening log")
 
         # Create logging thread
-        thread = await log_message.create_thread(name=f"Ticket {user.name} - {ticketID}", auto_archive_duration=1440)
+        try:
+            thread = await log_message.create_thread(name=f"Ticket Log {user.name} - {ticketID}", auto_archive_duration=1440)
+        except discord.HTTPException as e:
+            if "Contains words not allowed" in e.text:
+                thread = await log_message.create_thread(name=f"Ticket Log {user.id} - {ticketID}", auto_archive_duration=1440)
+
         await self.bot.cache.store_channel(thread)
-        logger.debug("created logging thread")
 
         # Create ticket channel
         channel = await self.create_ticket_channel(guild, category, user, dm_channelID, thread.id)
         await self.bot.cache.store_channel(channel)
-        logger.debug("created ticket channel")
+
+        logEmbed = log_message.embeds[0]
+        logEmbed.add_field(name="Ticket Channel", value=f"<#{channel.id}>")
+
+        await log_message.edit(embed=logEmbed)
 
         dm_channel = user.dm_channel or await user.create_dm()
 
         if channel:
             # Send opening embed, and greeting if it exists
             await self.send_opener(guild, dm_channel, user, values, title)
-            logger.debug("sent opening embeds to user")
 
             priority_values = [-1,-1]
             game_type = SERVER_TO_GAME.get(guild.id, None)
@@ -80,14 +85,11 @@ class TicketOpener:
 
             # Send in-channel embeds
             await self.send_ticket_embeds(guild, channel, thread, user, values, title, time_taken, priority_values)
-            logger.debug("sent ticket channel embeds")
 
             # Add new ticket to database
             await self.bot.data_manager.create_ticket(guild.id, ticketID, channel.id, user.id, thread.id, typeID, 
                                                       time_taken, priority_values[0], priority_values[1])
-            logger.debug("added ticket to DB")
             tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id, False)
-            logger.debug("ticket creation done")
             return True
 
         else:
@@ -97,23 +99,18 @@ class TicketOpener:
 
     async def send_log(self, guild, user, title):
             config = await self.bot.data_manager.get_or_load_config(guild.id)
-            logger.debug("got config")
 
             if config is None:
                 return
             
             logID = config["logID"] 
             log_channel = await self.bot.cache.get_channel(logID)
-            logger.debug("got log channel")
 
             openLogEmbed = discord.Embed(title=f"New \"{title}\" Ticket", description="", 
                                         color=discord.Color.green())
             openLogEmbed.timestamp = datetime.now(timezone.utc)
 
-            if user.avatar:
-                openLogEmbed.set_footer(text=f"{user.name} | {user.id}", icon_url=user.avatar.url)
-            else:
-                openLogEmbed.set_footer(text=f"{user.name} | {user.id}")
+            openLogEmbed.set_footer(text=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
 
             message = await log_channel.send(embed=openLogEmbed)
             return message
@@ -121,7 +118,6 @@ class TicketOpener:
 
     async def create_ticket_channel(self, guild, category, user, dm_channelID, threadID):
         try:
-            logger.warning("CALLED CREATE TICKET CHANNEL")
             # Check for any permitted roles (user or admin)
             # roles = []
             # permissions = await self.bot.data_manager.get_or_load_permissions(guild.id)
@@ -222,10 +218,7 @@ class TicketOpener:
                             inline=False)
 
         if guild is None:
-            if member.avatar:
-                submissionEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.avatar.url)
-            else:
-                submissionEmbed.set_footer(text=f"{member.name} | {member.id}")
+            submissionEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.display_avatar.url)
         else:
             if guild.icon:
                 submissionEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
@@ -236,7 +229,6 @@ class TicketOpener:
 
 
     async def send_ticket_embeds(self, guild, channel, thread, user, values, title, time_taken, priority_values):
-        print("user id is", user.id)
         member = await self.bot.cache.get_guild_member(guild, user.id)
 
         if member is None:
@@ -255,6 +247,7 @@ class TicketOpener:
                                     "list.\n\n`+close [reason]` will close a ticket. `+inactive [hours]` will close "
                                     "a ticket after X hours of inactivity from the ticket opener.")
         ticketEmbed.timestamp = datetime.now(timezone.utc)
+        ticketEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.display_avatar.url)
  
         ticketEmbed.add_field(name="Opener", value=f"<@{user.id}> {user.name}\n({user.id})", inline=True)
         ticketEmbed.add_field(

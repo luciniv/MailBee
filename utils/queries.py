@@ -666,6 +666,140 @@ def week_CSV(guildIDs: List[int], weekISO: int, type_numbers: List[int]):
     return query_list
 
 
+async def week_CSV_v2(self, guildID: int, weekISO: int):
+    types = await self.bot.data_manager.get_types_from_db_v2(guildID)
+
+    main_types = {}
+    subtypes_map = {}
+
+    for t in types:
+        if t["subType"] == -1:
+            main_types[t["categoryID"]] = {
+                "name": t["typeName"],
+                "typeIDs": [t["typeID"]],
+            }
+        else:
+            subtypes_map.setdefault(t["subType"], []).append(t["typeID"])
+
+    grouped_types = []
+    for categoryID, info in main_types.items():
+        all_ids = info["typeIDs"] + subtypes_map.get(categoryID, [])
+        grouped_types.append((info["name"], all_ids))
+
+    # Base query parts
+    query_parts = [
+        f"""(SELECT COUNT(*) FROM tickets_v2 WHERE guildID = {guildID} AND state = 'open')""",
+        f"""(SELECT COUNT(*) FROM tickets_v2 WHERE guildID = {guildID} AND state = 'closed')""",
+        f"""(SELECT COUNT(*) FROM tickets_v2 WHERE guildID = {guildID} AND YEARWEEK(dateOpen, 3) = {weekISO})""",
+        f"""(SELECT COUNT(*) FROM tickets_v2 WHERE guildID = {guildID} AND state = 'open' AND YEARWEEK(dateOpen, 3) = {weekISO})""",
+        f"""(SELECT COUNT(*) FROM tickets_v2 WHERE guildID = {guildID} AND state = 'closed' AND YEARWEEK(dateOpen, 3) = {weekISO})""",
+        f"""(SELECT COUNT(*) FROM tickets_v2 WHERE guildID = {guildID} AND state = 'closed' AND YEARWEEK(dateClose, 3) = {weekISO})""",
+        f"""(SELECT DATE(dateOpen) FROM tickets_v2 WHERE guildID = {guildID} AND YEARWEEK(dateOpen, 3) = {weekISO} GROUP BY DATE(dateOpen) ORDER BY COUNT(*) DESC LIMIT 1)""",
+        f"""(SELECT DATE(dateClose) FROM tickets_v2 WHERE guildID = {guildID} AND YEARWEEK(dateOpen, 3) = {weekISO} GROUP BY DATE(dateClose) ORDER BY COUNT(*) DESC LIMIT 1)""",
+        f"""(SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) FROM tickets_v2 WHERE guildID = {guildID} AND state = 'closed' AND YEARWEEK(dateClose, 3) = {weekISO})""",
+        f"""(SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, first_message.date)) FROM tickets_v2
+                INNER JOIN (
+                    SELECT channelID, MIN(date) AS date FROM ticket_messages_v2 WHERE ticket_messages_v2.type = 'Sent' GROUP BY channelID
+                ) AS first_message ON tickets_v2.channelID = first_message.channelID
+                WHERE guildID = {guildID} AND YEARWEEK(dateOpen, 3) = {weekISO})""",
+        f"""(SELECT AVG(message_count) FROM (
+                SELECT COUNT(messageID) AS message_count FROM tickets_v2
+                INNER JOIN ticket_messages_v2 ON tickets_v2.channelID = ticket_messages_v2.channelID
+                WHERE guildID = {guildID} AND state = 'closed' AND YEARWEEK(dateClose, 3) = {weekISO}
+                GROUP BY tickets_v2.channelID
+            ) AS ticket_counts)""",
+        f"""(SELECT ROUND(AVG(robux), 2) FROM tickets_v2 WHERE guildID = {guildID} AND robux != '-1' AND YEARWEEK(dateOpen, 3) = {weekISO})""",
+        f"""(SELECT ROUND(AVG(hours), 2) FROM tickets_v2 WHERE guildID = {guildID} AND hours != '-1' AND YEARWEEK(dateOpen, 3) = {weekISO})""",
+        f"""(SELECT HOUR(dateOpen) FROM tickets_v2 WHERE guildID = {guildID} AND YEARWEEK(dateOpen, 3) = {weekISO} GROUP BY HOUR(dateOpen) ORDER BY COUNT(*) DESC LIMIT 1)""",
+        f"""(SELECT HOUR(dateClose) FROM tickets_v2 WHERE guildID = {guildID} AND YEARWEEK(dateClose, 3) = {weekISO} GROUP BY HOUR(dateClose) ORDER BY COUNT(*) DESC LIMIT 1)""",
+        f"""(SELECT hour_of_day FROM (
+                    SELECT HOUR(dateClose) AS hour_of_day, COUNT(*) AS activity_count FROM tickets_v2
+                    WHERE guildID = {guildID} AND dateClose IS NOT NULL AND YEARWEEK(dateClose, 3) = {weekISO}
+                    GROUP BY hour_of_day
+                    UNION ALL
+                    SELECT HOUR(date) AS hour_of_day, COUNT(*) AS activity_count FROM ticket_messages_v2
+                    JOIN tickets_v2 ON tickets_v2.channelID = ticket_messages_v2.channelID
+                    WHERE guildID = {guildID} AND YEARWEEK(date, 3) = {weekISO} AND ticket_messages_v2.type IN ('Sent', 'Discussion')
+                    GROUP BY hour_of_day
+                ) AS combined_activity GROUP BY hour_of_day ORDER BY SUM(activity_count) DESC LIMIT 1)""",
+        f"""(SELECT hour_of_day FROM (
+                    SELECT HOUR(dateClose) AS hour_of_day, COUNT(*) AS activity_count FROM tickets_v2
+                    WHERE guildID = {guildID} AND dateClose IS NOT NULL AND YEARWEEK(dateClose, 3) = {weekISO}
+                    GROUP BY hour_of_day
+                    UNION ALL
+                    SELECT HOUR(date) AS hour_of_day, COUNT(*) AS activity_count FROM ticket_messages_v2
+                    JOIN tickets_v2 ON tickets_v2.channelID = ticket_messages_v2.channelID
+                    WHERE guildID = {guildID} AND YEARWEEK(date, 3) = {weekISO} AND ticket_messages_v2.type IN ('Sent', 'Discussion')
+                    GROUP BY hour_of_day
+                ) AS combined_activity GROUP BY hour_of_day ORDER BY SUM(activity_count) ASC LIMIT 1)""",
+        f"""(SELECT closerID FROM tickets_v2 WHERE guildID = {guildID} AND closerID IS NOT NULL AND closerID != -1 AND YEARWEEK(dateClose, 3) = {weekISO} GROUP BY closerID ORDER BY COUNT(*) DESC LIMIT 1)""",
+        f"""(SELECT authorID FROM tickets_v2 INNER JOIN ticket_messages_v2 ON tickets_v2.channelID = ticket_messages_v2.channelID WHERE guildID = {guildID} AND ticket_messages_v2.type = 'Sent' AND YEARWEEK(date, 3) = {weekISO} GROUP BY authorID ORDER BY COUNT(*) DESC LIMIT 1)""",
+        f"""(SELECT authorID FROM tickets_v2 INNER JOIN ticket_messages_v2 ON tickets_v2.channelID = ticket_messages_v2.channelID WHERE guildID = {guildID} AND ticket_messages_v2.type = 'Discussion' AND YEARWEEK(date, 3) = {weekISO} GROUP BY authorID ORDER BY COUNT(*) DESC LIMIT 1)""",
+        f"""(SELECT COUNT(DISTINCT authorID) FROM (
+                    SELECT closerID AS authorID FROM tickets_v2 WHERE guildID = {guildID} AND YEARWEEK(dateClose, 3) = {weekISO}
+                    UNION
+                    SELECT authorID FROM tickets_v2
+                    INNER JOIN ticket_messages_v2 ON tickets_v2.channelID = ticket_messages_v2.channelID
+                    WHERE guildID = {guildID} AND ticket_messages_v2.type IN ('Sent', 'Discussion') AND YEARWEEK(date, 3) = {weekISO}
+                ) AS unique_mods)"""
+    ]
+
+    headers = [
+        "Server ID", "Total Tickets Open", "Total Tickets Closed", "Num Tickets Opened This Week",
+        "Num Tickets Still Open From This Week", "Num Tickets Closed From This Week",
+        "Total Tickets Closed This Week", "Day Most Tickets Opened", "Day Most Tickets Closed",
+        "Average Ticket Duration", "Average First Response Time", "Average Messages Per Ticket Resolved",
+        "Value: Average Ticket Robux", "Value: Average Ticket Hours",
+        "Activity: Daily Time Most Tickets Opened", "Activity: Daily Time Most Tickets Closed",
+        "Activity: Daily Time Most Mod Activity", "Activity: Daily Time Least Mod Activity",
+        "Mod: Closed The Most Tickets", "Mod: Sent The Most Replies",
+        "Mod: Sent The Most Discussions", "Mod: Num Mods Answering Tickets"
+    ]
+
+    typeid_to_name = {t["typeID"]: t["typeName"] for t in types}
+    main_types_inv = {info["name"]: cid for cid, info in main_types.items()}
+
+    for type_name, type_ids in grouped_types:
+        type_ids_sql = ", ".join(str(tid) for tid in type_ids)
+        query_parts.extend([
+            f"""(SELECT COUNT(*) FROM tickets_v2 WHERE guildID = {guildID} AND tickets_v2.type IN ({type_ids_sql}) AND YEARWEEK(dateOpen, 3) = {weekISO})""",
+            f"""(SELECT ROUND(AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)), 2) FROM tickets_v2 WHERE guildID = {guildID} AND state = 'closed' AND tickets_v2.type IN ({type_ids_sql}) AND YEARWEEK(dateClose, 3) = {weekISO})""",
+            f"""(SELECT ROUND(AVG(TIMESTAMPDIFF(MINUTE, dateOpen, first_message.date)), 2) FROM tickets_v2
+                    INNER JOIN (
+                        SELECT channelID, MIN(date) AS date FROM ticket_messages_v2 WHERE ticket_messages_v2.type = 'Sent' GROUP BY channelID
+                    ) AS first_message ON tickets_v2.channelID = first_message.channelID
+                    WHERE guildID = {guildID} AND tickets_v2.type IN ({type_ids_sql}) AND YEARWEEK(dateOpen, 3) = {weekISO})"""
+        ])
+        headers.extend([
+            f"{type_name} Opened This Week",
+            f"{type_name} Avg Duration",
+            f"{type_name} Avg First Response"
+        ])
+
+        subtype_ids = subtypes_map.get(main_types_inv.get(type_name, -9999), [])
+        for subtype_id in subtype_ids:
+            subtype_name = typeid_to_name.get(subtype_id, f"subtype_{subtype_id}")
+            query_parts.extend([
+                f"""(SELECT COUNT(*) FROM tickets_v2 WHERE guildID = {guildID} AND tickets_v2.type = {subtype_id} AND YEARWEEK(dateOpen, 3) = {weekISO})""",
+                f"""(SELECT ROUND(AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)), 2) FROM tickets_v2 WHERE guildID = {guildID} AND state = 'closed' AND tickets_v2.type = {subtype_id} AND YEARWEEK(dateClose, 3) = {weekISO})""",
+                f"""(SELECT ROUND(AVG(TIMESTAMPDIFF(MINUTE, dateOpen, first_message.date)), 2) FROM tickets_v2
+                        INNER JOIN (
+                            SELECT channelID, MIN(date) AS date FROM ticket_messages_v2 WHERE ticket_messages_v2.type = 'Sent' GROUP BY channelID
+                        ) AS first_message ON tickets_v2.channelID = first_message.channelID
+                        WHERE guildID = {guildID} AND tickets_v2.type = {subtype_id} AND YEARWEEK(dateOpen, 3) = {weekISO})"""
+            ])
+            headers.extend([
+                f"{type_name} - {subtype_name} Opened This Week",
+                f"{type_name} - {subtype_name} Avg Duration",
+                f"{type_name} - {subtype_name} Avg First Response"
+            ])
+
+    # Final query string
+    query = "SELECT\n" + ",\n".join(query_parts) + ";"
+    return query, headers
+
+
+
 # Query string for /server_stats_CSV
 def server_stats_CSV(guildIDs: List[int], intervals: List[str]):
     query_list = []

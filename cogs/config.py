@@ -255,8 +255,8 @@ class Config(commands.Cog):
     @checks.is_guild()
     @checks.is_user()   
     @checks.is_setup()
-    @app_commands.describe(name="Type name (45 character limit)")
-    @app_commands.describe(description="Type description (100 character limit)")
+    @app_commands.describe(name="Type name")
+    @app_commands.describe(description="Type description")
     @app_commands.describe(emoji="Emoji to show for select option")
     async def type_add(self, interaction: discord.Interaction, name: Range[str, 1, 45], description: Range[str, 1, 100], emoji: str = None):
         try:

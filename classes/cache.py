@@ -13,10 +13,9 @@ class Cache:
         self.channel_cache = {}
 
 
-    async def store_user(self, user: discord.User):
+    async def store_user(self, user):
         epoch_time = int(time.time())
         self.user_cache[str(user.id)] = (user, epoch_time)
-        print("user cache keys are", self.user_cache.keys())
 
 
     async def get_user(self, userID: int):
@@ -27,26 +26,22 @@ class Cache:
             result = self.user_cache.get(str(userID), None)
             if result is not None:
                 user, epoch = result
-                print("got cached user")
                 return user
             else:
                 epoch_time = int(time.time())
                 try:
                     user = await asyncio.wait_for(self.bot.fetch_user(userID), timeout=1)
                 except Exception as e:
-                    print("failed to fetch global user", e)
                     return None
-                print("fetched a user", user.name)
                 self.user_cache[str(user.id)] = (user, epoch_time)
                 return user
         except Exception as e:
             logger.exception(f"get_user sent an error: {e}")
 
 
-    async def store_guild_member(self, guildID: int, member: discord.Member):
+    async def store_guild_member(self, guildID: int, member):
         epoch_time = int(time.time())
         self.member_cache[(str(member.id), str(guildID))] = (member, epoch_time)
-        print("member cache keys are", self.member_cache.keys())
 
 
     async def get_guild_member(self, guild, memberID: int):
@@ -57,7 +52,6 @@ class Cache:
             result = self.member_cache.get((str(memberID), str(guild.id)), None)
             if result is not None:
                 member, epoch = result
-                print("got cached member")
                 return member
             else:
                 epoch_time = int(time.time())
@@ -68,7 +62,6 @@ class Cache:
                     except Exception as e:
                         logger.error(f"failed to fetch guild member using id {memberID}:", e)
                         return None
-                    print("fetched a member", member.name)
                     self.member_cache[(str(member.id), str(guild.id))] = (member, epoch_time)
                     return member
                 else:
@@ -83,7 +76,6 @@ class Cache:
     async def store_channel(self, channel):
         epoch_time = int(time.time())
         self.channel_cache[str(channel.id)] = (channel, epoch_time)
-        print("channel cache keys are", self.channel_cache.keys())
 
 
     async def get_channel(self, channelID: int):
@@ -94,7 +86,6 @@ class Cache:
             result = self.channel_cache.get(str(channelID), None)
             if result is not None:
                 channel, epoch = result
-                print("got cached cannel")
                 return channel
             else:
                 epoch_time = int(time.time())
@@ -106,9 +97,7 @@ class Cache:
                     try:
                         channel = await asyncio.wait_for(self.bot.fetch_channel(channelID), timeout=1)
                     except Exception as e:
-                        print("failed to fetch global channel", e)
-                        return None
-                    print("fetched a channel", channel.name)
+                        return None 
                     self.channel_cache[str(channel.id)] = (channel, epoch_time)
                     return channel
         except Exception as e:

@@ -40,7 +40,6 @@ class Analytics(commands.Cog):
             channel = message.channel
             authorID = message.author.id
             tickets = await self.bot.data_manager.get_or_load_user_tickets(authorID)
-            print("tickets is", tickets)
 
             # Prompt to open a ticket
             if tickets is None:
@@ -60,7 +59,6 @@ class Analytics(commands.Cog):
 
             # Route message to open ticket
             elif (len(tickets) == 1):
-                print("one ticket found, sending message to channel")
                 ticket = tickets[0]
                 guildID = ticket["guildID"]
                 channelID = ticket["channelID"]
@@ -93,15 +91,36 @@ class Analytics(commands.Cog):
 
             guild = self.bot.get_guild(guildID)
             if guild is None:
-                errorEmbed.description=("❌ You're no longer in this server. Please rejoin "
-                                        "it to continue your ticket or open a new one.")
+                errorEmbed.description=("❌ I could not find the server you are trying to contact. "
+                                        "Please try again later. If this error persists, then I am "
+                                        "not in that server.")
                 await message.channel.send(embed=errorEmbed)
                 return
+            
+            member = guild.get_member(author.id)
+            if member is None:
+                try:
+                    member = await asyncio.wait_for(guild.fetch_member(author.id), timeout=1)
+                    
+                except discord.errors.NotFound:
+                    errorEmbed.description=("❌ You are not in the server you are trying to contact. Please "
+                                            "rejoin the server before attempting to send messages there.")
+                    await message.channel.send(embed=errorEmbed)
+                    return
+                except Exception:
+                    errorEmbed.description=("❌ You are not in the server you are trying to contact. Please "
+                                            "rejoin the server before attempting to send messages there.\n\n"
+                                            "If you ARE in the server, please re-try sending your message. "
+                                            "Discord API issues may prevent your messages from being sent.")
+                    await message.channel.send(embed=errorEmbed)
+                    return
+                
+            await self.bot.cache.store_guild_member(guildID, member)
             
             server_channel = guild.get_channel(channelID)
             if server_channel is None:
                 try:
-                    server_channel = await asyncio.wait_for(guild.fetch_channel(channelID))
+                    server_channel = await asyncio.wait_for(guild.fetch_channel(channelID), timeout=1)
                 except Exception:
                     errorEmbed.description=("❌ Could not find your ticket channel in this server. "
                                             "Please contact staff if this error persists.")
@@ -118,9 +137,22 @@ class Analytics(commands.Cog):
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
             text = await self.bot.helper.convert_mentions(message.content, guild)
 
-            #FIXME check if over 4000 characters
+            # Check if over 4000 characters
+            if len(text) > 4000:
+                errorEmbed.description=("❌ Message must be less than 4000 characters. Note that "
+                                        "channel links add ~70 additional characters each.")
+                await message.channel.send(embed=errorEmbed)
+                return
 
-            logger.debug("started file process")
+            gif_links = re.findall(r'https?://[^\s)]+', text, flags=re.IGNORECASE)
+            gif = None
+
+            for link in gif_links:
+                gif_candidate = await self.bot.helper.convert_to_direct_gif(link)
+                if gif_candidate:
+                    gif = gif_candidate
+                    break
+
             # Process any attachments
             attachments = []
             raw_files = []  # <-- store raw data
@@ -138,7 +170,6 @@ class Analytics(commands.Cog):
 
                 if len(attachments) > 0:
                     fileMessage = await message.channel.send(embed=fileEmbed)
-                    print("message has attachments")
 
                 for file in attachments:
                     saved_file = io.BytesIO()
@@ -172,11 +203,7 @@ class Analytics(commands.Cog):
             # Add attachment URLs to embed
             for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
                 sendEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
-
-            if author.avatar:
-                sendEmbed.set_footer(text=f"{author.name} | {author.id}", icon_url=author.avatar.url)
-            else:
-                sendEmbed.set_footer(text=f"{author.name} | {author.id}")
+            sendEmbed.set_footer(text=f"{author.name} | {author.id}", icon_url=author.display_avatar.url)
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             await server_channel.send(embed=sendEmbed, files=files)
@@ -184,8 +211,7 @@ class Analytics(commands.Cog):
             thread = await self.bot.cache.get_channel(threadID)
             
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-            await thread.send(embed=sendEmbed, files=files)
-            logger.debug("sent thread receipt")
+            await thread.send(embed=sendEmbed, files=files, allowed_mentions=discord.AllowedMentions(users=False))
 
             await self.bot.data_manager.add_ticket_message(sent_message.id, 
                                                             None, 
@@ -193,7 +219,7 @@ class Analytics(commands.Cog):
                                                             author.id, 
                                                             format_time, 
                                                             "Received", True)
-            result = self.bot.channel_status.remove_timer(server_channel.id)
+            self.bot.channel_status.remove_timer(server_channel.id)
             await self.bot.channel_status.set_emoji(server_channel, "alert")
 
         except Exception as e:
@@ -202,7 +228,6 @@ class Analytics(commands.Cog):
 
 
     async def staff_message(self, message: discord.Message, anon: bool = None):
-        logger.debug("entered staff message")
         channel = message.channel
         author = message.author
         id_list = (channel.topic).split()
@@ -215,21 +240,25 @@ class Analytics(commands.Cog):
 
     async def route_to_dm(self, message, channel, author, threadID: int, userID: int, 
                           anon: bool = None, snippet: bool = None):
-        logger.debug("entered route to dm")
         try:
             member = None
             guild = channel.guild
             errorEmbed = discord.Embed(description="❌ Ticket opener is no longer in this server. "
                                        "Use `+close [reason]` to close this ticket.",
                                        color=discord.Color.red())
-            try:
-                member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
-            except discord.NotFound:
-                await channel.send(embed=errorEmbed)
-                return
-            except Exception:
-                errorEmbed.description="❌ Error fetching ticket opener. Please try again."
-                return
+            member = guild.get_member(userID)
+            if member is None:
+                try:
+                    member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
+                except discord.NotFound:
+                    await channel.send(embed=errorEmbed)
+                    return
+                except Exception:
+                    errorEmbed.description="❌ Error fetching ticket opener. Please try again."
+                    return
+            
+            await self.bot.cache.store_guild_member(guild.id, member)
+            await self.bot.cache.store_guild_member(guild.id, author)
 
             # Check if blacklisted
             entry = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, userID)
@@ -244,10 +273,24 @@ class Analytics(commands.Cog):
                 content = message.content
 
             # Clean remaining prefixes
-            content = re.sub(r"^\+(?:(?:areply|reply|ar|r)\s+|\s*)", "", message.content, flags=re.IGNORECASE)
+            content = re.sub(r"^\+(?:(?:nonareply|areply|reply|nar|ar|r)\s+|\s*)", "", content, flags=re.IGNORECASE)
             content = await self.bot.helper.convert_mentions(content, guild)
 
-            #FIXME check if over 4000 characters
+            # Check if over 4000 characters
+            if len(content) > 4000:
+                errorEmbed.description=("❌ Message must be less than 4000 characters. Note that "
+                                        "channel links add ~70 additional characters each.")
+                await message.channel.send(embed=errorEmbed)
+                return
+            
+            gif_links = re.findall(r'https?://[^\s)]+', content, flags=re.IGNORECASE)
+            gif = None
+
+            for link in gif_links:
+                gif_candidate = await self.bot.helper.convert_to_direct_gif(link)
+                if gif_candidate:
+                    gif = gif_candidate
+                    break
 
             timestamp = datetime.now(timezone.utc)
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
@@ -263,7 +306,6 @@ class Analytics(commands.Cog):
             
             dm_channel = member.dm_channel or await member.create_dm()
 
-            logger.debug("started file process")
             # Process any attachments
             attachments = []
             raw_files = [] 
@@ -280,17 +322,14 @@ class Analytics(commands.Cog):
 
                 if len(attachments) > 0:
                     fileMessage = await message.channel.send(embed=fileEmbed)
-                    print("message has attachments")
 
                 for file in attachments:
                     saved_file = io.BytesIO()
                     await file.save(saved_file)
                     raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
-            logger.debug("finished file process")
 
             if isinstance(message, discord.Message):
                 await message.delete()
-            logger.debug("deleted message")
 
             receiptEmbed = discord.Embed(title=f"Message Sent [STAFF]", 
                                     description=content,
@@ -299,28 +338,21 @@ class Analytics(commands.Cog):
             # Add attachment URLs to embed
             for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
                 receiptEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
-            logger.debug("added attachment urls")
 
             name = f"{author.name} | {author.id}"
-            url = None
             if anon:
                 name += " (Anonymous)"
-            if author.avatar:
-                url = author.avatar.url
-            receiptEmbed.set_author(name=name, icon_url=url)
+        
+            receiptEmbed.set_author(name=name, icon_url=author.display_avatar.url)
 
             if member:
-                if member.avatar:
-                    receiptEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.avatar.url)
-                else:
-                    receiptEmbed.set_footer(text=f"{member.name} | {member.id}")
+                receiptEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.display_avatar.url)
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             sent_message = await channel.send(embed=receiptEmbed, files=files)
 
             if fileMessage is not None:
                 await fileMessage.delete()
-            logger.debug("sent receipt embed")
 
             sendEmbed = discord.Embed(title=f"Message Received", 
                                     description=content,
@@ -331,26 +363,20 @@ class Analytics(commands.Cog):
                 sendEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
 
             if guild.icon:
-                sendEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
+                sendEmbed.set_footer(text=f"{guild.name}", icon_url=guild.icon.url)
             else:
-                sendEmbed.set_footer(text=guild.name)
+                sendEmbed.set_footer(text=f"{guild.name}")
 
             if not anon:
-                if (author.avatar):
-                    sendEmbed.set_author(name=f"{author.name} | {author.id}", icon_url=author.avatar.url)
-                else:
-                    sendEmbed.set_author(name=f"{author.name} | {author.id}")  
+                sendEmbed.set_author(name=f"{author.name} | {author.id}", icon_url=author.display_avatar.url)
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             await dm_channel.send(embed=sendEmbed, files=files)
-            logger.debug("sent message to dms")
 
             thread = await self.bot.cache.get_channel(threadID)
-            logger.debug("got the thread")
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-            await thread.send(embed=receiptEmbed, files=files)
-            logger.debug("sent thread receipt")
+            await thread.send(embed=receiptEmbed, files=files, allowed_mentions=discord.AllowedMentions(users=False))
 
             await self.bot.data_manager.add_ticket_message(sent_message.id, 
                                                             None, 
@@ -373,29 +399,26 @@ class Analytics(commands.Cog):
         threadID = id_list[-1]
 
         thread = await self.bot.cache.get_channel(threadID)
-        logger.debug("got the thread")
 
         # Process any attachments
         attachments = []
         raw_files = []  # <-- store raw data
 
+        content = message.content
+        if len(message.content) > 1800:
+            content = content[:1797] + "..."
+
         if message:
             attachments = message.attachments
-
-            print("attachments are", attachments)
-
-            if len(attachments) > 0:
-                print("message has attachments")
 
             for file in attachments:
                 saved_file = io.BytesIO()
                 await file.save(saved_file)
                 raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
-        logger.debug("finished file process")
 
         files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-        await thread.send(f"**{author.name}** `[COMMENT]`\n{message.content}\n"
-                          f"-# `ID: {author.id} | MSG: {message.id}`", files=files)
+        await thread.send(f"**{author.name}** `[COMMENT]`\n{content}\n"
+                          f"-# `ID: {author.id} | MSG: {message.id}`", files=files, allowed_mentions=discord.AllowedMentions(users=False))
         
 
     async def edit_comment(self, message):
@@ -405,15 +428,12 @@ class Analytics(commands.Cog):
         threadID = id_list[-1]
 
         thread = await self.bot.cache.get_channel(threadID)
-        logger.debug("got the thread")
 
         async for thread_message in thread.history(limit=None, oldest_first=False):
             if str(message.id) in thread_message.content:
-                print(f"Found message:\n{message.content}")
                 await thread_message.edit(content=f"**{author.name}** `[COMMENT]`\n{message.content}\n"
                                                   f"-# `ID: {author.id} | MSG: {message.id}`")
                 return
-        print("No matching message found.")
         return None
     
 
@@ -423,14 +443,11 @@ class Analytics(commands.Cog):
         threadID = id_list[-1]
 
         thread = await self.bot.cache.get_channel(threadID)
-        logger.debug("got the thread")
 
         async for thread_message in thread.history(limit=None, oldest_first=False):
             if str(message.id) in thread_message.content:
-                print(f"Found message:\n{message.content}")
                 await thread_message.delete()
                 return
-        print("No matching message found.")
         return None
 
 
@@ -508,7 +525,6 @@ class Analytics(commands.Cog):
     # Adds ticket to Redis cache if the ticket is still open
     async def log_open_ticket(self, message: discord.Message, status: str):
         try:
-            print("GOT TO MODMAIL LOG CAPTURED")
             guild = message.guild
             this_channel = message.channel
             this_channelID = this_channel.id
@@ -523,7 +539,6 @@ class Analytics(commands.Cog):
             ticket_channel = None
             start_time = time.time()
             while ((time.time() - start_time < 2) and (ticket_channel is None)):
-                print("checked for channel")
                 for channel in guild.channels:
                     if ((open_name).replace("_", "").replace(".", "") in channel.name):
                         ticket_channel = channel
@@ -548,17 +563,12 @@ class Analytics(commands.Cog):
 
             priority_values = [-1,-1]
             game_type = SERVER_TO_GAME.get(guild.id, None)
-            print(game_type)
 
             if game_type is not None:
                 priority_values = await get_priority(game_type, guild.id, openID)
-                print(f"priority values: {priority_values}")
 
             if not priority_values:
                 priority_values = [-1,-1]
-                print("priority values set to default")
-
-            print(f"ending priority values: {priority_values}")
 
             query = f"""
                 INSERT IGNORE INTO tickets VALUES 
@@ -667,13 +677,6 @@ class Analytics(commands.Cog):
         except Exception as e:
             logger.error(f"Error closing modmail ticket: {e}")
 
-   
-    @commands.Cog.listener()
-    async def on_guild_channel_create(self, channel):
-        if (isinstance(channel, discord.TextChannel)):
-            print("GOT TO CHANNEL CAPTURED")
-            pass
-
 
     # TODO add this: await self.bot.process_commands(message)
     # On-message event listener for messages in #modmail-log channels or modmail categories
@@ -690,10 +693,7 @@ class Analytics(commands.Cog):
             return
 
         if (isinstance(message.channel, discord.DMChannel)):
-            logger.debug("message was in DM ticket channel")
-            print("called got_dm")
             await self.bot_dm(message)
-            logger.debug("FULLY DONE NOW")
             return
         
         this_channel = message.channel
@@ -710,7 +710,6 @@ class Analytics(commands.Cog):
                         
                     else:
                         # Process comment
-                        print("staff sent comment")
                         timestamp = datetime.now(timezone.utc)
                         format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
                         await self.bot.data_manager.add_ticket_message(message.id, 
@@ -720,7 +719,6 @@ class Analytics(commands.Cog):
                                                             format_time, 
                                                             "Discussion", True)
                         await self.store_comment(message)
-                        logger.debug("comment processed")
                         return
 
         search_monitor = [
@@ -762,7 +760,6 @@ class Analytics(commands.Cog):
                             if (embed.title == "Message Received"):
                                 footer = embed.footer.text
                                 authorID = (footer.split())[-1]
-                                logger.debug("Modmail DM message received")
                             
                                 await self.bot.data_manager.add_ticket_message(messageID, 
                                                                                modmail_messageID, 
@@ -774,12 +771,9 @@ class Analytics(commands.Cog):
 
                             # Store sent message (embed from the Modmail bot to DM)
                             elif (embed.title == "Message Sent"):
-                                logger.debug("MESSAGE WAS SENT BY MODMAIL")
                                 author_name = (embed.author.name).split()
                                 author_username = (author_name[0])[:-2]
                                 authorID = self.bot.data_manager.mod_ids.get(author_username, None)
-
-                                logger.debug(f"Modmail bot sent message from {author_username}, {authorID}")
 
                                 await self.bot.data_manager.add_ticket_message(messageID, 
                                                                                modmail_messageID, 
@@ -797,7 +791,6 @@ class Analytics(commands.Cog):
                         if (message.content.startswith("=")):
                             # Chatting message or =close
                             if (message.content.startswith(("=c", "=ac"))):
-                                logger.debug(f"Modmail channel {this_channel.name} ({this_channelID}) closed")
                                 self.bot.data_manager.mod_ids[this_authorName] = this_authorID
 
                                 await self.log_closed_ticket(message, modmail_messageID)
@@ -809,7 +802,6 @@ class Analytics(commands.Cog):
                                 self.bot.data_manager.mod_ids[this_authorName] = this_authorID
 
                             else: 
-                                logger.debug(f"Chatting message in ticket {this_channel.name}")
                                 # Store chatting message, label it as such
                                 await self.bot.data_manager.add_ticket_message(messageID, 
                                                                                modmail_messageID, 
@@ -819,10 +811,9 @@ class Analytics(commands.Cog):
                                                                                "Discussion")
                         else:
                             # Message to be sent by Modmail
-                            logger.debug("MESSAGE TO BE SENT BY MODMAIL")
                             self.bot.data_manager.mod_ids[this_authorName] = this_authorID
                 else:
-                    logger.debug(f"Ticket channel message NOT within a logged ticket (channel: {this_channelID})")
+                    pass
         else: 
             # Calls if message is from the Modmail bot in a #modmail-log channel
             if (message.author.id == 575252669443211264):
@@ -854,7 +845,6 @@ class Analytics(commands.Cog):
         if (isinstance(message.channel, discord.TextChannel)):
             if (message.channel.topic):
                 if ("Ticket channel" in message.channel.topic):
-                    print("ticket channel message deleted", message.content)
                     if not (message.content.startswith("+")):
                         await self.delete_comment(message)
 

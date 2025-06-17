@@ -76,10 +76,8 @@ class Queue:
     async def call(self, func: Callable[..., Awaitable], *args, route_type: str = None, **kwargs) -> Any:
         route = route_type or self._classify_route(func, *args, **kwargs)
         bucket = self._get_bucket(route)
-        logger.debug(f"api function called: route: {route}")
 
         async with bucket.semaphore:
-            logger.debug("got semaphore")
             while True:
                 now = time.time()
 
@@ -89,15 +87,11 @@ class Queue:
 
                 async with bucket.lock:
                     if time.time() < bucket.reset_time:
-                        logger.warning("enforcing local ratelimit")
                         await asyncio.sleep(bucket.reset_time - time.time())
-                        logger.warning("enforced local ratelimit")
                     await self._enforce_global_rate()
 
                     try:
-                        logger.debug("executing function")
                         result = await func(*args, **kwargs)
-                        logger.debug("executed")
                         bucket.reset_time = time.time() + bucket.delay
                         return result
 

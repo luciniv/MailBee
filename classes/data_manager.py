@@ -2,9 +2,9 @@ import aiomysql
 import asyncio
 import json
 import os
+import time
 from datetime import datetime, timezone
 import redis.asyncio as redis
-from dotenv import load_dotenv
 from typing import List, Dict
 from utils.logger import *
 from tenacity import retry, wait_random_exponential, stop_after_attempt, before_sleep
@@ -335,10 +335,7 @@ class DataManager:
             WHERE openerID = {userID}
             AND state = 'open';
             """
-        print(query)
         open_tickets = await self.execute_query(query)
-        print(open_tickets)
-        print("loaded tickets from db")
         return open_tickets
     
 
@@ -361,14 +358,12 @@ class DataManager:
             ORDER BY dateOpen Desc;
             """
         history = await self.execute_query(query)
-        print("got history from db")
         return history
     
 
     # Create a new ticket entry in the database
     async def create_ticket(self, guildID, ticketID, channelID, memberID, threadID, typeID,
                             time_taken, robux, hours, queue = 0):
-        print("attempting to store ticket in database")
         timestamp = datetime.now(timezone.utc)
         dateOpen = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -389,7 +384,6 @@ class DataManager:
             {queue});
             """
         await self.execute_query(query, False)
-        print("storage success")
         
 
     # Update an open database entry as closed
@@ -406,7 +400,6 @@ class DataManager:
             WHERE channelID = {channelID};
             """
         await self.execute_query(query, False)
-        print("close sucess")
 
 
     async def update_rating(self, channelID, rating):
@@ -437,7 +430,6 @@ class DataManager:
             WHERE userID = {userID};
             """
         user = await self.execute_query(query)
-        print("loaded token from db", user)
         return user
 
 
@@ -449,13 +441,12 @@ class DataManager:
             '{token}');
             """
         await self.execute_query(query, False)
-        print("added verified user", userID, token)
 
 
     # Get all blacklist entries from database
     async def get_all_blacklist_from_db(self, guildID):
         query = f"""
-            SELECT userID from blacklist
+            SELECT * from blacklist
             WHERE guildID = {guildID};
             """
         blacklist = await self.execute_query(query)
@@ -474,15 +465,14 @@ class DataManager:
     
 
     # Add blacklist entry
-    async def add_blacklist_to_db(self, guildID, userID, reason, modID):
-        timestamp = datetime.now(timezone.utc)
-        date = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+    async def add_blacklist_to_db(self, guildID, userID, reason, mod):
+        epoch_time = int(time.time())
 
         query = """
-            INSERT INTO blacklist (guildID, userID, reason, date, modID) 
-            VALUES (%s, %s, %s, %s, %s);
+            INSERT INTO blacklist (guildID, userID, reason, modID, modName, date) 
+            VALUES (%s, %s, %s, %s, %s, %s);
             """
-        params = (guildID, userID, reason, date, modID)
+        params = (guildID, userID, reason, mod.id, mod.name, epoch_time)
         await self.execute_query(query, False, False, params)
     
 
@@ -505,6 +495,28 @@ class DataManager:
             """
         types = await self.execute_query(query)
         return types
+    
+
+    async def get_types_from_db_v2(self, guildID: int):
+        query = f"""
+            SELECT
+                typeID, guildID, categoryID, typeName, subType
+            FROM ticket_types
+            WHERE guildID = {guildID};
+        """
+        rows = await self.execute_query(query)
+
+        result = []
+        for row in rows:
+            typeID, guildID, categoryID, typeName, subType = row
+            result.append({
+                "typeID": typeID,
+                "guildID": guildID,
+                "categoryID": categoryID,
+                "typeName": typeName,
+                "subType": subType})
+
+        return result
 
 
     # Add ticket type
@@ -771,14 +783,14 @@ class DataManager:
 
 
     # Adds snip to DB
-    async def add_snip(self, guildID: int, authorID: int, abbrev: str, summary: str, content: str):
+    async def add_snip(self, guildID: int, authorID: int, abbrev: str, content: str, summary: str = "None"):
+        epoch_time = int(time.time())
         query = """
-            INSERT INTO snips (guildID, authorID, abbrev, summary, content)
-            VALUES (%s, %s, %s, %s, %s);
+            INSERT INTO snips (guildID, authorID, abbrev, summary, content, date)
+            VALUES (%s, %s, %s, %s, %s, %s);
             """
-        values = (guildID, authorID, abbrev, summary, content)
+        values = (guildID, authorID, abbrev, summary, content, epoch_time)
         await self.execute_query(query, False, False, values)
-        await self.update_cache(4)
 
 
     # Removes snip from DB
@@ -788,7 +800,6 @@ class DataManager:
             snips.guildID = {guildID} AND snips.abbrev = '{abbrev}';
             """
         await self.execute_query(query, False)
-        await self.update_cache(4)
 
 
     # Gets snip from DB
@@ -796,6 +807,16 @@ class DataManager:
         query = f"""
             SELECT snips.content FROM snips WHERE
             snips.guildID = {guildID} AND snips.abbrev = '{abbrev}';
+            """
+        content = await self.execute_query(query)
+        return content
+
+
+    # Get all snips from DB
+    async def get_all_snips(self, guildID: int):
+        query = f"""
+            SELECT * FROM snips WHERE
+            snips.guildID = {guildID};
             """
         content = await self.execute_query(query)
         return content
@@ -823,19 +844,16 @@ class DataManager:
 
 
     async def set_with_expiry(self, key: str, value: str, expiry: int = REDIS_TTL):
-        print(f"[Redis SET] Key: {key} | Value: {value} | Expiry: {expiry}")
         await self.redis.set(key, value, ex=expiry)
 
 
     async def hset_field_with_expiry(self, key: str, field: str, value: str, expiry: int = REDIS_TTL):
-        print(f"[Redis HSET FIELD] Key: {key} | Field: {field} | Value: {value} | Expiry: {expiry}")
         await self.redis.hset(key, field, value)
         await self.redis.expire(key, expiry)
 
 
     async def hset_with_expiry(self, key: str, data: dict, expiry: int = REDIS_TTL):
         json_data = {field: json.dumps(value) for field, value in data.items()}
-        print(f"[Redis HSET MAPPING] Key: {key} | Fields: {json_data} | Expiry: {expiry}")
         await self.redis.hset(key, mapping=json_data)
         await self.redis.expire(key, expiry)
 
@@ -866,11 +884,9 @@ class DataManager:
 
     # Save contents to Redis before shutdown
     async def save_status_dicts_to_redis(self):
-        print("saving status")
         try:
             await self.redis.set("last_update_times", json.dumps(self.bot.channel_status.last_update_times))
             await self.redis.set("pending_updates", json.dumps(self.bot.channel_status.pending_updates))
-            print("status saved")
 
         except Exception as e:
             logger.exception(f"Error saving status to Redis: {e}")
@@ -878,7 +894,6 @@ class DataManager:
 
     # Load contents from Redis on startup
     async def load_status_dicts_from_redis(self):
-        print("loading status")
         try:
             self.bot.channel_status.last_update_times = json.loads(await self.redis.get("last_update_times") or "{}")
             self.bot.channel_status.pending_updates = json.loads(await self.redis.get("pending_updates") or "{}")
@@ -891,8 +906,6 @@ class DataManager:
                 int(key): value for key, value 
                 in self.bot.channel_status.pending_updates.items()}
 
-            print("status loaded", self.bot.channel_status.last_update_times, self.bot.channel_status.pending_updates)
-
         except Exception as e:
             logger.exception(f"Error loading status from Redis: {e}")
 
@@ -901,7 +914,6 @@ class DataManager:
     async def save_timers_to_redis(self):
         try:
             await self.redis.set("timers", json.dumps(self.bot.channel_status.timers))
-            logger.debug(f"Saved timers to redis: {self.bot.channel_status.timers}")
         except Exception as e:
             logger.exception(f"Error saving timers to Redis: {e}")
 
@@ -910,9 +922,7 @@ class DataManager:
     async def load_timers_from_redis(self):
         try:
             self.bot.channel_status.timers = json.loads(await self.redis.get("timers") or "{}")
-            self.bot.channel_status.timers = {int(key): int(value) for key, value in self.bot.channel_status.timers.items()}
-            logger.success("Loaded timers from Redis:", self.bot.channel_status.timers)
-
+            self.bot.channel_status.timers = {int(key): value for key, value in self.bot.channel_status.timers.items()}
         except Exception as e:
             logger.error(f"Error loading timers from Redis: {e}")
 
@@ -921,7 +931,6 @@ class DataManager:
     async def save_mods_to_redis(self):
         try:
             await self.redis.set("mods", json.dumps(self.bot.data_manager.mod_ids))
-            logger.debug(f"Saved mod ids to redis: {self.bot.data_manager.mod_ids}")
         except Exception as e:
             logger.exception(f"Error saving mod ids to Redis: {e}")
 
@@ -931,8 +940,6 @@ class DataManager:
         try:
             self.bot.data_manager.mod_ids = json.loads(await self.redis.get("mods") or "{}")
             self.bot.data_manager.mod_ids = {key: int(value) for key, value in self.bot.data_manager.mod_ids.items()}
-            logger.success("Loaded mod ids from Redis:", self.bot.data_manager.mod_ids)
-
         except Exception as e:
             logger.error(f"Error loading mod ids from Redis: {e}")
 
@@ -976,11 +983,9 @@ class DataManager:
             cached = await self.redis.get(redis_key)
 
             if cached:
-                print(f"[CACHE HIT] Config for {guildID}: {cached}")
                 return json.loads(cached)
 
         config = await self.load_config_from_db(guildID)
-        print(f"[DB LOAD] Config for {guildID}: {config}")
         if not config:
             return None
 
@@ -997,11 +1002,9 @@ class DataManager:
             fields = await self.redis.hgetall(redis_key)
 
             if fields:
-                print(f"[CACHE HIT] User Tickets for {userID}: {fields}")
                 return [json.loads(data) for data in fields.values()]
 
         db_tickets = await self.load_tickets_from_db(userID)
-        print(f"[DB LOAD] Tickets for {userID}: {db_tickets}")
         if not db_tickets:
             return None
 
@@ -1026,11 +1029,9 @@ class DataManager:
             cached = await self.redis.hget(redis_key, "data")
 
             if cached:
-                print(f"[CACHE HIT] Verified User {userID}: {cached}")
                 return json.loads(cached)
 
         user = await self.get_verified_user_from_db(userID)
-        print(f"[DB LOAD] Verified User {userID}: {user}")
         if not user:
             return None
 
@@ -1057,12 +1058,10 @@ class DataManager:
             cached = await self.redis.get(redis_key)
 
             if cached:
-                print(f"[CACHE HIT] Blacklist Entry {guildID}-{userID}: {cached}")
                 return json.loads(cached)
             return None
 
         entry = await self.get_blacklist_from_db(guildID, userID)
-        print(f"[DB LOAD] Blacklist Entry {guildID}-{userID}: {entry}")
         if len(entry) < 1:
             return None
 
@@ -1078,6 +1077,48 @@ class DataManager:
         # Delete from Redis
         redis_key = f"blacklist:{guildID}:{userID}"
         await self.redis.delete(redis_key)
+
+
+    def format_snip_entry(self, authorID, abbrev, summary, content, date):
+        return {
+            "authorID": authorID,
+            "abbrev": abbrev,
+            "summary": summary,
+            "content": content,
+            "date": date}
+
+
+    async def get_or_load_snips(self, guildID, get = True):
+        redis_key = f"snips:{guildID}"
+
+        if get:
+            cached = await self.redis.get(redis_key)
+            if cached:
+                return json.loads(cached)
+
+        snips = await self.get_all_snips(guildID)
+
+        if not snips:
+            await self.set_with_expiry(redis_key, json.dumps([]))
+            return []
+
+        result = []
+        for entry in snips:
+            _, authorID, abbrev, summary, content, date = entry
+            data = self.format_snip_entry(authorID, abbrev, summary, content, date)
+            result.append(data)
+
+        await self.set_with_expiry(redis_key, json.dumps(result))
+        return result
+
+
+    # delete snip
+    async def delete_snip(self, guildID, categoryID):
+        # Delete from DB
+        await self.delete_type_from_db(guildID, categoryID)
+
+        redis_key = f"ticket_types:{guildID}"
+        await self.redis.hdel(redis_key, str(categoryID))
 
 
     def format_guild_type_entry(self, typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType, redirectText):
@@ -1107,7 +1148,6 @@ class DataManager:
 
         result = []
         for entry in types:
-            print(entry)
             typeID, _, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText = entry
             form = json.loads(formJson)
             data = self.format_guild_type_entry(typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType, redirectText)
@@ -1133,11 +1173,9 @@ class DataManager:
             cached = await self.redis.hgetall(redis_key)
 
             if cached:
-                print(f"[CACHE HIT] Permissions for {guildID}: {cached}")
                 return {int(roleID): json.loads(data)["permLevel"] for roleID, data in cached.items()}
 
         permissions = await self.get_permissions_from_db(guildID)
-        print(f"[DB LOAD] Permissions for {guildID}: {permissions}")
         if not permissions:
             return {}
 
@@ -1166,7 +1204,6 @@ class DataManager:
             # Redis hash
             await self.redis.hset(key, mapping={
                 "modmail_log_id": modmail_log_id })
-            logger.debug(f"Cached ticket for channel {channel_id}")
 
         except Exception as e:
             logger.exception(f"Error adding ticket to Redis: {e}")
@@ -1192,7 +1229,6 @@ class DataManager:
         key = f"tickets:{channel_id}"
         try:
             await self.redis.delete(key)
-            logger.debug(f"Removed ticket for channel ID {channel_id}")
             return
         
         except Exception as e:
@@ -1205,7 +1241,6 @@ class DataManager:
         try:
             keys = await self.redis.keys("tickets:*")
             if not keys:
-                logger.warning("No tickets found in Redis")
                 return
 
             # Iterate through keys to find the matching modmail_message_id
@@ -1214,10 +1249,7 @@ class DataManager:
 
                 if ticket_data and int(ticket_data["modmail_log_id"]) == modmail_message_id:
                     await self.redis.delete(key)
-                    logger.debug(f"Removed ticket with modmail_log_ID {modmail_message_id}")
                     return
-                
-            logger.info(f"No ticket found with modmail_log_ID {modmail_message_id}")
 
         except Exception as e:
             logger.exception(f"Error removing ticket from Redis: {e}")
@@ -1229,7 +1261,6 @@ class DataManager:
         try:
             keys = await self.redis.keys("tickets:*")
             if not keys:
-                logger.info("No tickets found in Redis")
                 return []
             
             # Extract channel IDs from the keys
@@ -1246,7 +1277,6 @@ class DataManager:
         try:
             keys = await self.redis.keys("tickets:*")
             if not keys:
-                logger.info("Attempted to delete empty tickets cache")
                 return
 
             for key in keys:
@@ -1290,19 +1320,15 @@ class DataManager:
             await self.redis.hset(key, mapping=mapping)
             if v2:
                 self.ticket_count_v2 += 1
-                logger.debug(f"Added ticket message_v2 {message_id} to Redis")
             else:
                 self.ticket_count += 1
-                logger.debug(f"Added ticket message {message_id} to Redis")
 
             # Batch flush cache if 20 messages have collected
             if (self.ticket_count > 19): 
                 await self.flush_messages()
-                logger.info(f"Called flush tickets")
 
             if (self.ticket_count_v2 > 19): 
                 await self.flush_messages_v2()
-                logger.info(f"Called flush tickets_v2")
 
         except Exception as e:
             logger.exception(f"Error adding ticket message to Redis: {e}")
@@ -1313,7 +1339,6 @@ class DataManager:
         key = f"ticket_messages:{message_id}"
         try:
             await self.redis.delete(key)
-            logger.debug(f"Removed ticket message of ID {message_id}")
 
         except Exception as e:
             logger.exception(f"Error removing ticket message from Redis: {e}")
@@ -1325,7 +1350,6 @@ class DataManager:
         try:
             keys = await self.redis.keys("ticket_messages:*")
             if not keys:
-                logger.warning("No messages found in Redis")
                 return []
             messages = []
 
@@ -1354,7 +1378,6 @@ class DataManager:
         try:
             keys = await self.redis.keys("ticket_messages:*")
             if not keys:
-                logger.info("Attempted to delete empty ticket messages cache")
                 return
 
             for key in keys:
@@ -1371,7 +1394,6 @@ class DataManager:
         try:
             keys = await self.redis.keys("ticket_messages_v2:*")
             if not keys:
-                logger.info("Attempted to delete empty ticket messages_v2 cache")
                 return
 
             for key in keys:
@@ -1390,7 +1412,6 @@ class DataManager:
             try:
                 keys = await self.redis.keys("ticket_messages:*")
                 if not keys:
-                    logger.debug("Attempted to flush zero messages")
                     return
 
                 messages_to_insert = []
@@ -1429,7 +1450,6 @@ class DataManager:
                     await self.redis.delete(key)
                 
                 self.ticket_count = 0
-                logger.success(f"Flushed {len(messages_to_insert)} messages to DB")
 
 
 
@@ -1478,4 +1498,3 @@ class DataManager:
                     await self.redis.delete(key)
 
                 self.ticket_count_v2 = 0
-                logger.success(f"Flushed {len(messages_to_insert)} v2 messages to DB")
