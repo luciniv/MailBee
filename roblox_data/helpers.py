@@ -198,7 +198,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
             message = f'{game_type.name} - {username} - R${robux_spent} - {time_played}hrs'
         except Exception as e:
-            print(e)
+            logger.exception(e)
             message = "Error retriving engagement statistics"
 
         return message, 'output.json', user_info
