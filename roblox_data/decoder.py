@@ -66,7 +66,6 @@ def horse_life_decoder(player_data):
     new_data = simplify_data(json.loads(decoded_data))
 
     final_data = prettify_json(json.dumps(new_data))
-    print(final_data)
     return final_data
 
 
