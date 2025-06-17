@@ -87,7 +87,7 @@ CONFIG = {
         'data_store_name': 'PlayerData',
         'data_prefix': 'keys/alpha1',
         'json_decoder': horse_life_decoder,
-        'robux_parser': lambda player_data: format(player_data['Monetization']['RobuxSpent'], ','),
+        'robux_parser': lambda player_data: format(player_data['MetaData']['RobuxSpent'], ','),
         'time_parser': lambda player_data: round(player_data['Stats']['PlayTime'] / 3600, 1),
     },
 }
