@@ -227,8 +227,8 @@ class Snips(commands.Cog):
                             content = entry["content"]
                             date = entry["date"]
 
-                            if len(content) > 300:
-                                content = content[:297] + "..."
+                            if len(content) > 200:
+                                content = content[:197] + "..."
 
                             snipEmbed.add_field(name=f"**Name:** {abbrev}", 
                                             value=f"**Summary:** {summary}\n"
