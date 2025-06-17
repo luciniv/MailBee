@@ -45,32 +45,29 @@ def sonaria_decoder(player_data):
 
 
 def horse_life_decoder(player_data):
-    # Clean up escaped JSON
-    decoded_data = player_data.replace('\\\\\\"', '\\\\"').replace('\\"', '"')
+    decoded_data = player_data.replace('\\\\\\"', '\\\\"')
+    decoded_data = decoded_data.replace('\\"', '"')
+    
     if decoded_data.startswith('"') and decoded_data.endswith('"'):
         decoded_data = decoded_data[1:-1]
 
-    # Recursively simplify Roblox-style data
     def simplify_data(data):
         def process_node(node):
             simplified_node = {}
             for child in node.get("Children", []):
-                name = child.get("Name")
                 if not child.get("Children"):
-                    simplified_node[name] = child.get("Value")
+                    simplified_node[child["Name"]] = child.get("Value")
                 else:
-                    simplified_node[name] = process_node(child)
+                    simplified_node[child["Name"]] = process_node(child) 
             return simplified_node
+      
         return process_node(data["SerializedData"])
-
+    
     new_data = simplify_data(json.loads(decoded_data))
 
-    # Save to file as actual JSON (not a string of JSON)
-    with open("test.json", "w") as file:
-        json.dump(new_data, file, indent=2)
-
-    return new_data  # return as dict if you want to use elsewhere
-
+    final_data = prettify_json(json.dumps(new_data))
+    print(final_data)
+    return final_data
 
 
 CONFIG = {
