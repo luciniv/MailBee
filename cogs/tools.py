@@ -663,7 +663,7 @@ class Tools(commands.Cog):
                                                         "channel links add ~70 additional characters each.")
                                 await channel.send(embed=errorEmbed)
                                 return
-                            end_time = now + (hours * 60)
+                            end_time = now + (hours * 3600)
                             timer = self.bot.channel_status.get_timer(channelID)
                             statusEmbed = discord.Embed(title="", 
                                             description=f"Status set to **inactive** 🕓 for {hours} hour(s).\n"
