@@ -914,6 +914,7 @@ class DataManager:
     async def save_timers_to_redis(self):
         try:
             await self.redis.set("timers", json.dumps(self.bot.channel_status.timers))
+            print("TIMERS ARE", self.bot.channel_status.timers)
         except Exception as e:
             logger.exception(f"Error saving timers to Redis: {e}")
 
@@ -923,6 +924,7 @@ class DataManager:
         try:
             self.bot.channel_status.timers = json.loads(await self.redis.get("timers") or "{}")
             self.bot.channel_status.timers = {int(key): value for key, value in self.bot.channel_status.timers.items()}
+            print("TIMERS ARE", self.bot.channel_status.timers)
         except Exception as e:
             logger.error(f"Error loading timers from Redis: {e}")
 
