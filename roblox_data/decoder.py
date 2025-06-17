@@ -45,27 +45,31 @@ def sonaria_decoder(player_data):
 
 
 def horse_life_decoder(player_data):
-    decoded_data = player_data.replace('\\\\\\"', '\\\\"')
-    decoded_data = decoded_data.replace('\\"', '"')
-    
-    if decoded_data.startswith('"') and decoded_data.endswith('"'):
-        decoded_data = decoded_data[1:-1]
+    try:
+        decoded_data = player_data.replace('\\\\\\"', '\\\\"')
+        decoded_data = decoded_data.replace('\\"', '"')
+        
+        if decoded_data.startswith('"') and decoded_data.endswith('"'):
+            decoded_data = decoded_data[1:-1]
 
-    def simplify_data(data):
-        def process_node(node):
-            simplified_node = {}
-            for child in node.get("Children", []):
-                if not child.get("Children"):
-                    simplified_node[child["Name"]] = child.get("Value")
-                else:
-                    simplified_node[child["Name"]] = process_node(child) 
-            return simplified_node
-      
-        return process_node(data["SerializedData"])
-    
-    new_data = simplify_data(json.loads(decoded_data))
+        def simplify_data(data):
+            def process_node(node):
+                simplified_node = {}
+                for child in node.get("Children", []):
+                    if not child.get("Children"):
+                        simplified_node[child["Name"]] = child.get("Value")
+                    else:
+                        simplified_node[child["Name"]] = process_node(child) 
+                return simplified_node
+        
+            return process_node(data["SerializedData"])
+        
+        new_data = simplify_data(json.loads(decoded_data))
 
-    final_data = prettify_json(json.dumps(new_data))
+        final_data = prettify_json(json.dumps(new_data))
+    except Exception as e:
+        print(e)
+    print("final_data is", final_data)
     return final_data
 
 
