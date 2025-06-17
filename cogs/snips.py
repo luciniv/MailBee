@@ -17,7 +17,7 @@ class Snips(commands.Cog):
     @commands.command(name="snip", aliases=["s"])
     @checks.is_guild()
     @checks.is_user()
-    async def snip(self, ctx, snip: str):
+    async def snip(self, ctx, *, snip: str):
         try:
             channel = ctx.channel
             author = ctx.author
@@ -60,7 +60,7 @@ class Snips(commands.Cog):
     @commands.command(name="asnip", aliases=["as"])
     @checks.is_guild()
     @checks.is_user()
-    async def asnip(self, ctx, snip: str):
+    async def asnip(self, ctx, *, snip: str):
         try:
             channel = ctx.channel
             author = ctx.author
@@ -103,7 +103,7 @@ class Snips(commands.Cog):
     @commands.command(name="nonasnip", aliases=["nas"])
     @checks.is_guild()
     @checks.is_user()
-    async def nonasnip(self, ctx, snip: str):
+    async def nonasnip(self, ctx, *, snip: str):
         try:
             channel = ctx.channel
             author = ctx.author
@@ -147,7 +147,7 @@ class Snips(commands.Cog):
                              aliases=["sv"])
     @checks.is_guild()
     @checks.is_user()
-    async def snip_list(self, ctx, snip: str):   
+    async def snip_list(self, ctx, *, snip: str):   
         try:
             channel = ctx.channel
             guild = ctx.guild

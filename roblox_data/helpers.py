@@ -84,6 +84,7 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
             async with session.get(url, params=params, headers=HEADERS) as response:
 
                 if response.status == 200:
+                    print(response.text())
                     return await response.text()  # Successful response
 
         return None
