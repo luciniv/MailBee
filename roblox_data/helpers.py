@@ -84,9 +84,7 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
             async with session.get(url, params=params, headers=HEADERS) as response:
 
                 if response.status == 200:
-                    print("GOT DATA")
-                    data = await response.text()
-                    return data  # Successful response
+                    return await response.text()  # Successful response
 
         return None
     
@@ -185,8 +183,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
             result = player_data
 
         with open("output.json", "w") as file:
-            file.write(json.dumps(result, indent=2))
-        print(result)
+            file.write(result)
 
         result_dict = json.loads(result)
         values = []
@@ -199,7 +196,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
             message = f'{game_type.name} - {username} - R${robux_spent} - {time_played}hrs'
         except Exception as e:
-            logger.exception(e)
+            print(e)
             message = "Error retriving engagement statistics"
 
         return message, 'output.json', user_info
@@ -244,7 +241,7 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
             result = player_data
 
         with open("output.json", "w") as file:
-            file.write(json.dumps(result, indent=2))
+            file.write(result)
 
         result_dict = json.loads(result)
         values = []
