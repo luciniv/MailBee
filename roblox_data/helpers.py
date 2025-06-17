@@ -84,9 +84,10 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
             async with session.get(url, params=params, headers=HEADERS) as response:
 
                 if response.status == 200:
+                    print("GOT DATA")
                     data = await response.text()
                     with open("output.json", "w") as file:
-                        file.write(data)
+                        file.write(json.dumps(data, indent=2))
                     return data  # Successful response
 
         return None
@@ -244,7 +245,7 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
             result = player_data
 
         with open("output.json", "w") as file:
-            file.write(result)
+            file.write(json.dumps(result, indent=2))
 
         result_dict = json.loads(result)
         values = []
