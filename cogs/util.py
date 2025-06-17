@@ -20,6 +20,18 @@ class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command()
+    async def sendjson(self, ctx):
+        # Get the absolute path to test.json
+        base_dir = os.path.dirname(os.path.dirname(__file__))  # goes up from /cogs
+        file_path = os.path.join(base_dir, "roblox_data", "test.json")
+
+        # Check if file exists just to be safe
+        if os.path.exists(file_path):
+            with open(file_path, "rb") as f:
+                await ctx.send("Here's your decoded file:", file=discord.File(f, "test.json"))
+        else:
+            await ctx.send("File not found")
 
     @commands.command()
     @checks.is_owner()
