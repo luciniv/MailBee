@@ -187,17 +187,21 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
         result_dict = json.loads(result)
         values = []
+        robux_spent = None
+        time_played = None
         try:
             try:
                 robux_spent = game_config['robux_parser'](result_dict)
                 time_played = game_config['time_parser'](result_dict)
-            except Exception:
+            except Exception as e:
+                print(e)
                 if (game_type == 5422546686):
                     print("trying for new HL data")
                     try:
                         robux_spent = format(result_dict['bia']['aiq'], ',')
                         time_played = round(result_dict['bki']['atm'] / 3600, 1)
-                    except Exception:
+                    except Exception as e:
+                        print(e)
                         raise
             
             values.append(int(robux_spent.replace(",", "")))
