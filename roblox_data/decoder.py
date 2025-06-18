@@ -65,6 +65,21 @@ def horse_life_decoder(player_data):
     
     new_data = simplify_data(json.loads(decoded_data))
 
+    if len(new_data) < 20:
+        def simplify_data_v2(data):
+            def process_node(node):
+                simplified_node = {}
+                for child in node.get("CH", []):
+                    if not child.get("CH"):
+                        simplified_node[child["N"]] = child.get("V")
+                    else:
+                        simplified_node[child["N"]] = process_node(child) 
+                return simplified_node
+      
+            return process_node(data["SerializedData"])
+    
+        new_data = simplify_data_v2(json.loads(decoded_data))
+
     return prettify_json(json.dumps(new_data))
 
 
@@ -89,5 +104,5 @@ CONFIG = {
         'json_decoder': horse_life_decoder,
         'robux_parser': lambda player_data: format(player_data['Metadata']['RobuxSpent'], ','),
         'time_parser': lambda player_data: round(player_data['Stats']['PlayTime'] / 3600, 1),
-    },
+    }
 }
