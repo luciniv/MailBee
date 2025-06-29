@@ -320,10 +320,11 @@ class TicketOpener:
         ticketEmbed.add_field(name="Join Date", value=f"<t:{int(member.joined_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name="Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name="Roblox Account", value="No data\n(#)", inline=True)
-        ticketEmbed.add_field(name="Game Data", value=(f"**Robux Spent:** {priority_values[0]}\n"
-                                                       f"**Hours Ingame:** {priority_values[1]}"), 
-                              inline=True)
+        ticketEmbed.add_field(name="Roblox Username", value=priority_values[2], inline=True)
+        ticketEmbed.add_field(name="Roblox ID", value=priority_values[3], inline=True)
+        ticketEmbed.add_field(name="", value="", inline=False)
+        ticketEmbed.add_field(name="Robux Spent", value=priority_values[0], inline=True)
+        ticketEmbed.add_field(name="Hours Ingame", value=priority_values[1], inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
         ticketEmbed.add_field(name="Time Taken on Form", value=f"`{time_taken}` seconds", inline=True)
         ticketEmbed.add_field(name="Prior Tickets", value=count, inline=True)

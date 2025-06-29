@@ -20,6 +20,16 @@ class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+
+    @commands.command()
+    @checks.is_owner()
+    async def leave(self, ctx, *, guild_name: str):
+        for guild in self.bot.guilds:
+            if guild.name.casefold == guild_name.casefold():
+                await guild.leave()
+                await ctx.send(f"Left server: {guild.name}")
+
+
     @commands.command()
     @checks.is_owner()
     async def embed(self, ctx, channel: discord.TextChannel):

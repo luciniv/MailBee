@@ -440,7 +440,7 @@ class DataManager:
             SET rating = %s
             WHERE channelID = {channelID};
             """
-        params = (rating)
+        params = (rating,)
         await self.execute_query(query, False, False, params)
 
 
