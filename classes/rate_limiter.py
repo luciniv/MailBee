@@ -31,7 +31,7 @@ class Queue:
 
         # Customize delays and concurrency per route type
         self.route_delays = {
-            "dm_send": (1, 1),
+            "dm_send": (0.5, 1),
             "message_send": (0.5, 10),
             "message_delete": (0.5, 5),
             "message_edit": (0.5, 5),
@@ -96,7 +96,6 @@ class Queue:
 
                 async with bucket.lock:
                     if time.time() < bucket.reset_time:
-                        print("sleeping for route:", route)
                         await asyncio.sleep(bucket.reset_time - time.time())
                     await self._enforce_global_rate()
 
