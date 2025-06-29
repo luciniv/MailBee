@@ -30,7 +30,7 @@ class Snips(commands.Cog):
                 if ("Ticket channel" in channel.topic):
                     id_list = (channel.topic).split()
                     threadID = id_list[-1]
-                    userID = id_list[-3]
+                    userID = id_list[-2]
 
                     content = None
                     guild = ctx.guild
@@ -49,9 +49,9 @@ class Snips(commands.Cog):
                         await ctx.message.delete()
                         await analytics.route_to_dm(content, channel, author, threadID, userID, None, True)
                     return
-            else:
-                errorEmbed.description="❌ This command can only be used in ticket channels."
-                await channel.send(embed=errorEmbed)
+    
+            errorEmbed.description="❌ This command can only be used in ticket channels."
+            await channel.send(embed=errorEmbed)
             
         except Exception as e:
             logger.exception(e)
@@ -73,7 +73,7 @@ class Snips(commands.Cog):
                 if ("Ticket channel" in channel.topic):
                     id_list = (channel.topic).split()
                     threadID = id_list[-1]
-                    userID = id_list[-3]
+                    userID = id_list[-2]
 
                     content = None
                     guild = ctx.guild
@@ -92,9 +92,9 @@ class Snips(commands.Cog):
                         await ctx.message.delete()
                         await analytics.route_to_dm(content, channel, author, threadID, userID, True, True)
                     return
-            else:
-                errorEmbed.description="❌ This command can only be used in ticket channels."
-                await channel.send(embed=errorEmbed)
+      
+            errorEmbed.description="❌ This command can only be used in ticket channels."
+            await channel.send(embed=errorEmbed)
             
         except Exception as e:
             logger.exception(e)
@@ -116,7 +116,7 @@ class Snips(commands.Cog):
                 if ("Ticket channel" in channel.topic):
                     id_list = (channel.topic).split()
                     threadID = id_list[-1]
-                    userID = id_list[-3]
+                    userID = id_list[-2]
 
                     content = None
                     guild = ctx.guild
@@ -135,20 +135,20 @@ class Snips(commands.Cog):
                         await ctx.message.delete()
                         await analytics.route_to_dm(content, channel, author, threadID, userID, False, True)
                     return
-            else:
-                errorEmbed.description="❌ This command can only be used in ticket channels."
-                await channel.send(embed=errorEmbed)
+       
+            errorEmbed.description="❌ This command can only be used in ticket channels."
+            await channel.send(embed=errorEmbed)
             
         except Exception as e:
             logger.exception(e)
             raise BotError(f"+nonasnip sent an error: {e}")
         
 
-    @commands.command(name="snip_view", description="List all current snips",
-                             aliases=["sv"])
+    @commands.command(name="snipview", description="List all current snips",
+                             aliases=["sv", "snip_view"])
     @checks.is_guild()
     @checks.is_user()
-    async def snip_list(self, ctx, *, snip: str):   
+    async def snipview(self, ctx, *, snip: str):   
         try:
             channel = ctx.channel
             guild = ctx.guild
@@ -182,7 +182,7 @@ class Snips(commands.Cog):
 
         except Exception as e:
             logger.exception(e)
-            raise BotError(f"+snip_view sent an error: {e}")
+            raise BotError(f"+snipview sent an error: {e}")
         
 
     @commands.hybrid_command(name="sniplist", description="List all current snips",
@@ -271,7 +271,7 @@ class Snips(commands.Cog):
                 if ("Ticket channel" in channel.topic):
                     id_list = (channel.topic).split()
                     threadID = id_list[-1]
-                    userID = id_list[-3]
+                    userID = id_list[-2]
 
                     content = ""
                     guild = interaction.guild
@@ -289,10 +289,10 @@ class Snips(commands.Cog):
                         sentEmbed=discord.Embed(description="✅ Snip sent", color=discord.Color.green())
                         await interaction.followup.send(embed=sentEmbed, ephemeral=True)
                     return
-            else:
-                errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels.",
-                                           color=discord.Color.red())
-                await interaction.followup.send(embed=errorEmbed)
+   
+            errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels.",
+                                        color=discord.Color.red())
+            await interaction.followup.send(embed=errorEmbed)
             
         except Exception as e:
             logger.exception(e)

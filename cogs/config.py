@@ -378,7 +378,7 @@ class Config(commands.Cog):
 
             moderation = self.bot.get_cog("Moderation")
             if moderation is not None:
-                greeting = await moderation.convert_mentions(greeting, guild)
+                greeting = await self.bot.helper.convert_mentions(greeting, guild)
 
             if len(greeting) > 4000:
                 errorEmbed = discord.Embed(description="❌ Greeting text is too long, must be at most 4000 characters", 
@@ -408,7 +408,7 @@ class Config(commands.Cog):
 
             moderation = self.bot.get_cog("Moderation")
             if moderation is not None:
-                closing = await moderation.convert_mentions(closing, guild)
+                closing = await self.bot.helper.convert_mentions(closing, guild)
 
             if len(closing) > 4000:
                 errorEmbed = discord.Embed(description="❌ Closing text is too long, must be at most 4000 characters", 

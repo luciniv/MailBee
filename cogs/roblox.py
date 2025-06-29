@@ -19,6 +19,7 @@ class Roblox(commands.Cog):
 
 
     @app_commands.command(name="engagement", description="Get Roblox engagement data for a user")
+    @checks.is_guild()
     @checks.is_user()
     @app_commands.describe(username="Roblox username")
     @app_commands.describe(game_type="Select the game")
@@ -41,6 +42,7 @@ class Roblox(commands.Cog):
 
 
     @app_commands.command(name="getdata", description="Get player data file")
+    @checks.is_guild()
     @checks.is_user()
     @app_commands.describe(username="Roblox username")
     @app_commands.describe(game_type="Select the game")

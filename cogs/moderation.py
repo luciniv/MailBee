@@ -18,6 +18,7 @@ class Moderation(commands.Cog):
 
     @commands.hybrid_command(name="ticket_history", description="View a user's ticketing history", 
                              aliases=["tickets", "history", "th"])
+    @checks.is_guild()
     @checks.is_user()
     @app_commands.describe(user="User to view history of")
     async def ticket_history(self, ctx, user: discord.Member):
@@ -57,11 +58,15 @@ class Moderation(commands.Cog):
                             close = ticket[3]
                             if close is not None:
                                 date_close = f"<t:{int(close.timestamp())}:D>"
+                            closeID = ticket[4]
+                            if closeID is not None:
+                                closeID = f"<@{closeID}"
                             state = (ticket[5]).upper()
                             typeName = ticket[6]
 
                             historyEmbed.add_field(name=f"{count + 1}) {typeName} Ticket: {state}", 
-                                            value=f"`ID: {ticketID}`\n**Opened:** <t:{date_open}:D>\n**Closed:** {date_close}\n**Logs:** <#{logID}>\n{'⎯' * 20}", 
+                                            value=f"`ID: {ticketID}`\n**Opened:** <t:{date_open}:D>\n**Closed:** {date_close}\n"
+                                            f"**Closed By:** {closeID}\n**Logs:** <#{logID}>\n{'⎯' * 20}", 
                                             inline=False)
                             count += 1
                         pages.append(historyEmbed)
@@ -78,18 +83,208 @@ class Moderation(commands.Cog):
             raise BotError(f"/ticket_history sent an error: {e}")
         
 
-    @commands.hybrid_command(name="notes_add", description="Add a note to a ticket or user")
+    @commands.hybrid_command(name="noteadd", description="Add a note to a ticket or user")
+    @checks.is_guild()
     @checks.is_user()
-    @app_commands.describe(user="User to view history of")
-    async def notes_add(self, ctx, ticket: str = None, user: discord.Member = None):
-        pass
+    @app_commands.describe(target="The ID to add a note to")
+    async def notes_add(self, ctx, target, *, note: str):
+        try:
+            guild = ctx.guild
+            channel = ctx.channel
+            author = ctx.author
+            content = await self.bot.helper.convert_mentions(note, guild)
 
-    
-    @commands.hybrid_command(name="notes", description="View a ticket's or user's notes")
+            errorEmbed = discord.Embed(description="❌ Entered ID must be an integer",
+                                       color=discord.Color.red())
+            if target.isdigit():
+                if int(target) < 9999999:
+                    result = await self.bot.data_manager.check_ID_exists(int(target), guild.id)
+                    print("result is", result)
+                    if len(result) < 1:
+                        errorEmbed.description=("❌ No ticket found with that ID")
+                        await ctx.send(embed=errorEmbed)
+                        return
+                    else:
+                        if len(content) > 1000:
+                            errorEmbed.description=("❌ Notes must be 1000 characters or less")
+                            await ctx.send(embed=errorEmbed)
+                            return
+
+                        await self.bot.data_manager.add_note(guild.id, result[0][0], target, 
+                                                             author.id, author.name, content)
+                        successEmbed = discord.Embed(description=f"✅ Saved note for ticket ID **{target}**", 
+                                                     color=discord.Color.green())
+                        await ctx.send(embed=successEmbed)
+                        return
+                else:
+                    member = await self.bot.cache.get_guild_member(guild, int(target))
+                    if member is None:
+                        errorEmbed.description=("❌ No member found with that ID")
+                        await ctx.send(embed=errorEmbed)
+                        return
+                    else:
+                        if len(content) > 1000:
+                            errorEmbed.description=("❌ Notes must be 1000 characters or less")
+                            await ctx.send(embed=errorEmbed)
+                            return
+                        
+                        await self.bot.data_manager.add_note(guild.id, member.id, -1, 
+                                                             author.id, author.name, content)
+                        successEmbed = discord.Embed(description=f"✅ Saved note for **{member.name}** ({member.id})", 
+                                                     color=discord.Color.green())
+                        await ctx.send(embed=successEmbed)
+                        return 
+            else:
+                await ctx.send(embed=errorEmbed)
+                return
+
+            #await self.bot.data_manager.add_note()
+        except Exception as e:
+            raise BotError(f"+noteadd sent an error: {e}")
+        
+
+    @commands.hybrid_command(name="notes", description="View the notes of a ticket or user")
+    @checks.is_guild()
     @checks.is_user()
-    @app_commands.describe(user="User to view history of")
-    async def notes(self, ctx, user: discord.Member):
-        pass
+    @app_commands.describe(target="The ID to add a note to")
+    async def notes(self, ctx, target):
+        try:
+            errorEmbed=discord.Embed(description="❌ This command is currently disabled for testing.", 
+                                     color=discord.Color.red())
+            await ctx.send(embed=errorEmbed)
+            return
+            # guild = ctx.guild
+            # channel = ctx.channel
+            # errorEmbed = discord.Embed(description="❌ Entered ID must be an integer",
+            #                            color=discord.Color.red())
+            # if target.isdigit():
+            #     if int(target) < 9999999:
+            #         result = await self.bot.data_manager.check_ID_exists(int(target), guild.id)
+            #         print("result is", result)
+            #         if len(result) < 1:
+            #             errorEmbed.description=("❌ No ticket found with that ID")
+            #             await ctx.send(embed=errorEmbed)
+            #             return
+            #         else:
+            #             print("get notes for ticket", target)
+            #     else:
+            #         member = await self.bot.cache.get_guild_member(guild, int(target))
+            #         if member is None:
+            #             errorEmbed.description=("❌ No member found with that ID")
+            #             await ctx.send(embed=errorEmbed)
+            #             return
+            #         else:
+            #             print("get notes for member", target) 
+            # elif (re.search(r"<@!?(\d+)>", target)):
+            #     id = (re.search(r"<@!?(\d+)>", target)).group(1)
+            #     member = await self.bot.cache.get_guild_member(guild, int(id))
+            #     if member is None:
+            #         errorEmbed.description=("❌ No member found with that mention")
+            #         await ctx.send(embed=errorEmbed)
+            #         return
+            #     else:
+            #         print("get notes for member", target) 
+            # else:
+            #     await ctx.send(embed=errorEmbed)
+            #     return
+
+            # FIXME get list to be processed
+
+            # pages = []
+            # count = 0
+            # limit = 0
+            # guild = ctx.guild
+
+            # blacklistEmbed = discord.Embed(title=f"Server Blacklist",
+            #                       description="No blacklisted members found",
+            #                       color=discord.Color.green())
+            # url = None
+            # if (guild.icon):
+            #     url = guild.icon.url
+            # blacklistEmbed.set_author(name=guild.name, icon_url=url)
+
+            # entries = await self.bot.data_manager.get_all_blacklist_from_db(guild.id)
+            # if entries is not None:
+            #     if len(entries) == 0:
+            #         await ctx.send(embed=blacklistEmbed)
+            #         return
+            #     else:
+            #         page_counts = build_subsections(len(entries), 5)
+            #         for page_count in page_counts:
+            #             limit += page_count
+            #             blacklistEmbed = discord.Embed(title=f"Server Blacklist",
+            #                     description="",
+            #                     color=discord.Color.green())
+            #             blacklistEmbed.set_author(name=guild.name, icon_url=url)
+
+            #             while (count < limit):
+            #                 entry = entries[count]
+
+            #                 userID = entry[1]
+            #                 reason = entry[2]
+            #                 modID = entry[3]
+            #                 modName = entry[4]
+            #                 date = entry[5]
+
+            #                 if len(reason) > 800:
+            #                     reason = reason[:797] + "..."
+
+            #                 blacklistEmbed.add_field(name=f"Case {count + 1}", 
+            #                                 value=f"**User:** <@{userID}> ({userID})\n"
+            #                                 f"**Moderator:** {modName} ({modID})\n"
+            #                                 f"**Date:** <t:{date}:D> (<t:{date}:R>)\n"
+            #                                 f"**Reason:** {reason}\n{'⎯' * 20}", 
+            #                                 inline=False)
+            #                 count += 1
+            #             pages.append(blacklistEmbed)
+
+            # for page in range(len(pages)):
+            #     pages[page].set_footer(text=f"Use the buttons below to navigate (Page {page + 1}/{len(pages)})")
+
+            # # Create an instance of the pagination view
+            # view = Paginator(pages)
+            # view.message = await ctx.send(embed=pages[0], view=view)
+
+        except Exception as e:
+            logger.exception(f"+notes error: {e}")
+            raise BotError(f"+notes sent an error: {e}")
+
+
+    note_group = app_commands.Group(name="note", description="Manage notes")
+
+    @note_group.command(name="add", description="Add a note to a ticket or user")
+    @checks.is_guild()
+    @checks.is_user()
+    @app_commands.describe(ticket_id="The ticket ID to add a note to")
+    @app_commands.describe(member="The member to add a note to")
+    @app_commands.describe(note="The content of the note")
+    async def note_add(self, interaction: discord.Interaction, 
+                   ticket_id: int = None, member: discord.Member = None, note: str = None):
+        try:
+            errorEmbed=discord.Embed(description="❌ This command is currently disabled for testing.", 
+                                     color=discord.Color.red())
+            await interaction.response.send_message(embed=errorEmbed, ephemeral=True)
+            return
+        
+        except Exception as e:
+            raise BotError(f"/note add sent an error: {e}")
+        
+
+    @note_group.command(name="view", description="Add a note to a ticket or user")
+    @checks.is_guild()
+    @checks.is_user()
+    @app_commands.describe(ticket_id="The ticket ID to add a note to")
+    @app_commands.describe(member="The member to add a note to")
+    async def view(self, interaction: discord.Interaction, 
+                   ticket_id: int = None, member: discord.Member = None, note: str = None):
+        try:
+            errorEmbed=discord.Embed(description="❌ This command is currently disabled for testing.", 
+                                     color=discord.Color.red())
+            await interaction.response.send_message(embed=errorEmbed, ephemeral=True)
+            return
+        
+        except Exception as e:
+            raise BotError(f"/note view sent an error: {e}")
 
 
     @commands.hybrid_command(name="blacklist", description="Blacklist a user from opening tickets", 
@@ -117,7 +312,7 @@ class Moderation(commands.Cog):
             logger.exception(f"blacklist error: {e}")
             raise BotError(f"/blacklist sent an error: {e}")
 
-    # FIXME pagination
+
     @commands.hybrid_command(name="blacklist_view", description="View all blacklisted users in this server",
                              aliases=["bv"])
     @checks.is_guild()

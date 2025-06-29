@@ -264,6 +264,7 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
             
             values.append(int(robux_spent.replace(",", "")))
             values.append(time_played)
+            #values.appent(roblox_id)
 
         except Exception as e:
             values = None

@@ -1,5 +1,6 @@
 import discord
 from discord import app_commands
+import discord.webhook.async_
 from discord.ext import commands, tasks
 import os
 from classes.data_manager import DataManager
@@ -52,15 +53,17 @@ class Mantid(commands.Bot):
 
         # Save originals
         global original_send, original_edit, original_fetch_member, original_fetch_user
-        global original_delete, original_add_reaction, original_fetch_channel
+        global original_delete, original_add_reaction, original_fetch_channel, original_fetch_message
 
         original_send = discord.abc.Messageable.send
         original_edit = discord.Message.edit
         original_delete = discord.Message.delete
+        original_fetch_message = discord.TextChannel.fetch_message
         original_fetch_member = discord.Guild.fetch_member
         original_fetch_user = discord.Client.fetch_user
         original_fetch_channel = discord.Client.fetch_channel
         original_add_reaction = discord.Message.add_reaction
+        original_webhook_send = discord.webhook.async_.Webhook.send
 
         # Monkey patch
         async def queued_send(self_, *args, **kwargs):
@@ -71,6 +74,9 @@ class Mantid(commands.Bot):
 
         async def queued_delete(self_, *args, **kwargs):
             return await queue.call(original_delete, self_, *args, **kwargs, route_type='message_delete')
+        
+        async def queued_fetch_message(self_, message_id, *args, **kwargs):
+            return await queue.call(original_fetch_message, self_, message_id, *args, **kwargs, route_type='fetch_message')
 
         async def queued_fetch_member(self_, user_id, *args, **kwargs):
             return await queue.call(original_fetch_member, self_, user_id, *args, **kwargs, route_type='fetch_member')
@@ -83,16 +89,20 @@ class Mantid(commands.Bot):
 
         async def queued_add_reaction(self_, emoji, *args, **kwargs):
             return await queue.call(original_add_reaction, self_, emoji, *args, **kwargs, route_type='add_reaction')
+        
+        async def queued_webhook_send(self_, *args, **kwargs):
+            return await queue.call(original_webhook_send, self_, *args, **kwargs, route_type='followup_send')
 
         # Apply patches
         discord.abc.Messageable.send = queued_send
         discord.Message.edit = queued_edit
         discord.Message.delete = queued_delete
+        discord.TextChannel.fetch_message = queued_fetch_message
         discord.Message.add_reaction = queued_add_reaction
         discord.Guild.fetch_member = queued_fetch_member
         discord.Client.fetch_user = queued_fetch_user
         discord.Client.fetch_channel = queued_fetch_channel
-        # FIXME discord.Message.fetch
+        discord.webhook.async_.Webhook.send = queued_webhook_send
     
     
     async def on_ready(self):

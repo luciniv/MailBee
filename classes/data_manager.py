@@ -361,6 +361,38 @@ class DataManager:
         return history
     
 
+    async def get_ticket_count(self, guildID, userID):
+        query = f"""
+            SELECT COUNT(ticketID)
+            FROM tickets_v2
+            WHERE tickets_v2.guildID = {guildID}
+            AND tickets_v2.openerID = {userID};
+            """
+        count = await self.execute_query(query)
+        return count
+    
+
+    async def check_ID_exists(self, ticketID, guildID):
+        query = f"""
+            SELECT openerID
+            FROM tickets_v2
+            WHERE tickets_v2.ticketID = {ticketID}
+            AND tickets_v2.guildID = {guildID};
+            """
+        id = await self.execute_query(query)
+        return id
+    
+
+    async def get_ticket_ID(self, channelID):
+        query = f"""
+            SELECT ticketID
+            FROM tickets_v2
+            WHERE tickets_v2.channelID = {channelID};
+            """
+        id = await self.execute_query(query)
+        return id
+
+
     # Create a new ticket entry in the database
     async def create_ticket(self, guildID, ticketID, channelID, memberID, threadID, typeID,
                             time_taken, robux, hours, queue = 0):
@@ -667,58 +699,43 @@ class DataManager:
 
 
     # Adds verbal to DB
-    async def add_note(self, messageID: int, guildID: int, userID: int, authorID: int, authorName: str, content: str):
+    async def add_note(self, guildID: int, userID: int, ticketID: int, authorID: int, authorName: str, content: str):
         epoch_time = int(datetime.now(timezone.utc).timestamp())
 
         query = """
-            INSERT INTO verbals (messageID, guildID, userID, authorID, authorName, date, content)
+            INSERT INTO notes (guildID, userID, ticketID, authorID, authorName, date, content)
             VALUES (%s, %s, %s, %s, %s, %s, %s);
             """
-        values = (messageID, guildID, userID, authorID, authorName, epoch_time, content)
+        values = (guildID, userID, ticketID, authorID, authorName, epoch_time, content)
         await self.execute_query(query, False, False, values)
 
 
     # Removes verbal from DB
-    async def remove_note(self, messageID: int):
+    async def remove_note(self, noteID: int):
         query = f"""
-            DELETE FROM verbals WHERE 
-            verbals.messageID = {messageID};
+            DELETE FROM notes WHERE 
+            notes.noteID = {noteID};
             """
         await self.execute_query(query, False)
-
-
-    # Edit verbal in DB
-    async def edit_note(self, messageID: int, authorID: int, authorName: str, content: str):
-        epoch_time = int(datetime.now(timezone.utc).timestamp())
-
-        query = """
-            UPDATE verbals
-            SET verbals.authorID = %s, 
-            verbals.authorName = %s, 
-            verbals.date = %s, 
-            verbals.content = %s
-            WHERE verbals.messageID = %s;
-            """
-        params = (authorID, authorName, epoch_time, content, messageID)
-        await self.execute_query(query, False, False, params)
-
     
-    # Gets verbal from DB
-    async def get_note(self, messageID: int):
+
+    # Get all notes for user from DB
+    async def get_user_note_history(self, guildID: int, userID: int):
         query = f"""
-            SELECT * FROM verbals WHERE
-            verbals.messageID = {messageID};
+            SELECT *
+            FROM notes WHERE
+            notes.guildID = {guildID} AND notes.userID = {userID};
             """
         content = await self.execute_query(query)
         return content
     
 
-    # Get all verbals for user from DB
-    async def get_note_history(self, guildID: int, userID: int):
+    # Get all notes for user from DB
+    async def get_ticket_note_history(self, guildID: int, ticketID: int):
         query = f"""
-            SELECT verbals.messageID, verbals.authorID, verbals.authorName, verbals.date, verbals.content
-            FROM verbals WHERE
-            verbals.guildID = {guildID} AND verbals.userID = {userID};
+            SELECT *
+            FROM notes WHERE
+            notes.guildID = {guildID} AND notes.ticketID = {ticketID};
             """
         content = await self.execute_query(query)
         return content
@@ -948,6 +965,26 @@ class DataManager:
     async def get_next_ticket_id(self, guildID: int) -> int:
         key = f"ticket_counter:{guildID}"
         return await self.redis.incr(key)
+    
+
+    async def add_message_link(self, channel_id: int, message_id: int, linked_ids: list[int]):
+        key = f"linked_msgs:{channel_id}"
+        value = json.dumps({"linked": linked_ids})
+        await self.redis.hset(key, str(message_id), value)
+
+
+    async def get_linked_messages(self, channel_id: int, message_id: int) -> list[int] | None:
+        key = f"linked_msgs:{channel_id}"
+        raw = await self.redis.hget(key, str(message_id))
+        if raw:
+            data = json.loads(raw)
+            return data.get("linked", [])
+        return None
+
+
+    async def clear_channel_links(self, channel_id: int):
+        key = f"linked_msgs:{channel_id}"
+        await self.redis.delete(key)
 
 
     def format_config(self, guildID, logID, inboxID, 
@@ -1121,7 +1158,8 @@ class DataManager:
         await self.redis.hdel(redis_key, str(categoryID))
 
 
-    def format_guild_type_entry(self, typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType, redirectText):
+    def format_guild_type_entry(self, typeID, categoryID, typeName, typeDescrip, 
+                                typeEmoji, form, subType, redirectText, NSFWCategoryID):
         return {
             "typeID": typeID,
             "categoryID": categoryID,
@@ -1130,8 +1168,9 @@ class DataManager:
             "typeEmoji": typeEmoji,
             "form": form,
             "subType": subType,
-            "redirectText": redirectText}
-
+            "redirectText": redirectText,
+            "NSFWCategoryID": NSFWCategoryID}
+    
 
     async def get_or_load_guild_types(self, guildID, get = True):
         redis_key = f"ticket_types:{guildID}"
@@ -1148,9 +1187,10 @@ class DataManager:
 
         result = []
         for entry in types:
-            typeID, _, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText = entry
+            typeID, _, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText, NSFWCategoryID = entry
             form = json.loads(formJson)
-            data = self.format_guild_type_entry(typeID, categoryID, typeName, typeDescrip, typeEmoji, form, subType, redirectText)
+            data = self.format_guild_type_entry(typeID, categoryID, typeName, typeDescrip, 
+                                                typeEmoji, form, subType, redirectText, NSFWCategoryID)
             result.append(data)
 
         await self.set_with_expiry(redis_key, json.dumps(result))

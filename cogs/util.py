@@ -20,6 +20,50 @@ class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command()
+    @checks.is_owner()
+    async def embed(self, ctx, channel: discord.TextChannel):
+        postEmbed = discord.Embed(title="Example title",
+                                  description="Example description",
+                                  color=discord.Color.green())
+        postEmbed.add_field(name="Example field", value="Example field content", inline=False)
+        await channel.send(embed=postEmbed)
+
+
+    @commands.command()
+    @checks.is_owner()
+    async def say_reply(self, ctx, channel: discord.TextChannel, message_id: str, *, message: str):
+        await ctx.message.delete()
+        try:
+            found_message = await channel.fetch_message(int(message_id))
+        except Exception:
+            embed = discord.Embed(description="❌ I couldn't find that message",
+                                    color=discord.Color.red())
+            await ctx.send(embed=embed)
+            return
+        await found_message.reply(message, mention_author=True)
+
+
+    @commands.command()
+    @checks.is_owner()
+    async def say_reply_np(self, ctx, channel: discord.TextChannel, message_id: str, *, message: str):
+        await ctx.message.delete()
+        try:
+            found_message = await channel.fetch_message(int(message_id))
+        except Exception:
+            embed = discord.Embed(description="❌ I couldn't find that message",
+                                    color=discord.Color.red())
+            await ctx.send(embed=embed)
+            return
+        await found_message.reply(message, mention_author=False)
+
+
+    @commands.command()
+    @checks.is_owner()
+    async def say(self, ctx, channel: discord.TextChannel, *, message: str):
+        await ctx.message.delete()
+        await channel.send(message)
+
 
     @commands.command()
     @checks.is_owner()

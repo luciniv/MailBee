@@ -2,6 +2,7 @@ import discord
 import asyncio
 import re
 import os
+from copy import deepcopy
 from discord import Embed
 from discord.permissions import PermissionOverwrite
 from datetime import datetime, timezone
@@ -13,14 +14,12 @@ from roblox_data.helpers import *
 SERVER_TO_GAME = {
     714722808009064492: ("Creatures of Sonaria", 1831550657, os.getenv("COS_KEY")),
     346515443869286410: ("Dragon Adventures", 1235188606, os.getenv("DA_KEY")),
-    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY"))
-}
+    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY"))}
 
 
 async def get_overwrites(guild, roles) -> Dict:
     overwrites = {
-        guild.default_role: PermissionOverwrite(read_messages=False)
-    }
+        guild.default_role: PermissionOverwrite(read_messages=False)}
 
     for role in roles:
         if role is not None:
@@ -30,9 +29,7 @@ async def get_overwrites(guild, roles) -> Dict:
                 send_messages=True,
                 embed_links=True,
                 attach_files=True,
-                add_reactions=True
-            )
-
+                add_reactions=True)
     return dict(overwrites)
 
 
@@ -41,82 +38,110 @@ class TicketOpener:
         self.bot = bot
 
 
-    async def open_ticket(self, user, guild, category, typeID, dm_channelID, values, title, time_taken):
-
-        # Generate ticket ID
-        ticketID = await self.bot.data_manager.get_next_ticket_id(guild.id)
-
-        # Send log embed
-        log_message = await self.send_log(guild, user, title)
-
-        # Create logging thread
+    async def open_ticket(self, user, guild, category, typeID, values, title, time_taken, NSFW):
         try:
-            thread = await log_message.create_thread(name=f"Ticket Log {user.name} - {ticketID}", auto_archive_duration=1440)
-        except discord.HTTPException as e:
-            if "Contains words not allowed" in e.text:
-                thread = await log_message.create_thread(name=f"Ticket Log {user.id} - {ticketID}", auto_archive_duration=1440)
+            NSFW_flag = "🔞"
+            if not NSFW:
+                NSFW_flag = ""
 
-        await self.bot.cache.store_channel(thread)
+            errorEmbed = discord.Embed(description="", color=discord.Color.red())
 
-        # Create ticket channel
-        channel = await self.create_ticket_channel(guild, category, user, dm_channelID, thread.id)
-        await self.bot.cache.store_channel(channel)
+            # Generate ticket ID
+            ticketID = await self.bot.data_manager.get_next_ticket_id(guild.id)
+            dm_channel = user.dm_channel or await user.create_dm()
 
-        logEmbed = log_message.embeds[0]
-        logEmbed.add_field(name="Ticket Channel", value=f"<#{channel.id}>")
+            # Send log embed
+            log_message = await self.send_log(guild, user, title, NSFW_flag)
 
-        await log_message.edit(embed=logEmbed)
+            # Create logging thread
+            if log_message is not None:
+                try:
+                    thread = await log_message.create_thread(name=f"Ticket Log {user.name} - {ticketID}", auto_archive_duration=1440)
+                except discord.HTTPException as e:
+                    if "Contains words not allowed" in e.text:
+                        thread = await log_message.create_thread(name=f"Ticket Log {user.id} - {ticketID}", auto_archive_duration=1440)
+                except Exception:
+                    pass
 
-        dm_channel = user.dm_channel or await user.create_dm()
+                if thread is not None:
+                    await self.bot.cache.store_channel(thread)
+                else:
+                    errorEmbed.description="❌ Unable to create logging thread. Contact a server admin with this error."
+                    await dm_channel.send(embed=errorEmbed)
+                    return
+            else:
+                errorEmbed.description="❌ Unable to send opening log. Contact a server admin with this error."
+                await dm_channel.send(embed=errorEmbed)
+                return
 
-        if channel:
-            # Send opening embed, and greeting if it exists
-            await self.send_opener(guild, dm_channel, user, values, title)
+            # Create ticket channel
+            channel = await self.create_ticket_channel(guild, category, user, thread.id, NSFW_flag)
+            if channel is None:
+                errorEmbed.description="❌ Unable to create ticket channel. Contact a server admin with this error."
+                await dm_channel.send(embed=errorEmbed)
+                return
 
-            priority_values = [-1,-1]
-            game_type = SERVER_TO_GAME.get(guild.id, None)
+            await self.bot.cache.store_channel(channel)
 
-            result = None
-            if game_type is not None:
-                result = await get_priority(game_type, guild.id, user.id)
+            logEmbed = deepcopy(log_message.embeds[0])
+            logEmbed.add_field(name="Ticket Channel", value=f"<#{channel.id}>", inline=True)
+            logEmbed.add_field(name="Ticket ID", value=ticketID, inline=True)
 
-            if result is not None:
-                priority_values = result
+            await log_message.edit(embed=logEmbed)
 
-            # Send in-channel embeds
-            await self.send_ticket_embeds(guild, channel, thread, user, values, title, time_taken, priority_values)
+            if channel:
+                # Send opening embed, and greeting if it exists
+                await self.send_opener(guild, dm_channel, user, values, title)
 
-            # Add new ticket to database
-            await self.bot.data_manager.create_ticket(guild.id, ticketID, channel.id, user.id, thread.id, typeID, 
-                                                      time_taken, priority_values[0], priority_values[1])
-            tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id, False)
-            return True
+                priority_values = [-1,-1]
+                game_type = SERVER_TO_GAME.get(guild.id, None)
 
-        else:
-            print("failed to create ticket channel")
-            return False
+                result = None
+                if game_type is not None:
+                    result = await get_priority(game_type, guild.id, user.id)
+
+                if result is not None:
+                    priority_values = result
+
+                # Send in-channel embeds
+                await self.send_ticket_embeds(guild, channel, thread, user, values, title, time_taken, priority_values, ticketID)
+
+                # Add new ticket to database
+                await self.bot.data_manager.create_ticket(guild.id, ticketID, channel.id, user.id, thread.id, typeID, 
+                                                        time_taken, priority_values[0], priority_values[1])
+                await self.bot.data_manager.get_or_load_user_tickets(user.id, False)
+                return True
+
+            else:
+                print("failed to create ticket channel")
+                return False
+        except Exception as e:
+            print("ticket_opener sent an exception:", e)
         
 
-    async def send_log(self, guild, user, title):
-            config = await self.bot.data_manager.get_or_load_config(guild.id)
+    async def send_log(self, guild, user, title, NSFW_flag):
+        config = await self.bot.data_manager.get_or_load_config(guild.id)
 
-            if config is None:
-                return
-            
-            logID = config["logID"] 
-            log_channel = await self.bot.cache.get_channel(logID)
+        if config is None:
+            return
+        
+        logID = config["logID"] 
+        log_channel = await self.bot.cache.get_channel(logID)
 
-            openLogEmbed = discord.Embed(title=f"New \"{title}\" Ticket", description="", 
-                                        color=discord.Color.green())
-            openLogEmbed.timestamp = datetime.now(timezone.utc)
+        openLogEmbed = discord.Embed(title=f"{NSFW_flag} New \"{title}\" Ticket", description="", 
+                                    color=discord.Color.green())
+        openLogEmbed.timestamp = datetime.now(timezone.utc)
 
-            openLogEmbed.set_footer(text=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
+        openLogEmbed.set_footer(text=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
 
+        try:
             message = await log_channel.send(embed=openLogEmbed)
             return message
+        except Exception:
+            return None
 
 
-    async def create_ticket_channel(self, guild, category, user, dm_channelID, threadID):
+    async def create_ticket_channel(self, guild, category, user, threadID, NSFW_flag):
         try:
             # Check for any permitted roles (user or admin)
             # roles = []
@@ -133,21 +158,42 @@ class TicketOpener:
             # FIXME re-use this overwrites code to apply on category creation
 
             channel_name = re.sub(r"[./]", "", user.name.lower())
-
-            try:
-                ticket_channel = await guild.create_text_channel(
-                    name=channel_name,
-                    category=category,
-                    overwrites=category.overwrites,
-                    topic=f"Ticket channel {user.id} {dm_channelID} {threadID}")
-                
-            except discord.HTTPException as e:
-                if "Contains words not allowed" in e.text:
+            if NSFW_flag == "":
+                try:
                     ticket_channel = await guild.create_text_channel(
-                        name=str(user.id),
+                        name=channel_name,
                         category=category,
                         overwrites=category.overwrites,
-                        topic=f"Ticket channel {user.id} {dm_channelID} {threadID}")
+                        topic=f"Ticket channel {user.id} {threadID}")
+                    
+                except discord.HTTPException as e:
+                    if "Contains words not allowed" in e.text:
+                        ticket_channel = await guild.create_text_channel(
+                            name=str(user.id),
+                            category=category,
+                            overwrites=category.overwrites,
+                            topic=f"Ticket channel {user.id} {threadID}")
+                except Exception:
+                    return None
+            else:
+                try:
+                    ticket_channel = await guild.create_text_channel(
+                        name=f"{NSFW_flag}{channel_name}",
+                        nsfw=True,
+                        category=category,
+                        overwrites=category.overwrites,
+                        topic=f"Ticket channel {user.id} {threadID}")
+                
+                except discord.HTTPException as e:
+                    if "Contains words not allowed" in e.text:
+                        ticket_channel = await guild.create_text_channel(
+                            name=f"{NSFW_flag}{str(user.id)}",
+                            nsfw=True,
+                            category=category,
+                            overwrites=category.overwrites,
+                            topic=f"Ticket channel {user.id} {threadID}")
+                except Exception:
+                    return None
 
             # Set channel status
             await self.bot.channel_status.set_emoji(ticket_channel, "new")
@@ -228,24 +274,33 @@ class TicketOpener:
         return submissionEmbed
 
 
-    async def send_ticket_embeds(self, guild, channel, thread, user, values, title, time_taken, priority_values):
+    async def send_ticket_embeds(self, guild, channel, thread, user, values, title, time_taken, priority_values, ticketID):
         member = await self.bot.cache.get_guild_member(guild, user.id)
 
         if member is None:
             logger.error("Failed to find member object for user: ", user.id)
             return
+        
+        count = await self.bot.data_manager.get_ticket_count(guild.id, user.id)
+        print(count)
+        if count is not None:
+            count = int(count[0][0])
+            if count != 0:
+                count -= 1
+        else:
+            count = 0
          
         roles = member.roles
         default = guild.default_role
         if priority_values == [-1,-1]:
             priority_values = ["No data", "No data"]
 
-        ticketEmbed = discord.Embed(title=f"New \"{title}\" Ticket",
+        ticketEmbed = discord.Embed(title=f"New \"{title}\" Ticket [ID {ticketID}]",
                                     description="To reply, send a message in this channel prefixed with `+`. "
                                     "Any other messages will send as a comment (not visible to the ticket opener). "
                                     "To use commands, prefix with `+` or type `/` and select from the displayed "
-                                    "list.\n\n`+close [reason]` will close a ticket. `+inactive [hours]` will close "
-                                    "a ticket after X hours of inactivity from the ticket opener.")
+                                    "list.\n\n`+close [reason]` will close a ticket. `+inactive [hours] [reason]` "
+                                    "will close a ticket after X hours of inactivity from the ticket opener.")
         ticketEmbed.timestamp = datetime.now(timezone.utc)
         ticketEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.display_avatar.url)
  
@@ -255,24 +310,23 @@ class TicketOpener:
                         value=(
                             "*None*"
                             if len(roles) <= 1  # Only @everyone
-                            else (
-                                (
-                                    " ".join([f"<@&{role.id}>" for role in roles if role != default])
-                                    if len(" ".join([f"<@&{role.id}>" for role in roles if role != default])) <= 1024
-                                    else f"*{len([r for r in roles if r != default])} roles*"
-                                )
-                            )
-                        ),
-                        inline=True
-                    )
+                            else ((
+                                " ".join([f"<@&{role.id}>" for role in roles if role != default])
+                                if len(" ".join([f"<@&{role.id}>" for role in roles if role != default])) <= 1024
+                                else f"*{len([r for r in roles if r != default])} roles*"
+                                ))),
+                        inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name=f"Join Date", value=f"<t:{int(member.joined_at.timestamp())}:R>", inline=True)
-        ticketEmbed.add_field(name=f"Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
+        ticketEmbed.add_field(name="Join Date", value=f"<t:{int(member.joined_at.timestamp())}:R>", inline=True)
+        ticketEmbed.add_field(name="Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name=f"Robux Spent", value=priority_values[0], inline=True)
-        ticketEmbed.add_field(name=f"Hours Ingame", value=priority_values[1], inline=True)
+        ticketEmbed.add_field(name="Roblox Account", value="No data\n(#)", inline=True)
+        ticketEmbed.add_field(name="Game Data", value=(f"**Robux Spent:** {priority_values[0]}\n"
+                                                       f"**Hours Ingame:** {priority_values[1]}"), 
+                              inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name=f"Time Taken on Form", value=f"`{time_taken}` seconds", inline=True)
+        ticketEmbed.add_field(name="Time Taken on Form", value=f"`{time_taken}` seconds", inline=True)
+        ticketEmbed.add_field(name="Prior Tickets", value=count, inline=True)
 
         submissionEmbed = await self.create_submission_embed(None, member, values, title)
             

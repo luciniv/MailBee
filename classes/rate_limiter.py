@@ -20,19 +20,28 @@ class Queue:
         self.global_reset = 0.0
         self.call_timestamps = deque()
         self.max_actions_per_sec = max_actions_per_sec
+        self.user_action_cooldowns = {
+            "open_ticket_button": {},  # {user_id: timestamp}
+            "dm_start": {},            # {user_id: timestamp}
+        }
+        self.per_user_cooldown_seconds = {
+            "open_ticket_button": 5,  # seconds
+            "dm_start": 5,
+        }
 
         # Customize delays and concurrency per route type
         self.route_delays = {
-            "dm_send": (0.5, 2),
-            "message_send": (0.2, 10),
-            "message_delete": (0.2, 10),
-            "message_edit": (0.2, 10),
+            "dm_send": (1, 1),
+            "message_send": (0.5, 10),
+            "message_delete": (0.5, 5),
+            "message_edit": (0.5, 5),
             "channel_edit": (0.5, 5),
             "add_reaction": (0.5, 5),
-            "fetch_member": (0.1, 10),
-            "fetch_user": (0.1, 10),
-            "fetch_generic": (0.1, 10),
-            "generic": (0.1, 10),
+            "fetch_message": (1, 5),
+            "fetch_member": (1, 5),
+            "fetch_user": (1, 5),
+            "fetch_generic": (1, 5),
+            "generic": (1, 5),
         }
 
     def _classify_route(self, func: Callable, *args, **kwargs) -> str:
@@ -59,7 +68,7 @@ class Queue:
 
     def _get_bucket(self, route: str) -> RateLimitBucket:
         if route not in self.route_buckets:
-            delay, concurrency = self.route_delays.get(route, (0.1, 10))
+            delay, concurrency = self.route_delays.get(route, (0.5, 5))
             self.route_buckets[route] = RateLimitBucket(delay, concurrency)
         return self.route_buckets[route]
 
@@ -87,6 +96,7 @@ class Queue:
 
                 async with bucket.lock:
                     if time.time() < bucket.reset_time:
+                        print("sleeping for route:", route)
                         await asyncio.sleep(bucket.reset_time - time.time())
                     await self._enforce_global_rate()
 
@@ -101,3 +111,32 @@ class Queue:
                             await asyncio.sleep(2)
                             continue
                         raise e
+                    
+    def check_user_action_cooldown(self, route: str, user_id: int):
+        now = time.time()
+
+        cooldowns = self.user_action_cooldowns.setdefault(route, {})
+        attempts = cooldowns.setdefault("attempts", {})
+        timestamps = cooldowns.setdefault("timestamps", {})
+        notified = cooldowns.setdefault("notified", {})
+
+        last_time = timestamps.get(user_id, 0)
+        attempt_count = attempts.get(user_id, 0)
+        was_notified = notified.get(user_id, False)
+
+        base_delay = self.per_user_cooldown_seconds.get(route, 3)
+        retry_after = (last_time + base_delay * (2 ** max(0, attempt_count - 1))) - now
+
+        if retry_after > 0:
+            return True, retry_after, was_notified
+
+        # Reset attempt count if cooldown expired
+        if now - last_time > base_delay * 4:
+            attempt_count = 0
+
+        # Update state
+        attempts[user_id] = attempt_count + 1
+        timestamps[user_id] = now
+        notified[user_id] = False  # reset notification status
+
+        return False, 0.0, False

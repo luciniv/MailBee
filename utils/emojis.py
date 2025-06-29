@@ -4,6 +4,8 @@ emoji_map = {
     "new": "🆕",
     "alert": "❗",
     "wait": "⏳",
+    "review": "🔎",
     "inactive": "🕓",
-    "close": "❌"
+    "close": "❌",
+    "nsfw": "🔞"
 }

@@ -14,6 +14,7 @@ class Storage(commands.Cog):
 
     # Manually update the status of a ticket channel
     @commands.hybrid_command(name="testing", description="Change the emoji status of a ticket")
+    @checks.is_guild()
     @checks.is_user()
     @app_commands.describe(status="Select an emoji from the defined list, or add a custom one" 
                                     " (unicode only)")

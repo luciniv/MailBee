@@ -233,13 +233,24 @@ class DMCategoryButtonView(discord.ui.View):
     @discord.ui.button(label="Open a Ticket", style=discord.ButtonStyle.green, custom_id="persistent_dm_button", emoji="✉️")
     async def send_dm(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        errorEmbed = discord.Embed(description=" ", color=discord.Color.red())
 
         user = interaction.user
         guild = interaction.guild
-        errorEmbed = discord.Embed(description="❌ This button must be used in a server.", 
-                                   color=discord.Color.red())
+        limited, retry_after, was_notified = self.bot.queue.check_user_action_cooldown("open_ticket_button", user.id)
+
+        if limited:
+            if not was_notified:
+                self.bot.queue.user_action_cooldowns["open_ticket_button"]["notified"][user.id] = True
+                errorEmbed.description = (
+                    f"❌ You're clicking a bit too quickly — please wait {retry_after:.1f} seconds."
+                )
+                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+            # else: silently ignore
+            return
 
         if not guild:
+            errorEmbed.description="❌ This button must be used in a server."
             await interaction.followup.send(embed=errorEmbed, ephemeral=True)
             return
 
@@ -307,6 +318,7 @@ class CategorySelect(discord.ui.Select):
         value = self.values[0].split()
         selected_typeID = int(value[0])
         selected_categoryID = int(value[1])
+        selected_NSFWID = int(value[2])
         dm_channelID = self.dm_channelID
         guild = self.guild
         subtypes = []
@@ -380,7 +392,7 @@ class CategorySelect(discord.ui.Select):
 
             if modal_template:
                 await send_dynamic_modal(
-                    self.bot, interaction, self.guild, category, selected_typeID, dm_channelID,
+                    self.bot, interaction, self.guild, category, selected_typeID, selected_NSFWID, dm_channelID,
                     modal_template, source_view)
             else:
                 errorEmbed = discord.Embed(
@@ -403,15 +415,16 @@ class CategorySelect(discord.ui.Select):
         else:
             filtered_types = [entry for entry in types if int(entry.get("subType")) == parent_category_id]
 
+        #{entry["NSFWCategoryID"]}
+
         options = [
             SelectOption(
                 label=str(entry["typeName"]),
-                value=f"{entry['typeID']} {entry['categoryID']}",
+                value=f"{entry['typeID']} {entry['categoryID']} {entry['NSFWCategoryID']}",
                 emoji=safe_partial_emoji(entry.get("typeEmoji")),
                 description=str(entry["typeDescrip"])
-            ) for entry in filtered_types
-        ]
-
+            ) for entry in filtered_types]
+        
         return cls(bot, guild, dm_channelID, types, options, parent_category_id)
 
 
@@ -468,7 +481,7 @@ class BackButton(discord.ui.Button):
             view.message = message
 
 
-async def send_dynamic_modal(bot, interaction, guild, category, typeID, dm_channelID, modal_template, view):
+async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, dm_channelID, modal_template, view):
     if not category:
         errorEmbed = discord.Embed(
             description="❌ Couldn't find ticket category in the destination server. Please contact a server admin.",
@@ -483,29 +496,48 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, dm_chann
 
     # Modal submission handler
     async def handle_submit(interaction: discord.Interaction, values: dict):
-        time_taken = int(time.time()) - start_time
         try:
-            # Delete the original DM message with the view
-            await view.message.delete()
+            time_taken = int(time.time()) - start_time
+            await interaction.response.defer()
+
+            if NSFWID != -1:
+                NSFWembed = discord.Embed(title="Does Your Report Contain NSFW?", 
+                                        description="Use the buttons below to select whether your ticket "
+                                        "contains **content that is considered Not Safe For Work (NSFW)**, "
+                                        "such as:\n"
+                                        "> - Gore or extreme violence\n"
+                                        "> - Suggestive, explicit, or sexual content\n"
+                                        "> - Anything violating **Rule 1.** of our server's rules list\n"
+                                        "We ask this to ensure your report is handed to the appropriate staff "
+                                        "members, thank you!",
+                                        color=discord.Color.red())
+
+                # Build and send the NSFW button view
+                view = NSFWButtonView(bot, guild, category, typeID, NSFWID, dm_channelID, values, title, time_taken)
+
+                try:
+                    message = await interaction.message.edit(embed=NSFWembed, view=view)
+                    view.message = message
+                except discord.HTTPException:
+                    message = await interaction.channel.send(embed=NSFWembed, view=view)
+                    view.message = message
+            else:
+                sendingEmbed = discord.Embed(description="Opening ticket...", color=discord.Color.blue())
+                opening_message = await interaction.channel.send(embed=sendingEmbed)
+                user = interaction.user
+
+                opener = TicketOpener(bot)
+                status = await opener.open_ticket(user, guild, category, typeID, values, title, time_taken, False)
+                await opening_message.delete()
+
+                if not status:
+                    errorEmbed = discord.Embed(
+                        description="❌ Couldn't open a ticket in the destination server. Please contact a server admin.",
+                        color=discord.Color.red()
+                    )
+                    await interaction.channel.send(embed=errorEmbed)
         except Exception as e:
-            print(f"Failed to delete old message: {e}")
-
-        await interaction.response.defer()
-            
-        sendingEmbed = discord.Embed(description="Opening ticket...", color=discord.Color.blue())
-        opening_message = await interaction.channel.send(embed=sendingEmbed)
-        user = interaction.user
-
-        opener = TicketOpener(bot)
-        status = await opener.open_ticket(user, guild, category, typeID, dm_channelID, values, title, time_taken)
-        await opening_message.delete()
-
-        if not status:
-            errorEmbed = discord.Embed(
-                description="❌ Couldn't open a ticket in the destination server. Please contact a server admin.",
-                color=discord.Color.red()
-            )
-            await interaction.channel.send(embed=errorEmbed)
+            print(e)
             
     # Send the modal
     await interaction.response.send_modal(DynamicFormModal(title, fields, handle_submit, view))
@@ -538,16 +570,94 @@ class DynamicFormModal(discord.ui.Modal):
         message = None
 
         # Stop the original view to disable its components
-        if self.source_view:
-            message = self.source_view.message
-            self.source_view.stop()
+        # if self.source_view:
+        #     message = self.source_view.message
+        #     self.source_view.stop()
 
-        # Delete the original category select message
-        if (message):
-            try:
-                await message.delete()
-            except discord.HTTPException:
-                pass
+        # # Delete the original category select message
+        # if (message):
+        #     try:
+        #         await message.delete()
+        #     except discord.HTTPException:
+        #         pass
+
+
+class NSFWButtonView(TimeoutSafeView):
+    def __init__(self, bot, guild, category, typeID, NSFWID, dm_channelID, values, title, time_taken):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.guild = guild
+        self.category = category
+        self.typeID = typeID
+        self.NSFWID = NSFWID
+        self.dm_channelID = dm_channelID
+        self.values = values
+        self.title = title
+        self.time_taken = time_taken
+        self.message = None
+   
+
+    @discord.ui.button(label="Yes, it contains NSFW", style=discord.ButtonStyle.success, row=0)
+    async def nsfw_yes_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+
+        try:
+            # Delete the original DM message with the view
+            await self.message.delete()
+        except Exception as e:
+            print(f"Failed to delete old message: {e}")
+
+        category = await self.bot.cache.get_channel(self.NSFWID)
+        if not category:
+            errorEmbed = discord.Embed(
+                description="❌ Couldn't find NSFW ticket category in the destination server. "
+                            "Please contact a server admin.",
+                color=discord.Color.red())
+            await interaction.channel.send(embed=errorEmbed)
+            return
+        self.category = category
+            
+        sendingEmbed = discord.Embed(description="Opening ticket...", color=discord.Color.blue())
+        opening_message = await interaction.channel.send(embed=sendingEmbed)
+        user = interaction.user
+
+        opener = TicketOpener(self.bot)
+        status = await opener.open_ticket(user, self.guild, self.category, self.typeID, 
+                                          self.values, self.title, self.time_taken, True)
+        await opening_message.delete()
+
+        if not status:
+            errorEmbed = discord.Embed(
+                description="❌ Couldn't open a ticket in the destination server. Please contact a server admin.",
+                color=discord.Color.red()
+            )
+            await interaction.channel.send(embed=errorEmbed)
+
+
+    @discord.ui.button(label="No, it does not", style=discord.ButtonStyle.danger, row=0)
+    async def nsfw_no_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        try:
+            # Delete the original DM message with the view
+            await self.message.delete()
+        except Exception as e:
+            print(f"Failed to delete old message: {e}")
+            
+        sendingEmbed = discord.Embed(description="Opening ticket...", color=discord.Color.blue())
+        opening_message = await interaction.channel.send(embed=sendingEmbed)
+        user = interaction.user
+
+        opener = TicketOpener(self.bot)
+        status = await opener.open_ticket(user, self.guild, self.category, self.typeID, 
+                                          self.values, self.title, self.time_taken, False)
+        await opening_message.delete()
+
+        if not status:
+            errorEmbed = discord.Embed(
+                description="❌ Couldn't open a ticket in the destination server. Please contact a server admin.",
+                color=discord.Color.red()
+            )
+            await interaction.channel.send(embed=errorEmbed)
 
 
 class TicketRatingView(discord.ui.View):

@@ -135,7 +135,30 @@ class Analytics(commands.Cog):
             guild = server_channel.guild
             timestamp = datetime.now(timezone.utc)
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
-            text = await self.bot.helper.convert_mentions(message.content, guild)
+            snapshot_flag = False
+            content = None
+
+            if message.type.name == "FORWARD":
+                snapshots = getattr(message, "message_snapshots", None)
+                if snapshots:
+                    snapshot_flag = True
+                    snapshot = snapshots[0].message
+                    content = snapshot.content
+                else:
+                    errorEmbed.description=("❌ Failed to process forwarded message. "
+                                            "Send the message via copy-paste instead.")
+                    await message.channel.send(embed=errorEmbed)
+                    return
+            else:
+                content = message.content
+
+            if content is None:
+                errorEmbed.description=("❌ Failed to read forwarded message content. "
+                                        "Send the message via copy-paste instead.")
+                await message.channel.send(embed=errorEmbed)
+                return
+            
+            text = await self.bot.helper.convert_mentions(content, guild)
 
             # Check if over 4000 characters
             if len(text) > 4000:
@@ -166,7 +189,10 @@ class Analytics(commands.Cog):
                                     color=discord.Color.blue())
 
             if message:
-                attachments = message.attachments
+                if snapshot_flag:
+                    attachments = message.message_snapshots[0].message.attachments
+                else:
+                    attachments = message.attachments
 
                 if len(attachments) > 0:
                     fileMessage = await message.channel.send(embed=fileEmbed)
@@ -219,7 +245,7 @@ class Analytics(commands.Cog):
                                                             author.id, 
                                                             format_time, 
                                                             "Received", True)
-            self.bot.channel_status.remove_timer(server_channel.id)
+            await self.bot.channel_status.remove_timer(server_channel.id)
             await self.bot.channel_status.set_emoji(server_channel, "alert")
 
         except Exception as e:
@@ -232,7 +258,7 @@ class Analytics(commands.Cog):
         author = message.author
         id_list = (channel.topic).split()
         threadID = id_list[-1]
-        userID = id_list[-3]
+        userID = id_list[-2]
         
         # Process message to ticket opener
         await self.route_to_dm(message, channel, author, threadID, userID, anon, False)
@@ -371,12 +397,12 @@ class Analytics(commands.Cog):
                 sendEmbed.set_author(name=f"{author.name} | {author.id}", icon_url=author.display_avatar.url)
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-            await dm_channel.send(embed=sendEmbed, files=files)
+            dm_message = await dm_channel.send(embed=sendEmbed, files=files)
 
             thread = await self.bot.cache.get_channel(threadID)
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-            await thread.send(embed=receiptEmbed, files=files, allowed_mentions=discord.AllowedMentions(users=False))
+            thread_message = await thread.send(embed=receiptEmbed, files=files, allowed_mentions=discord.AllowedMentions(users=False))
 
             await self.bot.data_manager.add_ticket_message(sent_message.id, 
                                                             None, 
@@ -385,6 +411,7 @@ class Analytics(commands.Cog):
                                                             format_time, 
                                                             "Sent", True)
             await self.bot.channel_status.set_emoji(channel, "wait")
+            await self.bot.data_manager.add_message_link(channel.id, sent_message.id, [dm_message.id, thread_message.id])
 
         except Exception as e:
             if isinstance(message, discord.Message):
@@ -399,17 +426,29 @@ class Analytics(commands.Cog):
         threadID = id_list[-1]
 
         thread = await self.bot.cache.get_channel(threadID)
+        content = None
+        snapshot_flag = False
+
+        if message.type.name == "FORWARD":
+            snapshots = getattr(message, "message_snapshots", None)
+            if snapshots:
+                snapshot_flag = True
+                snapshot = snapshots[0].message
+                content = snapshot.content
+            else:
+                return
+        else:
+            content = message.content
 
         # Process any attachments
         attachments = []
         raw_files = []  # <-- store raw data
 
-        content = message.content
-        if len(message.content) > 1800:
-            content = content[:1797] + "..."
-
         if message:
-            attachments = message.attachments
+            if snapshot_flag:
+                attachments = message.message_snapshots[0].message.attachments
+            else:
+                attachments = message.attachments
 
             for file in attachments:
                 saved_file = io.BytesIO()
@@ -417,8 +456,10 @@ class Analytics(commands.Cog):
                 raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
 
         files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-        await thread.send(f"**{author.name}** `[COMMENT]`\n{content}\n"
-                          f"-# `ID: {author.id} | MSG: {message.id}`", files=files, allowed_mentions=discord.AllowedMentions(users=False))
+        thread_message = await thread.send(f"**{author.name}**\n{content}\n"
+                          f"-# `ID: {author.id}`", files=files, allowed_mentions=discord.AllowedMentions(users=False))
+        
+        await self.bot.data_manager.add_message_link(channel.id, message.id, [-1, thread_message.id])
         
 
     async def edit_comment(self, message):
@@ -429,11 +470,15 @@ class Analytics(commands.Cog):
 
         thread = await self.bot.cache.get_channel(threadID)
 
-        async for thread_message in thread.history(limit=None, oldest_first=False):
-            if str(message.id) in thread_message.content:
-                await thread_message.edit(content=f"**{author.name}** `[COMMENT]`\n{message.content}\n"
-                                                  f"-# `ID: {author.id} | MSG: {message.id}`")
-                return
+        _, thread_messageID = await self.bot.data_manager.get_linked_messages(channel.id, message.id)
+        try:
+            thread_message = await thread.fetch_message(thread_messageID)
+        except Exception:
+            pass
+        if thread_message:
+            await thread_message.edit(content=f"**{author.name}**\n{message.content}\n"
+                                              f"-# `ID: {author.id}`")
+            return
         return None
     
 
@@ -444,10 +489,14 @@ class Analytics(commands.Cog):
 
         thread = await self.bot.cache.get_channel(threadID)
 
-        async for thread_message in thread.history(limit=None, oldest_first=False):
-            if str(message.id) in thread_message.content:
-                await thread_message.delete()
-                return
+        _, thread_messageID = await self.bot.data_manager.get_linked_messages(channel.id, message.id)
+        try:
+            thread_message = await thread.fetch_message(thread_messageID)
+        except Exception:
+            pass
+        if thread_message:
+            await thread_message.delete()
+            return
         return None
 
 
@@ -693,6 +742,18 @@ class Analytics(commands.Cog):
             return
 
         if (isinstance(message.channel, discord.DMChannel)):
+            limited, retry, was_notified = self.bot.queue.check_user_action_cooldown("dm_start", message.author.id)
+
+            if limited:
+                if not was_notified:
+                    self.bot.queue.user_action_cooldowns["dm_start"]["notified"][message.author.id] = True
+                    errorEmbed = discord.Embed(
+                        description=f"❌ You're messaging me too quickly — retry in {retry:.1f} seconds.",
+                        color=discord.Color.red()
+                    )
+                    await message.channel.send(embed=errorEmbed)
+                return
+
             await self.bot_dm(message)
             return
         

@@ -135,7 +135,8 @@ class ChannelStatus:
 
                     # Remove expired timer
                     self.timers.pop(channelID, None)
-                    await asyncio.sleep(0.5)
+                    await self.bot.data_manager.save_timers_to_redis()
+                    await asyncio.sleep(2)
             except Exception:
                 await asyncio.sleep(5)
                     
@@ -185,19 +186,33 @@ class ChannelStatus:
 
 
     # Add emoji to the start of a channel's name
-    async def set_emoji(self, channel: discord.TextChannel, emoji_str: str, manual: bool = False) -> bool:
-        if emoji_str is None:
-            self.queue_update(channel, None, manual)
-            return True
-
+    async def set_emoji(self, channel: discord.TextChannel, emoji_str: str, manual: bool = False, nsfw: bool = None) -> bool:
         new_name = ""
-        selected_emoji = emojis.emoji_map.get(emoji_str, "")
+        if nsfw is not None:
+            current_name = self.pending_updates.get(channel.id, channel.name)
 
-        # Remove prefixed emoji if there is one
-        if (channel.name)[0] in emoji.EMOJI_DATA:
-            new_name = f"{selected_emoji}{(channel.name)[1:]}" if selected_emoji else f"{emoji_str}{(channel.name)[1:]}"
+            # nsfw is True, make name nsfw
+            if nsfw:
+                if any((current_name).startswith(value) for value in emojis.emoji_map.values()):
+                    new_name = f"{(current_name)[0]}{emojis.emoji_map.get('nsfw', '🔞')}{(current_name)[1:]}"
+
+            # nsfw is false, make name non-nsfw
+            elif not nsfw:
+                if any((current_name).startswith(value) for value in emojis.emoji_map.values()):
+                    new_name = f"{(current_name)[0]}{(current_name)[2:]}"
+
         else:
-            new_name = f"{selected_emoji}{channel.name}" if selected_emoji else f"{emoji_str}{channel.name}"
+            if emoji_str is None:
+                self.queue_update(channel, None, manual)
+                return True
+
+            selected_emoji = emojis.emoji_map.get(emoji_str, "")
+
+            # Remove prefixed emoji if there is one
+            if (channel.name)[0] in emoji.EMOJI_DATA and (not channel.name.startswith(emojis.emoji_map.get("nsfw", "🔞"))):
+                new_name = f"{selected_emoji}{(channel.name)[1:]}" if selected_emoji else f"{emoji_str}{(channel.name)[1:]}"
+            else:
+                new_name = f"{selected_emoji}{channel.name}" if selected_emoji else f"{emoji_str}{channel.name}"
 
         return self.queue_update(channel, new_name, manual)
 
@@ -207,15 +222,18 @@ class ChannelStatus:
         return input_emoji in emoji.EMOJI_DATA
     
 
-    def add_timer(self, channelID, time, modID, openerID, reason):
+    async def add_timer(self, channelID, time, modID, openerID, reason):
         self.timers[channelID] = [time, modID, openerID, reason]
+        await self.bot.data_manager.save_timers_to_redis()
 
 
-    def remove_timer(self, channelID):
+    async def remove_timer(self, channelID):
         if self.timers.pop(channelID, None) is not None:
+            await self.bot.data_manager.save_timers_to_redis()
             return True
         return False
     
+
     def get_timer(self, channelID):
         timer = self.timers.get(channelID, None)
         return timer
