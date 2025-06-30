@@ -247,9 +247,11 @@ class TicketOpener:
         greetingEmbed = None
         if config is not None:
             greeting_text = config["greeting"] 
-            if (len(greeting_text) < 1):
-                return
-            
+            if (len(greeting_text) == 0):
+                greeting_text = ("Hi {mention}, thanks for reaching out! We'll get back to you "
+                                 "as soon as we can.\n\nIn the meantime, please refer to the "
+                                 "informational channels in our server regarding MailBee and its "
+                                 "rules.")
             try:
                 greeting = greeting_text.format(
                     mention=f"<@{user.id}>",

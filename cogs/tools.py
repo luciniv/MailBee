@@ -163,9 +163,9 @@ async def delete_channel(ticket_channel, closingMessage, deleted):
 async def send_closing(bot, guild, dm_channel, channelID, user, closing_text):
     try:
         if (closing_text is None or len(closing_text) <= 1):
-            closing_text = ("Thank you for reaching out to us! Your ticket has been closed. "
-                       "Please do not respond to this message.\n\nFeel free to let us "
-                       "know how we're doing using the buttons below!")
+            closing_text = ("Your ticket has been closed. Please do not reply to this message. "
+                       "\n\nIf you require support again in the future, you may open a new ticket."
+                       "\n\nHow did we do? Let us know below!")
         closing = closing_text.format(
             mention=f"<@{user.id}>",
             name=user.name,
