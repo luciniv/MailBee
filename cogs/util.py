@@ -26,7 +26,7 @@ class Util(commands.Cog):
     async def leave(self, ctx, *, guild_name: str):
         for guild in self.bot.guilds:
             print("found guild", guild.name)
-            if guild.name.casefold == guild_name.casefold():
+            if guild.name.casefold() == guild_name.casefold():
                 await guild.leave()
                 await ctx.send(f"Left server: {guild.name}")
 
