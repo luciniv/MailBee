@@ -656,10 +656,13 @@ class Analytics(commands.Cog):
                 logger.debug("Ticket channel is already closed")
                 pass
 
-            robloxID, robloxUsername = await get_roblox_info(game_type, guild.id, openID)
-
             priority_values = [-1,-1]
+            robloxID = None
+            robloxUsername = None
             game_type = SERVER_TO_GAME.get(guild.id, None)
+
+            if game_type is not None:
+                robloxID, robloxUsername = await get_roblox_info(game_type, guild.id, openID)
 
             if game_type is not None and robloxUsername is not None:
                 priority_values = await get_priority(game_type, guild.id, openID, robloxUsername)
