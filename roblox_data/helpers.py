@@ -291,8 +291,12 @@ async def get_priority(game_type: tuple, guildID: int, openID: int, roblox_usern
 
 async def get_roblox_info(game_type: tuple, guildID: int, openID: int):
     try:
-        roblox_id, roblox_username = await get_roblox_username(guildID, openID, game_type[2])
+        roblox_id = None
+        roblox_username = None
+        result = await get_roblox_username(guildID, openID, game_type[2])
+        if result is not None:
+            roblox_id, roblox_username = result
         return roblox_id, roblox_username
     except Exception as e:
         logger.exception(f"get_roblox_info sent an error: {e}")
-        return None
+        return None, None
