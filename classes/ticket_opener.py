@@ -14,7 +14,10 @@ from roblox_data.helpers import *
 SERVER_TO_GAME = {
     714722808009064492: ("Creatures of Sonaria", 1831550657, os.getenv("COS_KEY")),
     346515443869286410: ("Dragon Adventures", 1235188606, os.getenv("DA_KEY")),
-    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY"))}
+    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY")),
+    549701425958223895: ("World // Zero", 0, os.getenv("WZ_KEY")),
+    1007432760027250740: ("Drive World", 0, os.getenv("DW_KEY")),
+    1301233303734718474: ("Dungeon Heroes", 0, os.getenv("DH_KEY"))}
 
 
 async def get_overwrites(guild, roles) -> Dict:
@@ -93,18 +96,38 @@ class TicketOpener:
                 # Send opening embed, and greeting if it exists
                 await self.send_opener(guild, dm_channel, user, values, title)
 
+                roblox_data = []
                 priority_values = [-1,-1]
+                robloxID = None
+                robloxUsername = None
                 game_type = SERVER_TO_GAME.get(guild.id, None)
-
-                result = None
                 if game_type is not None:
-                    result = await get_priority(game_type, guild.id, user.id)
+                    robloxID, robloxUsername = await get_roblox_info(game_type, guild.id, user.id)
 
-                if result is not None:
-                    priority_values = result
+                if robloxID is None:
+                    roblox_data.append("ID not found")
+                else:
+                    roblox_data.append(robloxID)
+                if robloxUsername is None:
+                    roblox_data.append("Username not found")
+                else:
+                    roblox_data.append(robloxUsername)
+
+                if game_type is not None and robloxUsername is not None:
+                    result = await get_priority(game_type, guild.id, user.id, robloxUsername)
+                    if result is None:
+                        roblox_data.append("Error fetching data")
+                        roblox_data.append("Error fetching data")
+                    else:
+                        priority_values = result
+                        roblox_data.append(result[0])
+                        roblox_data.append(result[1])
+                else:
+                    roblox_data.append("No data")
+                    roblox_data.append("No data")
 
                 # Send in-channel embeds
-                await self.send_ticket_embeds(guild, channel, thread, user, values, title, time_taken, priority_values, ticketID)
+                await self.send_ticket_embeds(guild, channel, thread, user, values, title, time_taken, roblox_data, ticketID)
 
                 # Add new ticket to database
                 await self.bot.data_manager.create_ticket(guild.id, ticketID, channel.id, user.id, thread.id, typeID, 
@@ -274,7 +297,7 @@ class TicketOpener:
         return submissionEmbed
 
 
-    async def send_ticket_embeds(self, guild, channel, thread, user, values, title, time_taken, priority_values, ticketID):
+    async def send_ticket_embeds(self, guild, channel, thread, user, values, title, time_taken, roblox_data, ticketID):
         member = await self.bot.cache.get_guild_member(guild, user.id)
 
         if member is None:
@@ -292,8 +315,6 @@ class TicketOpener:
          
         roles = member.roles
         default = guild.default_role
-        if priority_values == [-1,-1]:
-            priority_values = ["No data", "No data"]
 
         ticketEmbed = discord.Embed(title=f"New \"{title}\" Ticket [ID {ticketID}]",
                                     description="To reply, send a message in this channel prefixed with `+`. "
@@ -320,11 +341,11 @@ class TicketOpener:
         ticketEmbed.add_field(name="Join Date", value=f"<t:{int(member.joined_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name="Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
-        # ticketEmbed.add_field(name="Roblox Username", value=priority_values[2], inline=True)
-        # ticketEmbed.add_field(name="Roblox ID", value=priority_values[3], inline=True)
-        # ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name="Robux Spent", value=priority_values[0], inline=True)
-        ticketEmbed.add_field(name="Hours Ingame", value=priority_values[1], inline=True)
+        ticketEmbed.add_field(name="Roblox Username", value=roblox_data[1], inline=True)
+        ticketEmbed.add_field(name="Roblox ID", value=roblox_data[0], inline=True)
+        ticketEmbed.add_field(name="", value="", inline=False)
+        ticketEmbed.add_field(name="Robux Spent", value=roblox_data[2], inline=True)
+        ticketEmbed.add_field(name="Hours Ingame", value=roblox_data[3], inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
         ticketEmbed.add_field(name="Time Taken on Form", value=f"`{time_taken}` seconds", inline=True)
         ticketEmbed.add_field(name="Prior Tickets", value=count, inline=True)

@@ -179,7 +179,7 @@ async def send_closing(bot, guild, dm_channel, channelID, user, closing_text):
     url = None
     if guild.icon:
         url = guild.icon.url
-    closingEmbed.set_footer(text=f"{guild.name}", icon_url=url)
+    closingEmbed.set_footer(text=f"{guild.name} | {channelID}", icon_url=url)
 
     view = TicketRatingView(bot=bot)
     message = await dm_channel.send(embed=closingEmbed, view=view)
@@ -425,6 +425,9 @@ class Tools(commands.Cog):
                     id_list = (channel.topic).split()
                     threadID = id_list[-1]
                     userID = id_list[-2]
+                    startEmbed = discord.Embed(description="Started editing process...", 
+                                               color=discord.Color.blue())
+                    startMessage = await ctx.send(embed=startEmbed)
        
                     try:
                         message = await channel.fetch_message(reply_id)
@@ -530,6 +533,7 @@ class Tools(commands.Cog):
                         await ctx.send(embed=errorEmbed)
                         return
 
+                    await startMessage.delete()
                     successEmbed = discord.Embed(description=f"✅ Updated ticket reply for <@{member.id}> ({member.name})",
                                                 color=discord.Color.green())
                     await ctx.send(embed=successEmbed)
@@ -563,6 +567,9 @@ class Tools(commands.Cog):
                     id_list = (channel.topic).split()
                     threadID = id_list[-1]
                     userID = id_list[-2]
+
+                    startEmbed = discord.Embed(description="Started deleting process...", color=discord.Color.blue())
+                    startMessage = await ctx.send(embed=startEmbed)
        
                     try:
                         message = await channel.fetch_message(reply_id)
@@ -658,6 +665,7 @@ class Tools(commands.Cog):
                         await ctx.send(embed=errorEmbed)
                         return
 
+                    await startMessage.delete()
                     successEmbed = discord.Embed(description=f"✅ Deleted ticket reply for <@{member.id}> ({member.name})",
                                                 color=discord.Color.green())
                     await ctx.send(embed=successEmbed)
@@ -1127,17 +1135,20 @@ class Tools(commands.Cog):
             if current_name.startswith(emojis.emoji_map.get("inactive", "")):
                 errorEmbed = discord.Embed(description="❌ Cannot change the status of an **inactive** ticket", 
                                            color=discord.Color.red())
+                await ctx.send(embed=errorEmbed)
+                return
 
             result = await self.bot.channel_status.set_emoji(channel, emoji_str, True)
 
-            statusEmbed = discord.Embed(description=f"Channel status set to **{emoji_name}**."
+            statusEmbed = discord.Embed(description=f"✅ Channel status set to **{emoji_name}**"
                                         "\n(*Please wait up to 5 minutes for edits to appear*)",
                                         color=discord.Color.green())
             if not result:
-                statusEmbed.description=(f"❌ Failed to set channel status to {emoji_str}, current "
+                statusEmbed.description=(f"❌ Failed to set channel status to **{emoji_name}**, current "
                                          "or pending status is already set as this")
                 statusEmbed.color=discord.Color.red()
-            await channel.send(embed=statusEmbed)
+            await ctx.send(embed=statusEmbed)
+            return
 
         except Exception as e:
             logger.exception(e)

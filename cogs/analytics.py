@@ -16,8 +16,10 @@ from utils.logger import *
 SERVER_TO_GAME = {
     714722808009064492: ("Creatures of Sonaria", 1831550657, os.getenv("COS_KEY")),
     346515443869286410: ("Dragon Adventures", 1235188606, os.getenv("DA_KEY")),
-    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY"))
-}
+    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY"))}
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 20MB in bytes
+
 
 class Analytics(commands.Cog):
     def __init__(self, bot):
@@ -178,16 +180,17 @@ class Analytics(commands.Cog):
 
             # Process any attachments
             attachments = []
+            final_attachments = []
             raw_files = []  # <-- store raw data
             files = []
             fileMessage = None
             fileEmbed = discord.Embed(title="", 
                                     description="**Processing files...**\n"
                                     "Please note that image / video files may not send if they are too "
-                                    "large (>20MB). For the fastest processing, upload large files to "
+                                    "large (>10MB). For the fastest processing, upload large files to "
                                     "hosting websites and share links to the uploads instead.",
                                     color=discord.Color.blue())
-
+            skipped_files = False
             if message:
                 if snapshot_flag:
                     attachments = message.message_snapshots[0].message.attachments
@@ -197,18 +200,31 @@ class Analytics(commands.Cog):
                 if len(attachments) > 0:
                     fileMessage = await message.channel.send(embed=fileEmbed)
 
+                total_size = 0
                 for file in attachments:
+                    if file.size + total_size > MAX_FILE_SIZE:
+                        skipped_files = True
+                        continue
+                    else:
+                        final_attachments.append(file.url)
                     saved_file = io.BytesIO()
                     await file.save(saved_file)
                     raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
+                    total_size += file.size
+
+            if len(text) == 0 and len(final_attachments) == 0:
+                emptyEmbed = discord.Embed(description="❌ Message not sent, you cannot send an empty message.",
+                                           color=discord.Color.red())
+                await message.channel.send(embed=emptyEmbed)
+                return
 
             replyEmbed = discord.Embed(title="Message Sent", 
                                     description=text,
                                     color=discord.Color.green())
             replyEmbed.timestamp = datetime.now(timezone.utc)
             # Add attachment URLs to embed
-            for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
-                replyEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
+            for count, url in enumerate(final_attachments, start=1):
+                replyEmbed.add_field(name=f"Attachment {count}", value=url, inline=False)
 
             if guild.icon:
                 replyEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
@@ -219,6 +235,12 @@ class Analytics(commands.Cog):
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             sent_message = await message.channel.send(embed=replyEmbed, files=files)
 
+            if skipped_files:
+                skipEmbed = discord.Embed(description="⚠️ Some attachments were skipped for being too "
+                                          "large or exceeding the total file size limit (10MB).", 
+                                          color=discord.Color.yellow())
+                await message.channel.send(embed=skipEmbed)
+
             if fileMessage is not None:
                 await fileMessage.delete()
 
@@ -227,8 +249,8 @@ class Analytics(commands.Cog):
                                     color=discord.Color.green())
             sendEmbed.timestamp = datetime.now(timezone.utc)
             # Add attachment URLs to embed
-            for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
-                sendEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
+            for count, url in enumerate(final_attachments, start=1):
+                sendEmbed.add_field(name=f"Attachment {count}", value=url, inline=False)
             sendEmbed.set_footer(text=f"{author.name} | {author.id}", icon_url=author.display_avatar.url)
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
@@ -334,36 +356,50 @@ class Analytics(commands.Cog):
 
             # Process any attachments
             attachments = []
+            final_attachments = []
             raw_files = [] 
             fileMessage = None
             fileEmbed = discord.Embed(title="", 
                                     description="**Processing files...**\n"
                                     "Please note that image / video files may not send if they are too "
-                                    "large (>20MB). For the fastest processing, upload large files to "
+                                    "large (>10MB). For the fastest processing, upload large files to "
                                     "hosting websites and share links to the uploads instead.",
                                     color=discord.Color.blue())
-            
+            skipped_files = False
             if isinstance(message, discord.Message):
                 attachments = message.attachments
 
                 if len(attachments) > 0:
                     fileMessage = await message.channel.send(embed=fileEmbed)
 
+                total_size = 0
                 for file in attachments:
+                    if file.size + total_size > MAX_FILE_SIZE:
+                        skipped_files = True
+                        continue
+                    else:
+                        final_attachments.append(file.url)
                     saved_file = io.BytesIO()
                     await file.save(saved_file)
                     raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
+                    total_size += file.size
 
             if isinstance(message, discord.Message):
                 await message.delete()
+
+            if len(content) == 0 and len(final_attachments) == 0:
+                emptyEmbed = discord.Embed(description="❌ Message not sent, you cannot send an empty message.",
+                                           color=discord.Color.red())
+                await channel.send(embed=emptyEmbed)
+                return
 
             receiptEmbed = discord.Embed(title=f"Message Sent [STAFF]", 
                                     description=content,
                                     color=discord.Color.blue())
             receiptEmbed.timestamp = datetime.now(timezone.utc)
             # Add attachment URLs to embed
-            for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
-                receiptEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
+            for count, url in enumerate(final_attachments, start=1):
+                receiptEmbed.add_field(name=f"Attachment {count}", value=url, inline=False)
 
             name = f"{author.name} | {author.id}"
             if anon:
@@ -377,6 +413,12 @@ class Analytics(commands.Cog):
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             sent_message = await channel.send(embed=receiptEmbed, files=files)
 
+            if skipped_files:
+                skipEmbed = discord.Embed(description="⚠️ Some attachments were skipped for being too "
+                                          "large or exceeding the total file size limit (10MB).", 
+                                          color=discord.Color.yellow())
+                await channel.send(embed=skipEmbed)
+
             if fileMessage is not None:
                 await fileMessage.delete()
 
@@ -385,8 +427,8 @@ class Analytics(commands.Cog):
                                     color=discord.Color.blue())
             sendEmbed.timestamp = datetime.now(timezone.utc)
             # Add attachment URLs to embed
-            for count, attachment in enumerate([attachment.url for attachment in attachments], start=1):
-                sendEmbed.add_field(name=f"Attachment {count}", value=attachment, inline=False)
+            for count, url in enumerate(final_attachments, start=1):
+                sendEmbed.add_field(name=f"Attachment {count}", value=url, inline=False)
 
             if guild.icon:
                 sendEmbed.set_footer(text=f"{guild.name}", icon_url=guild.icon.url)
@@ -450,10 +492,14 @@ class Analytics(commands.Cog):
             else:
                 attachments = message.attachments
 
+            total_size = 0
             for file in attachments:
+                if file.size + total_size > MAX_FILE_SIZE:
+                    continue
                 saved_file = io.BytesIO()
                 await file.save(saved_file)
                 raw_files.append((saved_file.getvalue(), file.filename))  # store raw bytes + filename
+                total_size += file.size
 
         files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
         thread_message = await thread.send(f"**{author.name}**\n{content}\n"
@@ -610,11 +656,13 @@ class Analytics(commands.Cog):
                 logger.debug("Ticket channel is already closed")
                 pass
 
+            robloxID, robloxUsername = await get_roblox_info(game_type, guild.id, openID)
+
             priority_values = [-1,-1]
             game_type = SERVER_TO_GAME.get(guild.id, None)
 
-            if game_type is not None:
-                priority_values = await get_priority(game_type, guild.id, openID)
+            if game_type is not None and robloxUsername is not None:
+                priority_values = await get_priority(game_type, guild.id, openID, robloxUsername)
 
             if not priority_values:
                 priority_values = [-1,-1]

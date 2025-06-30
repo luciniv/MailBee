@@ -481,7 +481,7 @@ class BackButton(discord.ui.Button):
             view.message = message
 
 
-async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, dm_channelID, modal_template, view):
+async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, dm_channelID, modal_template, source_view):
     if not category:
         errorEmbed = discord.Embed(
             description="❌ Couldn't find ticket category in the destination server. Please contact a server admin.",
@@ -522,6 +522,12 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, 
                     message = await interaction.channel.send(embed=NSFWembed, view=view)
                     view.message = message
             else:
+                try:
+                    # Delete the original DM message with the view
+                    await source_view.message.delete()
+                except Exception as e:
+                    print(f"Failed to delete old message: {e}")
+
                 sendingEmbed = discord.Embed(description="Opening ticket...", color=discord.Color.blue())
                 opening_message = await interaction.channel.send(embed=sendingEmbed)
                 user = interaction.user
@@ -540,7 +546,7 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, 
             print(e)
             
     # Send the modal
-    await interaction.response.send_modal(DynamicFormModal(title, fields, handle_submit, view))
+    await interaction.response.send_modal(DynamicFormModal(title, fields, handle_submit, source_view))
 
 
 class DynamicFormModal(discord.ui.Modal):
@@ -710,9 +716,9 @@ class TicketRatingView(discord.ui.View):
             message = interaction.message
             embed = message.embeds[0]
             footer = (embed.footer.text).split()
-            ticketID = footer[-1]
+            channelID = footer[-1]
 
-            await self.bot.data_manager.update_rating(ticketID, "Satisfied")
+            await self.bot.data_manager.update_rating(channelID, "Satisfied")
 
 
     @discord.ui.button(label="Dissatisfied", style=discord.ButtonStyle.danger, row=0, emoji="👎", custom_id="not_resolved")
@@ -730,9 +736,9 @@ class TicketRatingView(discord.ui.View):
             message = interaction.message
             embed = message.embeds[0]
             footer = (embed.footer.text).split()
-            ticketID = footer[-1]
+            channelID = footer[-1]
 
-            await self.bot.data_manager.update_rating(ticketID, "Dissatisfied")
+            await self.bot.data_manager.update_rating(channelID, "Dissatisfied")
 
 
     @discord.ui.button(label="📝 Leave Feedback", style=discord.ButtonStyle.secondary, row=1, custom_id="feedback")
@@ -765,11 +771,11 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
         user = interaction.user
         embed = message.embeds[0]
         footer = (embed.footer.text).split()
-        ticketID = footer[-1]
+        channelID = footer[-1]
         guildID = None
         threadID = None
 
-        data = await self.bot.data_manager.get_guild_and_log(ticketID)
+        data = await self.bot.data_manager.get_guild_and_log(channelID)
         if len(data) != 0:
             guildID = data[0][0]
             threadID = data[0][1]
@@ -814,11 +820,11 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
         user = interaction.user
         embed = message.embeds[0]
         footer = (embed.footer.text).split()
-        ticketID = footer[-1]
+        channelID = footer[-1]
         guildID = None
         threadID = None
 
-        data = await self.bot.data_manager.get_guild_and_log(ticketID)
+        data = await self.bot.data_manager.get_guild_and_log(channelID)
         if len(data) != 0:
             guildID = data[0][0]
             threadID = data[0][1]

@@ -21,6 +21,8 @@ MAX_RETRIES = 3
 async def get_roblox_username(guild_id, discord_id, api_key):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
+            roblox_id = None
+            username = None
             # Get Roblox ID from Bloxlink API
             bloxlink_url = f"https://api.blox.link/v4/public/guilds/{guild_id}/discord-to-roblox/{discord_id}"
             headers = {"Authorization": api_key}
@@ -32,15 +34,20 @@ async def get_roblox_username(guild_id, discord_id, api_key):
                 roblox_id = data.get("robloxID")
                 if not roblox_id:
                     return None
-
-            # Get Roblox username from Roblox API
-            roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
-            async with session.get(roblox_url) as response:
-                if response.status != 200:
-                    return None
-
-                data = await response.json()
-                return data.get("name")
+                
+                resolved = data.get("resolved")
+                if not resolved:
+                    # Get Roblox username from Roblox API
+                    roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
+                    async with session.get(roblox_url) as response:
+                        if response.status != 200:
+                            return None
+                        
+                        data = await response.json()
+                        username = data.get("name")
+                else:
+                    username = resolved.get("name")
+        return roblox_id, username
             
     except asyncio.TimeoutError:
         logger.warning("get_roblox_username request timed out")
@@ -62,7 +69,6 @@ async def get_roblox_user_info(username):
                     user_data = data.get('data')
                     
                     if user_data:
-                        print("there was data!")
                         return user_data[0]  # Return first result
 
         return None
@@ -220,7 +226,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: int):
     try:
         game_config = CONFIG[game_name]
-        user_info = await get_roblox_user_info(user)
+        user_info, = await get_roblox_user_info(user)
         
         if user_info is None:
             return None, None, "User account does not exist on Roblox"
@@ -264,7 +270,6 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
             
             values.append(int(robux_spent.replace(",", "")))
             values.append(time_played)
-            #values.appent(roblox_id)
 
         except Exception as e:
             values = None
@@ -274,13 +279,20 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
         logger.error(f"ticket_get_user_and_player_data sent an error: {e}")
 
 
-async def get_priority(game_type: tuple, guildID: int, openID: int):
+async def get_priority(game_type: tuple, guildID: int, openID: int, roblox_username):
     try:
-        roblox_username = await get_roblox_username(guildID, openID, game_type[2])
-
         if roblox_username:
             values, file_path, error = await ticket_get_user_and_player_data(roblox_username, game_type[0], game_type[1])
             return values
         return None
     except Exception as e:
         logger.error(f"get_priority sent an error: {e}")
+
+
+async def get_roblox_info(game_type: tuple, guildID: int, openID: int):
+    try:
+        roblox_id, roblox_username = await get_roblox_username(guildID, openID, game_type[2])
+        return roblox_id, roblox_username
+    except Exception as e:
+        logger.error(f"get_roblox_info sent an error: {e}")
+        return None

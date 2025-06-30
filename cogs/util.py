@@ -25,6 +25,7 @@ class Util(commands.Cog):
     @checks.is_owner()
     async def leave(self, ctx, *, guild_name: str):
         for guild in self.bot.guilds:
+            print("found guild", guild.name)
             if guild.name.casefold == guild_name.casefold():
                 await guild.leave()
                 await ctx.send(f"Left server: {guild.name}")
