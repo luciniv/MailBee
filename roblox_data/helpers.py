@@ -36,7 +36,10 @@ async def get_roblox_username(guild_id, discord_id, api_key):
                     return None
                 
                 resolved = data.get("resolved", {})
-                if not resolved:
+                roblox_info = resolved.get("Roblox")
+                if roblox_info:
+                     username = roblox_info["Name"]
+                else:
                     # Get Roblox username from Roblox API
                     roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
                     async with session.get(roblox_url) as response:
@@ -45,9 +48,7 @@ async def get_roblox_username(guild_id, discord_id, api_key):
                         
                         data = await response.json()
                         username = data.get("name")
-                else:
-                    roblox_info = resolved.get("roblox")
-                    username = roblox_info["name"]
+                    
         return roblox_id, username
             
     except asyncio.TimeoutError:
