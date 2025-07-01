@@ -534,7 +534,7 @@ class Tools(commands.Cog):
                         return
 
                     await startMessage.delete()
-                    successEmbed = discord.Embed(description=f"✅ Updated ticket reply for <@{member.id}> ({member.name})",
+                    successEmbed = discord.Embed(description=f"✅ Updated ticket reply to **{member.name}**",
                                                 color=discord.Color.green())
                     await ctx.send(embed=successEmbed)
                     return
@@ -666,7 +666,7 @@ class Tools(commands.Cog):
                         return
 
                     await startMessage.delete()
-                    successEmbed = discord.Embed(description=f"✅ Deleted ticket reply for <@{member.id}> ({member.name})",
+                    successEmbed = discord.Embed(description=f"✅ Deleted ticket reply to **{member.name}**",
                                                 color=discord.Color.green())
                     await ctx.send(embed=successEmbed)
                     return

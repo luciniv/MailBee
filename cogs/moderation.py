@@ -60,7 +60,7 @@ class Moderation(commands.Cog):
                                 date_close = f"<t:{int(close.timestamp())}:D>"
                             closeID = ticket[4]
                             if closeID is not None:
-                                closeID = f"<@{closeID}"
+                                closeID = f"<@{closeID}>"
                             state = (ticket[5]).upper()
                             typeName = ticket[6]
 
