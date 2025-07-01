@@ -31,8 +31,8 @@ class Queue:
 
         # Customize delays and concurrency per route type
         self.route_delays = {
-            "dm_send": (0.5, 1),
-            "message_send": (0.5, 10),
+            "dm_send": (0.5, 2),
+            "message_send": (0.2, 10),
             "message_delete": (0.5, 5),
             "message_edit": (0.5, 5),
             "channel_edit": (0.5, 5),
