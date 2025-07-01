@@ -93,9 +93,6 @@ class TicketOpener:
             await log_message.edit(embed=logEmbed)
 
             if channel:
-                # Send opening embed, and greeting if it exists
-                await self.send_opener(guild, dm_channel, user, values, title)
-
                 roblox_data = []
                 priority_values = [-1,-1]
                 robloxID = None
@@ -128,6 +125,9 @@ class TicketOpener:
 
                 # Send in-channel embeds
                 await self.send_ticket_embeds(guild, channel, thread, user, values, title, time_taken, roblox_data, ticketID)
+
+                # Send opening embed, and greeting if it exists
+                await self.send_opener(guild, dm_channel, user, values, title)
 
                 # Add new ticket to database
                 await self.bot.data_manager.create_ticket(guild.id, ticketID, channel.id, user.id, thread.id, typeID, 

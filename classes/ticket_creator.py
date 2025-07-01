@@ -528,7 +528,9 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, 
                 except Exception as e:
                     print(f"Failed to delete old message: {e}")
 
-                sendingEmbed = discord.Embed(description="Opening ticket...", color=discord.Color.blue())
+                sendingEmbed = discord.Embed(description="Opening ticket...\n\n"
+                                             "This may take a moment!", 
+                                             color=discord.Color.blue())
                 opening_message = await interaction.channel.send(embed=sendingEmbed)
                 user = interaction.user
 

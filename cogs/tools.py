@@ -451,10 +451,13 @@ class Tools(commands.Cog):
                         await ctx.send(embed=errorEmbed)
                         return
                     
-                    if ((message.embeds[0].author.name).split()[2] != str(author.id)) or (not channel.permissions_for(author).administrator):
-                        errorEmbed.description="❌ You do not have permission to alter that message"
-                        await ctx.send(embed=errorEmbed)
-                        return
+                    if ((message.embeds[0].author.name).split()[2] != str(author.id)):
+                        if (channel.permissions_for(author).administrator):
+                            pass
+                        else:
+                            errorEmbed.description="❌ You do not have permission to alter that message"
+                            await ctx.send(embed=errorEmbed)
+                            return
 
                     if (len(new_content) > 4000):
                         errorEmbed.description=("❌ Content must be at most 4000 characters. Note that "
@@ -593,10 +596,13 @@ class Tools(commands.Cog):
                         await ctx.send(embed=errorEmbed)
                         return
                     
-                    if ((message.embeds[0].author.name).split()[2] != str(author.id)) or (not channel.permissions_for(author).administrator):
-                        errorEmbed.description="❌ You do not have permission to delete that message"
-                        await ctx.send(embed=errorEmbed)
-                        return
+                    if ((message.embeds[0].author.name).split()[2] != str(author.id)):
+                        if (channel.permissions_for(author).administrator):
+                            pass
+                        else:
+                            errorEmbed.description="❌ You do not have permission to alter that message"
+                            await ctx.send(embed=errorEmbed)
+                            return
                     
                     member = await self.bot.cache.get_guild_member(guild, userID)
                     if member is None:
