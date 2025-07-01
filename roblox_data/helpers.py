@@ -202,15 +202,8 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
                 robux_spent = game_config['robux_parser'](result_dict)
                 time_played = game_config['time_parser'](result_dict)
             except Exception as e:
-                print(e)
-                if (game_type == 5422546686):
-                    print("trying for new HL data")
-                    try:
-                        robux_spent = format(result_dict['bia']['aiq'], ',')
-                        time_played = round(result_dict['bki']['atm'] / 3600, 1)
-                    except Exception as e:
-                        print(e)
-                        raise
+               message = "Error retriving engagement statistics"
+               return message, 'output.json', user_info
             
             values.append(int(robux_spent.replace(",", "")))
             values.append(time_played)
@@ -228,7 +221,7 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: int):
     try:
         game_config = CONFIG[game_name]
-        user_info, = await get_roblox_user_info(user)
+        user_info = await get_roblox_user_info(user)
         
         if user_info is None:
             return None, None, "User account does not exist on Roblox"
