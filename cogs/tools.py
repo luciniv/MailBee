@@ -1117,8 +1117,7 @@ class Tools(commands.Cog):
     @commands.hybrid_command(name="status", description="Change the emoji status of a ticket")
     @checks.is_guild()
     @checks.is_user()
-    @app_commands.describe(status="Select an emoji from the defined list, or add a custom one" 
-                                    " (unicode only)")
+    @app_commands.describe(status="Select an emoji from the provided list")
     @app_commands.choices(status=[
         app_commands.Choice(name=f"🆕 - New ticket", value="new"),
         app_commands.Choice(name=f"❗️ - Waiting for moderator response", value="alert"),
