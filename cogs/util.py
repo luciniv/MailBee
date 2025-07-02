@@ -82,6 +82,14 @@ class Util(commands.Cog):
         await self.bot.data_manager.get_or_load_guild_types(ctx.guild.id, False)
         await ctx.send("Refreshed ticket types")
 
+
+    @commands.command()
+    @checks.is_owner()
+    async def refresh_config(self, ctx):
+        await self.bot.data_manager.get_or_load_config(ctx.guild.id, False)
+        await ctx.send("Refreshed config")
+
+
     @commands.command()
     @checks.is_owner()
     async def del_rticket(self, ctx, userID, guildID):
