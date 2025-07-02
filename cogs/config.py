@@ -241,10 +241,8 @@ class Config(commands.Cog):
                             auto_archive_duration=10080)
                         setupEmbed.add_field(name="", value=f"Created the ticket reports thread: <#{reports_thread.id}>", inline=False)
             
-            print("about to write to DB")
             await self.bot.data_manager.add_config_to_db(guildID, log_channel.id, inbox_category.id, 
                                                          responses_channel.id, feedback_thread.id, reports_thread.id)
-            print("written to database")
             await ctx.send(embed=setupEmbed)
             
         except Exception as e:
@@ -272,7 +270,6 @@ class Config(commands.Cog):
 
             # Config must exist due to checks passing
             config = await self.bot.data_manager.get_or_load_config(guild.id)
-            print("IN COMMAND config is", config)
 
             inbox_category = guild.get_channel(config["inboxID"])
 
@@ -601,16 +598,13 @@ class Config(commands.Cog):
                                             " If this reaction fails to appear, run `/setup` again or contact"
                                             " <@429711831695753237>.\n\n**")
             setupEmbed.add_field(name="Setup Output:", value=f"", inline=False)
-            print(guild.channels)
 
             for channel in guild.channels:
                 if (isinstance(channel, discord.DMChannel)):
                     pass
                  
                 if (isinstance(channel, discord.TextChannel)):
-                    print("process text channel")
                     if (channel.name == "modmail-log"):
-                        print("modmail-log channel found")
                         search_monitor = [
                             (channelID) for guildID, channelID, monitorType 
                             in self.bot.data_manager.monitored_channels if channelID == channel.id]
@@ -626,7 +620,6 @@ class Config(commands.Cog):
                                                 inline=False)
                             
                     elif ((channel.name)[-2:] == "-0"):
-                        print("process -0 text channel, create tickets cat", channel.name)
                         this_category = channel.category
                         if ((this_category.name).casefold() == "modmail"):
                             pass
@@ -646,7 +639,6 @@ class Config(commands.Cog):
                                                     inline=False)
 
                 if (isinstance(channel, discord.CategoryChannel)):
-                    print("process modmail category", channel.name)
                     if ("modmail" in (channel.name).casefold()):
                         search_monitor = [
                             (channelID) for guildID, channelID, monitorType 

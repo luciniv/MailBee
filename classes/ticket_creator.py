@@ -232,75 +232,79 @@ class DMCategoryButtonView(discord.ui.View):
 
     @discord.ui.button(label="Open a Ticket", style=discord.ButtonStyle.green, custom_id="persistent_dm_button", emoji="✉️")
     async def send_dm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        errorEmbed = discord.Embed(description=" ", color=discord.Color.red())
-
-        user = interaction.user
-        guild = interaction.guild
-        limited, retry_after, was_notified = self.bot.queue.check_user_action_cooldown("open_ticket_button", user.id)
-
-        if limited:
-            if not was_notified:
-                self.bot.queue.user_action_cooldowns["open_ticket_button"]["notified"][user.id] = True
-                errorEmbed.description = (
-                    f"❌ You're clicking a bit too quickly — please wait {retry_after:.1f} seconds."
-                )
-                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
-            # else: silently ignore
-            return
-
-        if not guild:
-            errorEmbed.description="❌ This button must be used in a server."
-            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
-            return
-
-        guild_id = guild.id
-
-        existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild_id, user.id)
-        if existing is not None:
-            errorEmbed.description="❌ You are blacklisted from opening tickets with this server."
-            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
-            return
-
         try:
-            tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id)
-            if tickets and any(ticket["guildID"] == guild_id for ticket in tickets):
-                errorEmbed.description=("❌ You already have a ticket open with this server. "
-                                        "Direct message me to reply to that ticket instead.")
+            await interaction.response.defer(ephemeral=True)
+            errorEmbed = discord.Embed(description=" ", color=discord.Color.red())
+
+            user = interaction.user
+            guild = interaction.guild
+            limited, retry_after, was_notified = self.bot.queue.check_user_action_cooldown("open_ticket_button", user.id)
+
+            if limited:
+                if not was_notified:
+                    self.bot.queue.user_action_cooldowns["open_ticket_button"]["notified"][user.id] = True
+                    errorEmbed.description = (
+                        f"❌ You're clicking a bit too quickly — please wait {retry_after:.1f} seconds."
+                    )
+                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                # else: silently ignore
+                return
+
+            if not guild:
+                errorEmbed.description="❌ This button must be used in a server."
                 await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                 return
 
-            dm_channel = user.dm_channel or await user.create_dm()
-            types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
+            guild_id = guild.id
 
-            embed = discord.Embed(
-                title="Select Ticket Type",
-                description="Please select a type for your ticket with the drop-down menu below.\n\n"
-                            "If you're unsure what to choose, or your topic isn't listed, select \"Other.\"",
-                color=discord.Color.blue()
-            )
-            if guild.icon:
-                embed.set_author(name=guild.name, icon_url=guild.icon.url)
-                embed.set_thumbnail(url=guild.icon.url)
-            else:
-                embed.set_author(name=guild.name)
+            existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild_id, user.id)
+            if existing is not None:
+                errorEmbed.description="❌ You are blacklisted from opening tickets with this server."
+                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                return
 
-            view = CategorySelectView(self.bot, guild, dm_channel.id, types)
-            await view.setup()
+            try:
+                tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id)
+                if tickets and any(ticket["guildID"] == guild_id for ticket in tickets):
+                    errorEmbed.description=("❌ You already have a ticket open with this server. "
+                                            "Direct message me to reply to that ticket instead.")
+                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                    return
 
-            sent_msg = await dm_channel.send(embed=embed, view=view)
-            view.message = sent_msg
+                dm_channel = user.dm_channel or await user.create_dm()
+                types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
 
-            startView = View()
-            startView.add_item(Button(label="Jump to ticket", url=f"https://discord.com/channels/@me/{dm_channel.id}/{sent_msg.id}"))
+                embed = discord.Embed(
+                    title="Select Ticket Type",
+                    description="Please select a type for your ticket with the drop-down menu below.\n\n"
+                                "If you're unsure what to choose, or your topic isn't listed, select \"Other.\"",
+                    color=discord.Color.blue()
+                )
+                if guild.icon:
+                    embed.set_author(name=guild.name, icon_url=guild.icon.url)
+                    embed.set_thumbnail(url=guild.icon.url)
+                else:
+                    embed.set_author(name=guild.name)
 
-            startEmbed = discord.Embed(title="Ticket Started", description="A ticket has been started in your direct messages!",
-                                       color=discord.Color.green())
+                view = CategorySelectView(self.bot, guild, dm_channel.id, types)
+                await view.setup()
 
-            await interaction.followup.send(embed=startEmbed, view=startView, ephemeral=True)
+                sent_msg = await dm_channel.send(embed=embed, view=view)
+                view.message = sent_msg
 
-        except discord.Forbidden:
-            errorEmbed.description="❌ I couldn’t message you! Please enable direct messages and try again."
+                startView = View()
+                startView.add_item(Button(label="Jump to ticket", url=f"https://discord.com/channels/@me/{dm_channel.id}/{sent_msg.id}"))
+
+                startEmbed = discord.Embed(title="Ticket Started", description="A ticket has been started in your direct messages!",
+                                        color=discord.Color.green())
+
+                await interaction.followup.send(embed=startEmbed, view=startView, ephemeral=True)
+
+            except discord.Forbidden:
+                errorEmbed.description="❌ I couldn’t message you! Please enable direct messages and try again."
+                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+        except Exception:
+            errorEmbed.description="❌ An error occurred. Please wait a bit and try again."
             await interaction.followup.send(embed=errorEmbed, ephemeral=True)
 
 
@@ -528,8 +532,9 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, 
                 except Exception as e:
                     print(f"Failed to delete old message: {e}")
 
-                sendingEmbed = discord.Embed(description="Opening ticket...\n\n"
-                                             "This may take a moment!", 
+                sendingEmbed = discord.Embed(description="Creating your ticket...\n\n"
+                                             "**This may take a moment!** This message will be deleted once "
+                                             "your ticket is ready.", 
                                              color=discord.Color.blue())
                 opening_message = await interaction.channel.send(embed=sendingEmbed)
                 user = interaction.user
@@ -625,7 +630,10 @@ class NSFWButtonView(TimeoutSafeView):
             return
         self.category = category
             
-        sendingEmbed = discord.Embed(description="Opening ticket...", color=discord.Color.blue())
+        sendingEmbed = discord.Embed(description="Creating your ticket...\n\n"
+                                             "**This may take a moment!** This message will be deleted once "
+                                             "your ticket is ready.", 
+                                             color=discord.Color.blue())
         opening_message = await interaction.channel.send(embed=sendingEmbed)
         user = interaction.user
 
@@ -651,7 +659,10 @@ class NSFWButtonView(TimeoutSafeView):
         except Exception as e:
             print(f"Failed to delete old message: {e}")
             
-        sendingEmbed = discord.Embed(description="Opening ticket...", color=discord.Color.blue())
+        sendingEmbed = discord.Embed(description="Creating your ticket...\n\n"
+                                             "**This may take a moment!** This message will be deleted once "
+                                             "your ticket is ready.", 
+                                             color=discord.Color.blue())
         opening_message = await interaction.channel.send(embed=sendingEmbed)
         user = interaction.user
 
@@ -793,7 +804,7 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
                 description=self.feedback.value,
                 color=discord.Color.blue()
             )
-            embed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
+            embed.set_author(name=f"{user.name} | {user.id}", icon_url=(user.avatar and user.avatar.url) or user.display_avatar.url)
             embed.add_field(name="Ticket Log", value=f"<#{threadID}>")
             await feedback_channel.send(embed=embed)
         feedbackEmbed = discord.Embed(description="Your feedback has been recorded. Thank you!",
@@ -843,7 +854,7 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
                 color=discord.Color.red()
             )
         
-            embed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
+            embed.set_author(name=f"{user.name} | {user.id}", icon_url=(user.avatar and user.avatar.url) or user.display_avatar.url)
             embed.add_field(name="Ticket Log", value=f"<#{threadID}>")
             await report_channel.send(embed=embed)
 

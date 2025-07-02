@@ -1,5 +1,6 @@
 import discord
 import re
+import asyncio
 from discord.ext import commands
 from discord import app_commands
 from discord.app_commands import Range
@@ -47,7 +48,8 @@ class Snips(commands.Cog):
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
                         await ctx.message.delete()
-                        await analytics.route_to_dm(content, channel, author, threadID, userID, None, True)
+                        task = asyncio.create_task(analytics.route_to_dm(content, channel, author, threadID, userID, None, True))
+                        result = await task
                     return
     
             errorEmbed.description="❌ This command can only be used in ticket channels."
@@ -90,7 +92,8 @@ class Snips(commands.Cog):
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
                         await ctx.message.delete()
-                        await analytics.route_to_dm(content, channel, author, threadID, userID, True, True)
+                        task = asyncio.create_task(analytics.route_to_dm(content, channel, author, threadID, userID, True, True))
+                        result = await task
                     return
       
             errorEmbed.description="❌ This command can only be used in ticket channels."
@@ -133,7 +136,8 @@ class Snips(commands.Cog):
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
                         await ctx.message.delete()
-                        await analytics.route_to_dm(content, channel, author, threadID, userID, False, True)
+                        task = asyncio.create_task(analytics.route_to_dm(content, channel, author, threadID, userID, False, True))
+                        result = await task
                     return
        
             errorEmbed.description="❌ This command can only be used in ticket channels."
@@ -285,7 +289,8 @@ class Snips(commands.Cog):
 
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
-                        await analytics.route_to_dm(content, channel, author, threadID, userID, anon, True)
+                        task = asyncio.create_task(analytics.route_to_dm(content, channel, author, threadID, userID, anon, True))
+                        result = await task
                         sentEmbed=discord.Embed(description="✅ Snip sent", color=discord.Color.green())
                         await interaction.followup.send(embed=sentEmbed, ephemeral=True)
                     return

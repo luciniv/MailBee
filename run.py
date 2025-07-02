@@ -59,9 +59,9 @@ class Mantid(commands.Bot):
         original_edit = discord.Message.edit
         original_delete = discord.Message.delete
         original_fetch_message = discord.TextChannel.fetch_message
-        original_fetch_member = discord.Guild.fetch_member
-        original_fetch_user = discord.Client.fetch_user
-        original_fetch_channel = discord.Client.fetch_channel
+        # original_fetch_member = discord.Guild.fetch_member
+        # original_fetch_user = discord.Client.fetch_user
+        # original_fetch_channel = discord.Client.fetch_channel
         original_add_reaction = discord.Message.add_reaction
         original_webhook_send = discord.webhook.async_.Webhook.send
 
@@ -78,14 +78,14 @@ class Mantid(commands.Bot):
         async def queued_fetch_message(self_, message_id, *args, **kwargs):
             return await queue.call(original_fetch_message, self_, message_id, *args, **kwargs, route_type='fetch_message')
 
-        async def queued_fetch_member(self_, user_id, *args, **kwargs):
-            return await queue.call(original_fetch_member, self_, user_id, *args, **kwargs, route_type='fetch_member')
+        # async def queued_fetch_member(self_, user_id, *args, **kwargs):
+        #     return await queue.call(original_fetch_member, self_, user_id, *args, **kwargs, route_type='fetch_member')
 
-        async def queued_fetch_user(self_, user_id, *args, **kwargs):
-            return await queue.call(original_fetch_user, self_, user_id, *args, **kwargs, route_type='fetch_user')
+        # async def queued_fetch_user(self_, user_id, *args, **kwargs):
+        #     return await queue.call(original_fetch_user, self_, user_id, *args, **kwargs, route_type='fetch_user')
 
-        async def queued_fetch_channel(self_, channel_id, *args, **kwargs):
-            return await queue.call(original_fetch_channel, self_, channel_id, *args, **kwargs, route_type='fetch_generic')
+        # async def queued_fetch_channel(self_, channel_id, *args, **kwargs):
+        #     return await queue.call(original_fetch_channel, self_, channel_id, *args, **kwargs, route_type='fetch_generic')
 
         async def queued_add_reaction(self_, emoji, *args, **kwargs):
             return await queue.call(original_add_reaction, self_, emoji, *args, **kwargs, route_type='add_reaction')
@@ -99,9 +99,9 @@ class Mantid(commands.Bot):
         discord.Message.delete = queued_delete
         discord.TextChannel.fetch_message = queued_fetch_message
         discord.Message.add_reaction = queued_add_reaction
-        discord.Guild.fetch_member = queued_fetch_member
-        discord.Client.fetch_user = queued_fetch_user
-        discord.Client.fetch_channel = queued_fetch_channel
+        # discord.Guild.fetch_member = queued_fetch_member
+        # discord.Client.fetch_user = queued_fetch_user
+        # discord.Client.fetch_channel = queued_fetch_channel
         discord.webhook.async_.Webhook.send = queued_webhook_send
     
     
@@ -238,6 +238,8 @@ async def on_command_error(ctx, error):
         def check_perms():
             guild_id = ctx.guild
             user = ctx.author
+            if isinstance(user, discord.User):
+                return False
             channel = ctx.channel
             data_manager = bot.data_manager
             user_roles = user.roles

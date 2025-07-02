@@ -19,9 +19,7 @@ class Helper:
         for channel_id in matches:
             channel = None
             try:
-                channel = guild.get_channel(int(channel_id))
-                if channel is None:
-                    channel = await asyncio.wait_for(self.bot.fetch_channel(channel_id), timeout=1)
+                channel = await self.bot.cache.get_channel(channel_id)
             except Exception:
                 pass
             if channel:

@@ -4,6 +4,8 @@ import asyncio
 import time
 from utils.logger import *
 
+MEMBER_UPDATE = 43200    # 12 hours
+CHANNEL_UPDATE = 172800  # 48 hours
 
 class Cache:
     def __init__(self, bot):
@@ -30,7 +32,7 @@ class Cache:
             else:
                 epoch_time = int(time.time())
                 try:
-                    user = await asyncio.wait_for(self.bot.fetch_user(userID), timeout=1)
+                    user = await asyncio.wait_for(self.bot.fetch_user(userID), timeout=2)
                 except Exception as e:
                     return None
                 self.user_cache[str(user.id)] = (user, epoch_time)
@@ -52,22 +54,18 @@ class Cache:
             result = self.member_cache.get((str(memberID), str(guild.id)), None)
             if result is not None:
                 member, epoch = result
-                return member
-            else:
-                epoch_time = int(time.time())
-                member = guild.get_member(memberID)
-                if member is None:
-                    try:
-                        member = await asyncio.wait_for(guild.fetch_member(memberID), timeout=1)
-                    except Exception as e:
-                        logger.error(f"failed to fetch guild member using id {memberID}:", e)
-                        return None
-                    self.member_cache[(str(member.id), str(guild.id))] = (member, epoch_time)
-                    return member
-                else:
-                    self.member_cache[(str(member.id), str(guild.id))] = (member, epoch_time)
+                if (int(time.time()) - epoch) <= MEMBER_UPDATE:
                     return member
             
+            epoch_time = int(time.time())
+            try:
+                member = await asyncio.wait_for(guild.fetch_member(memberID), timeout=2)
+            except Exception as e:
+                logger.error(f"failed to fetch guild member using id {memberID}:", e)
+                return None
+            self.member_cache[(str(member.id), str(guild.id))] = (member, epoch_time)
+            return member
+        
         except Exception as e:
             logger.exception(f"get_member sent an error: {e}")
 
@@ -86,19 +84,20 @@ class Cache:
             result = self.channel_cache.get(str(channelID), None)
             if result is not None:
                 channel, epoch = result
+                if (int(time.time()) - epoch) <= CHANNEL_UPDATE:
+                    return channel
+           
+            epoch_time = int(time.time())
+            channel = self.bot.get_channel(channelID)
+            if channel is not None:
+                self.channel_cache[str(channel.id)] = (channel, epoch_time)
                 return channel
             else:
-                epoch_time = int(time.time())
-                channel = self.bot.get_channel(channelID)
-                if channel is not None:
-                    self.channel_cache[str(channel.id)] = (channel, epoch_time)
-                    return channel
-                else:
-                    try:
-                        channel = await asyncio.wait_for(self.bot.fetch_channel(channelID), timeout=1)
-                    except Exception as e:
-                        return None 
-                    self.channel_cache[str(channel.id)] = (channel, epoch_time)
-                    return channel
+                try:
+                    channel = await asyncio.wait_for(self.bot.fetch_channel(channelID), timeout=2)
+                except Exception as e:
+                    return None 
+                self.channel_cache[str(channel.id)] = (channel, epoch_time)
+                return channel
         except Exception as e:
             logger.exception(f"get_user sent an error: {e}")

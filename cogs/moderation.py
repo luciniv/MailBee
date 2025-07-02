@@ -30,7 +30,7 @@ class Moderation(commands.Cog):
             historyEmbed = discord.Embed(title="Ticket History",
                                   description="User has not opened any tickets",
                                   color=discord.Color.green())
-            historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
+            historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=(user.avatar and user.avatar.url) or user.display_avatar.url)
             
             history = await self.bot.data_manager.get_ticket_history(ctx.guild.id, user.id)
             if history is not None:
@@ -46,7 +46,7 @@ class Moderation(commands.Cog):
                                 "Logs may appear as `#unknown` before being accessed.",
                                 color=discord.Color.green())
                         
-                        historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
+                        historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=(user.avatar and user.avatar.url) or user.display_avatar.url)
 
                         while (count < limit):
                             ticket = history[count]
@@ -99,7 +99,7 @@ class Moderation(commands.Cog):
             if target.isdigit():
                 if int(target) < 9999999:
                     result = await self.bot.data_manager.check_ID_exists(int(target), guild.id)
-                    print("result is", result)
+    
                     if len(result) < 1:
                         errorEmbed.description=("❌ No ticket found with that ID")
                         await ctx.send(embed=errorEmbed)
@@ -592,13 +592,10 @@ class Moderation(commands.Cog):
                     return
                 
             dm_channel = user.dm_channel or await user.create_dm()
-            print("dm channel id", dm_channel.id)
          
             if dm_channel:
                 try:
-                    print("id to fetch", int(verbal_id))
                     message = await dm_channel.fetch_message(int(verbal_id))
-                    print("got message", message.id)
                 except discord.NotFound:
                     embed = discord.Embed(description="❌ Verbal not found, invalid user or ID",
                                             color=discord.Color.red())
@@ -651,24 +648,22 @@ class Moderation(commands.Cog):
                                   description="User does not have any verbals",
                                   color=discord.Color.green())
             
-            historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
+            historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=(user.avatar and user.avatar.url) or user.display_avatar.url)
             
             history = await self.bot.data_manager.get_verbal_history(guild.id, user.id)
-            print("verbal history", history)
             if history is not None:
                 if len(history) == 0:
                     await ctx.send(embed=historyEmbed)
                     return
                 else:
                     page_counts = build_subsections(len(history), 3)
-                    print(page_counts)
                     for page_count in page_counts:
                         limit += page_count
                         historyEmbed = discord.Embed(title=f"Verbal history for {user.name}",
                                 description="",
                                 color=discord.Color.green())
                         
-                        historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
+                        historyEmbed.set_author(name=f"{user.name} | {user.id}", icon_url=(user.avatar and user.avatar.url) or user.display_avatar.url)
 
                         while (count < limit):
                             verbal = history[count]

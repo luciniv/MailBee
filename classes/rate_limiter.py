@@ -26,12 +26,12 @@ class Queue:
         }
         self.per_user_cooldown_seconds = {
             "open_ticket_button": 5,  # seconds
-            "dm_start": 5,
+            "dm_start": 3,
         }
 
         # Customize delays and concurrency per route type
         self.route_delays = {
-            "dm_send": (0.5, 2),
+            "dm_send": (1, 1),
             "message_send": (0.2, 10),
             "message_delete": (0.5, 5),
             "message_edit": (0.5, 5),
@@ -41,7 +41,7 @@ class Queue:
             "fetch_member": (1, 5),
             "fetch_user": (1, 5),
             "fetch_generic": (1, 5),
-            "generic": (1, 5),
+            "generic": (1, 5)
         }
 
     def _classify_route(self, func: Callable, *args, **kwargs) -> str:

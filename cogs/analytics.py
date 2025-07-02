@@ -99,36 +99,19 @@ class Analytics(commands.Cog):
                 await message.channel.send(embed=errorEmbed)
                 return
             
-            member = guild.get_member(author.id)
-            if member is None:
-                try:
-                    member = await asyncio.wait_for(guild.fetch_member(author.id), timeout=1)
-                    
-                except discord.errors.NotFound:
-                    errorEmbed.description=("❌ You are not in the server you are trying to contact. Please "
-                                            "rejoin the server before attempting to send messages there.")
-                    await message.channel.send(embed=errorEmbed)
-                    return
-                except Exception:
-                    errorEmbed.description=("❌ You are not in the server you are trying to contact. Please "
-                                            "rejoin the server before attempting to send messages there.\n\n"
-                                            "If you ARE in the server, please re-try sending your message. "
-                                            "Discord API issues may prevent your messages from being sent.")
-                    await message.channel.send(embed=errorEmbed)
-                    return
-                
-            await self.bot.cache.store_guild_member(guildID, member)
+            member = await self.bot.cache.get_guild_member(guild, author.id)
+            if member is None: 
+                errorEmbed.description=("❌ You are not in the server you are trying to contact. Please "
+                                        "rejoin the server before attempting to send messages there.\n\n"
+                                        "If you ARE in the server, please re-try sending your message. "
+                                        "Discord API issues may prevent your messages from being sent.")
+                await message.channel.send(embed=errorEmbed)
+                return
             
-            server_channel = guild.get_channel(channelID)
+            server_channel = await self.bot.cache.get_channel(channelID)
             if server_channel is None:
-                try:
-                    server_channel = await asyncio.wait_for(guild.fetch_channel(channelID), timeout=1)
-                except Exception:
-                    errorEmbed.description=("❌ Could not find your ticket channel in this server. "
-                                            "Please contact staff if this error persists.")
-                    await message.channel.send(embed=errorEmbed)
-                    return
-            if not server_channel:
+                errorEmbed.description=("❌ Could not find your ticket channel in this server. "
+                                        "Please contact staff another way if this error persists.")
                 await message.channel.send(embed=errorEmbed)
                 return
                 
@@ -169,14 +152,14 @@ class Analytics(commands.Cog):
                 await message.channel.send(embed=errorEmbed)
                 return
 
-            gif_links = re.findall(r'https?://[^\s)]+', text, flags=re.IGNORECASE)
-            gif = None
+            # gif_links = re.findall(r'https?://[^\s)]+', text, flags=re.IGNORECASE)
+            # gif = None
 
-            for link in gif_links:
-                gif_candidate = await self.bot.helper.convert_to_direct_gif(link)
-                if gif_candidate:
-                    gif = gif_candidate
-                    break
+            # for link in gif_links:
+            #     gif_candidate = await self.bot.helper.convert_to_direct_gif(link)
+            #     if gif_candidate:
+            #         gif = gif_candidate
+            #         break
 
             # Process any attachments
             attachments = []
@@ -233,7 +216,11 @@ class Analytics(commands.Cog):
 
             # Later, when sending:
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-            sent_message = await message.channel.send(embed=replyEmbed, files=files)
+            try:
+                sent_message = await message.channel.send(embed=replyEmbed, files=files)
+            except Exception:
+                await message.add_reaction("❌")
+                return
 
             if skipped_files:
                 skipEmbed = discord.Embed(description="⚠️ Some attachments were skipped for being too "
@@ -251,15 +238,23 @@ class Analytics(commands.Cog):
             # Add attachment URLs to embed
             for count, url in enumerate(final_attachments, start=1):
                 sendEmbed.add_field(name=f"Attachment {count}", value=url, inline=False)
-            sendEmbed.set_footer(text=f"{author.name} | {author.id}", icon_url=author.display_avatar.url)
+            sendEmbed.set_footer(text=f"{author.name} | {author.id}", icon_url=(author.avatar and author.avatar.url) or author.display_avatar.url)
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-            await server_channel.send(embed=sendEmbed, files=files)
+            try:
+                await server_channel.send(embed=sendEmbed, files=files)
+            except Exception:
+                errorEmbed.description=("❌ Failed to send message to server. Please try again.")
+                await message.channel.send(embed=errorEmbed)
+                return
 
             thread = await self.bot.cache.get_channel(threadID)
             
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-            await thread.send(embed=sendEmbed, files=files, allowed_mentions=discord.AllowedMentions(users=False))
+            try:
+                await thread.send(embed=sendEmbed, files=files, allowed_mentions=discord.AllowedMentions(users=False))
+            except Exception:
+                pass
 
             await self.bot.data_manager.add_ticket_message(sent_message.id, 
                                                             None, 
@@ -294,18 +289,20 @@ class Analytics(commands.Cog):
             errorEmbed = discord.Embed(description="❌ Ticket opener is no longer in this server. "
                                        "Use `+close [reason]` to close this ticket.",
                                        color=discord.Color.red())
-            member = guild.get_member(userID)
+            member = await self.bot.cache.get_guild_member(guild, userID)
             if member is None:
                 try:
                     member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
+                    if member is not None:
+                        await self.bot.cache.store_guild_member(guild.id, member)
                 except discord.NotFound:
                     await channel.send(embed=errorEmbed)
                     return
                 except Exception:
-                    errorEmbed.description="❌ Error fetching ticket opener. Please try again."
+                    errorEmbed.description="❌ Error fetching ticket opener. Please try again shortly."
+                    await channel.send(embed=errorEmbed)
                     return
             
-            await self.bot.cache.store_guild_member(guild.id, member)
             await self.bot.cache.store_guild_member(guild.id, author)
 
             # Check if blacklisted
@@ -313,7 +310,7 @@ class Analytics(commands.Cog):
             if entry is not None:
                 errorEmbed.description=("❌ Ticket opener is blacklisted. `+whitelist` them before "
                                         "attempting to send a message.")
-                await message.channel.send(embed=errorEmbed)
+                await channel.send(embed=errorEmbed)
                 return
             
             content = message
@@ -328,17 +325,17 @@ class Analytics(commands.Cog):
             if len(content) > 4000:
                 errorEmbed.description=("❌ Message must be less than 4000 characters. Note that "
                                         "channel links add ~70 additional characters each.")
-                await message.channel.send(embed=errorEmbed)
+                await channel.send(embed=errorEmbed)
                 return
             
-            gif_links = re.findall(r'https?://[^\s)]+', content, flags=re.IGNORECASE)
-            gif = None
+            # gif_links = re.findall(r'https?://[^\s)]+', content, flags=re.IGNORECASE)
+            # gif = None
 
-            for link in gif_links:
-                gif_candidate = await self.bot.helper.convert_to_direct_gif(link)
-                if gif_candidate:
-                    gif = gif_candidate
-                    break
+            # for link in gif_links:
+            #     gif_candidate = await self.bot.helper.convert_to_direct_gif(link)
+            #     if gif_candidate:
+            #         gif = gif_candidate
+            #         break
 
             timestamp = datetime.now(timezone.utc)
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
@@ -351,8 +348,26 @@ class Analytics(commands.Cog):
                         anon = True
                     else:
                         anon = False
-            
-            dm_channel = member.dm_channel or await member.create_dm()
+
+            dm_channel = None
+            try:
+                dm_channel = member.dm_channel or await member.create_dm()
+            except Exception:
+                errorEmbed.description=("❌ Unable to find DM channel with the ticket opener. "
+                                        "Please try again or close this ticket.")
+                await channel.send(embed=errorEmbed)
+                try:
+                    member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
+                    if member is not None:
+                        await self.bot.cache.store_guild_member(guild.id, member)
+                except Exception:
+                    pass
+                return
+            if dm_channel is None:
+                errorEmbed.description=("❌ Unable to find DM channel with the ticket opener. "
+                                        "Please close this ticket.")
+                await channel.send(embed=errorEmbed)
+                return
 
             # Process any attachments
             attachments = []
@@ -370,7 +385,7 @@ class Analytics(commands.Cog):
                 attachments = message.attachments
 
                 if len(attachments) > 0:
-                    fileMessage = await message.channel.send(embed=fileEmbed)
+                    fileMessage = await channel.send(embed=fileEmbed)
 
                 total_size = 0
                 for file in attachments:
@@ -405,11 +420,10 @@ class Analytics(commands.Cog):
             if anon:
                 name += " (Anonymous)"
         
-            receiptEmbed.set_author(name=name, icon_url=author.display_avatar.url)
+            receiptEmbed.set_author(name=name, icon_url=(author.avatar and author.avatar.url) or author.display_avatar.url)
 
             if member:
-                receiptEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.display_avatar.url)
-
+                receiptEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=(member.avatar and member.avatar.url) or member.display_avatar.url)
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             sent_message = await channel.send(embed=receiptEmbed, files=files)
 
@@ -436,15 +450,28 @@ class Analytics(commands.Cog):
                 sendEmbed.set_footer(text=f"{guild.name}")
 
             if not anon:
-                sendEmbed.set_author(name=f"{author.name} | {author.id}", icon_url=author.display_avatar.url)
+                sendEmbed.set_author(name=f"{author.name} | {author.id}", icon_url=(author.avatar and author.avatar.url) or author.display_avatar.url)
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-            dm_message = await dm_channel.send(embed=sendEmbed, files=files)
+            try:
+                dm_message = await dm_channel.send(embed=sendEmbed, files=files)
+            except Exception:
+                errorEmbed.description=("❌ Unable to DM the ticket opener. Your last message was **not** sent. "
+                                        "If this error persists they have blocked the bot or no longer share a server with it.")
+                await channel.send(embed=errorEmbed)
+                try:
+                    member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)
+                except Exception:
+                    pass
+                return
 
             thread = await self.bot.cache.get_channel(threadID)
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
-            thread_message = await thread.send(embed=receiptEmbed, files=files, allowed_mentions=discord.AllowedMentions(users=False))
+            try:
+                thread_message = await thread.send(embed=receiptEmbed, files=files, allowed_mentions=discord.AllowedMentions(users=False))
+            except Exception:
+                pass
 
             await self.bot.data_manager.add_ticket_message(sent_message.id, 
                                                             None, 
@@ -782,7 +809,6 @@ class Analytics(commands.Cog):
     # On-message event listener for messages in #modmail-log channels or modmail categories
     @commands.Cog.listener()
     async def on_message(self, message):
-        
         # Temp, allows Mantid to still work (allows Modmail message processing)
         if (message.author.bot and message.author.id != 575252669443211264):
             return
@@ -818,7 +844,8 @@ class Analytics(commands.Cog):
             if (this_channel.topic):
                 if ("Ticket channel" in this_channel.topic):
                     if (message.content.startswith("+")):
-                        await self.staff_message(message, None)
+                        asyncio.create_task(self.staff_message(message, None))
+                        return
                         
                     else:
                         # Process comment
@@ -830,7 +857,7 @@ class Analytics(commands.Cog):
                                                             message.author.id, 
                                                             format_time, 
                                                             "Discussion", True)
-                        await self.store_comment(message)
+                        asyncio.create_task(self.store_comment(message))
                         return
 
         search_monitor = [

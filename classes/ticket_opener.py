@@ -86,6 +86,8 @@ class TicketOpener:
 
             await self.bot.cache.store_channel(channel)
 
+            
+            # FIXME task this?
             logEmbed = deepcopy(log_message.embeds[0])
             logEmbed.add_field(name="Ticket Channel", value=f"<#{channel.id}>", inline=True)
             logEmbed.add_field(name="Ticket ID", value=ticketID, inline=True)
@@ -93,42 +95,12 @@ class TicketOpener:
             await log_message.edit(embed=logEmbed)
 
             if channel:
-                roblox_data = []
-                priority_values = [-1,-1]
-                robloxID = None
-                robloxUsername = None
-                game_type = SERVER_TO_GAME.get(guild.id, None)
-                if game_type is not None:
-                    robloxID, robloxUsername = await get_roblox_info(game_type, guild.id, user.id)
+                # Task for sending server info
+                task = asyncio.create_task(self.handle_server_embeds(guild, channel, thread, user, values, title, time_taken, ticketID))
+                # Task for sending dm info
+                asyncio.create_task(self.handle_dm_embeds(guild, dm_channel, user, values, title))
 
-                if robloxID is None:
-                    roblox_data.append("ID not found")
-                else:
-                    roblox_data.append(robloxID)
-                if robloxUsername is None:
-                    roblox_data.append("Username not found")
-                else:
-                    roblox_data.append(robloxUsername)
-
-                if game_type is not None and robloxUsername is not None:
-                    result = await get_priority(game_type, guild.id, user.id, robloxUsername)
-                    if result is None:
-                        roblox_data.append("Error fetching data")
-                        roblox_data.append("Error fetching data")
-                    else:
-                        priority_values = result
-                        roblox_data.append(result[0])
-                        roblox_data.append(result[1])
-                else:
-                    roblox_data.append("No data")
-                    roblox_data.append("No data")
-
-                # Send in-channel embeds
-                await self.send_ticket_embeds(guild, channel, thread, user, values, title, time_taken, roblox_data, ticketID)
-
-                # Send opening embed, and greeting if it exists
-                await self.send_opener(guild, dm_channel, user, values, title)
-
+                priority_values = await task
                 # Add new ticket to database
                 await self.bot.data_manager.create_ticket(guild.id, ticketID, channel.id, user.id, thread.id, typeID, 
                                                         time_taken, priority_values[0], priority_values[1])
@@ -140,6 +112,41 @@ class TicketOpener:
                 return False
         except Exception as e:
             print("ticket_opener sent an exception:", e)
+
+    async def handle_server_embeds(self, guild, channel, thread, user, values, title, time_taken, ticketID):
+        roblox_data = []
+        priority_values = [-1,-1]
+        robloxID = None
+        robloxUsername = None
+        game_type = SERVER_TO_GAME.get(guild.id, None)
+        if game_type is not None:
+            robloxID, robloxUsername = await get_roblox_info(game_type, guild.id, user.id)
+
+        if robloxID is None:
+            roblox_data.append("ID not found")
+        else:
+            roblox_data.append(robloxID)
+        if robloxUsername is None:
+            roblox_data.append("Username not found")
+        else:
+            roblox_data.append(robloxUsername)
+
+        if game_type is not None and robloxUsername is not None:
+            result = await get_priority(game_type, guild.id, user.id, robloxUsername)
+            if result is None:
+                roblox_data.append("Error fetching data")
+                roblox_data.append("Error fetching data")
+            else:
+                priority_values = result
+                roblox_data.append(priority_values[0])
+                roblox_data.append(priority_values[1])
+        else:
+            roblox_data.append("No data")
+            roblox_data.append("No data")
+
+        # Send in-channel embeds
+        await self.send_ticket_embeds(guild, channel, thread, user, values, title, time_taken, roblox_data, ticketID)
+        return priority_values
         
 
     async def send_log(self, guild, user, title, NSFW_flag):
@@ -155,7 +162,7 @@ class TicketOpener:
                                     color=discord.Color.green())
         openLogEmbed.timestamp = datetime.now(timezone.utc)
 
-        openLogEmbed.set_footer(text=f"{user.name} | {user.id}", icon_url=user.display_avatar.url)
+        openLogEmbed.set_footer(text=f"{user.name} | {user.id}", icon_url=(user.avatar and user.avatar.url) or user.display_avatar.url)
 
         try:
             message = await log_channel.send(embed=openLogEmbed)
@@ -227,7 +234,7 @@ class TicketOpener:
             return None
         
 
-    async def send_opener(self, guild, dm_channel, user, values, title):
+    async def handle_dm_embeds(self, guild, dm_channel, user, values, title):
         config = await self.bot.data_manager.get_or_load_config(guild.id)
 
         dmEmbed = discord.Embed(title=f"New \"{title}\" Ticket", 
@@ -289,7 +296,7 @@ class TicketOpener:
                             inline=False)
 
         if guild is None:
-            submissionEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.display_avatar.url)
+            submissionEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=(member.avatar and member.avatar.url) or member.display_avatar.url)
         else:
             if guild.icon:
                 submissionEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
@@ -307,7 +314,6 @@ class TicketOpener:
             return
         
         count = await self.bot.data_manager.get_ticket_count(guild.id, user.id)
-        print(count)
         if count is not None:
             count = int(count[0][0])
             if count != 0:
@@ -325,9 +331,9 @@ class TicketOpener:
                                     "list.\n\n`+close [reason]` will close a ticket. `+inactive [hours] [reason]` "
                                     "will close a ticket after X hours of inactivity from the ticket opener.")
         ticketEmbed.timestamp = datetime.now(timezone.utc)
-        ticketEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=member.display_avatar.url)
+        ticketEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=(member.avatar and member.avatar.url) or member.display_avatar.url)
  
-        ticketEmbed.add_field(name="Opener", value=f"<@{user.id}> {user.name}\n({user.id})", inline=True)
+        ticketEmbed.add_field(name="Opener ID", value=user.id, inline=True)
         ticketEmbed.add_field(
                         name="Roles",
                         value=(

@@ -98,7 +98,7 @@ async def close_ticket(bot, ticket_channel, closer,
             closeLogEmbed.add_field(name="First Response Time", value=response, inline=True)
 
             name = f"{closerName} | {closerID}"
-            url = closer.display_avatar.url
+            url = (closer.avatar and closer.avatar.url) or closer.display_avatar.url
             if anon:
                 name = f"{name} (Anonymous)"
             closeLogEmbed.set_author(name=name, icon_url=url)
@@ -107,7 +107,7 @@ async def close_ticket(bot, ticket_channel, closer,
                 closeLogEmbed.title="Ticket Closed (Inactivity)"
 
             if opener:
-                closeLogEmbed.set_footer(text=f"{opener.name} | {opener.id}", icon_url=opener.display_avatar.url)
+                closeLogEmbed.set_footer(text=f"{opener.name} | {opener.id}", icon_url=(opener.avatar and opener.avatar.url) or opener.display_avatar.url)
 
                 dm_channel = opener.dm_channel or await opener.create_dm()
                 if dm_channel:
@@ -124,14 +124,16 @@ async def close_ticket(bot, ticket_channel, closer,
                         await dm_channel.send(embed=closeUserEmbed)
                         await send_closing(bot, guild, dm_channel, ticket_channel.id, opener, closing)
                     except Exception:
-                        logger.exception("Failed to DM closing messages to a user")
+                        logger.warning("Failed to DM closing messages to a user")
                         pass
                 else:
                     pass
             else:
                 closeLogEmbed.set_footer(text=f"Member not found | {userID}")
-
-            await thread.send(embed=closeLogEmbed)
+            try:
+                await thread.send(embed=closeLogEmbed)
+            except Exception: 
+                pass
             await log_channel.send(embed=closeLogEmbed)
             await thread.edit(archived=True, locked=True)
             return True
@@ -224,7 +226,6 @@ async def export_ticket_history(channel: discord.TextChannel,
                 match = re.search(r"\[COMMENT\]\s*\n(.*?)(?:\n-#|$)", text, re.DOTALL)
                 if match:
                     comment_text = match.group(1).strip()
-                    print(comment_text)
 
                 content = comment_text
 
@@ -296,7 +297,8 @@ class Tools(commands.Cog):
 
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
-                        await analytics.route_to_dm(full_message, channel, author, threadID, userID, None, False)
+                        task = asyncio.create_task(analytics.route_to_dm(full_message, channel, author, threadID, userID, None, False))
+                        result = await task
                     return
 
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
@@ -326,7 +328,8 @@ class Tools(commands.Cog):
 
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
-                        await analytics.route_to_dm(full_message, channel, author, threadID, userID, True, False)
+                        task = asyncio.create_task(analytics.route_to_dm(full_message, channel, author, threadID, userID, True, False))
+                        result = await task
                     return
 
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
@@ -356,7 +359,8 @@ class Tools(commands.Cog):
 
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
-                        await analytics.route_to_dm(full_message, channel, author, threadID, userID, False, False)
+                        task = asyncio.create_task(analytics.route_to_dm(full_message, channel, author, threadID, userID, False, False))
+                        result = await task
                     return
 
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
@@ -930,8 +934,9 @@ class Tools(commands.Cog):
     @app_commands.command(name="move", description="Move a ticket to a different category")
     @checks.is_guild()
     @checks.is_user()
-    @app_commands.describe(category="Category to move the current ticket channel to")
-    async def move(self, interaction: discord.Interaction, category: str):
+    @app_commands.describe(category="Ticket category to move the current ticket channel to")
+    @app_commands.describe(location="Any category to move the current ticket channel to")
+    async def move(self, interaction: discord.Interaction, category: str = None, location: discord.CategoryChannel = None):
         try:
             await interaction.response.defer()
 
@@ -947,56 +952,82 @@ class Tools(commands.Cog):
                     id_list = (channel.topic).split()
                     threadID = id_list[-1]
                     userID = id_list[-2]
-                    categoryID, flag = category.split()
-                    category = await self.bot.cache.get_channel(categoryID)
-
-                    if category is None:
-                        errorEmbed = discord.Embed(description="❌ Category doesn't exist.",
+                    if category is None and location is None:
+                        errorEmbed = discord.Embed(description="❌ You must specify some category or location.",
                                         color=discord.Color.red())
                         await interaction.followup.send(embed=errorEmbed)
                         return
-                    
-                    if category.id == channel.category.id:
-                        errorEmbed = discord.Embed(description="❌ Cannot move channel to the category it's already in.",
-                                        color=discord.Color.red())
-                        await interaction.followup.send(embed=errorEmbed)
+                    if category is not None:
+                        categoryID, flag = category.split()
+                        category = await self.bot.cache.get_channel(categoryID)
+
+                        if category is None:
+                            errorEmbed = discord.Embed(description="❌ Category doesn't exist.",
+                                            color=discord.Color.red())
+                            await interaction.followup.send(embed=errorEmbed)
+                            return
+                        
+                        if category.id == channel.category.id:
+                            errorEmbed = discord.Embed(description="❌ Cannot move channel to the category it's already in.",
+                                            color=discord.Color.red())
+                            await interaction.followup.send(embed=errorEmbed)
+                            return
+                        
+                        ticket_is_nsfw = False
+                        types_raw = await self.bot.data_manager.get_or_load_guild_types(guild.id)
+                        for type in types_raw:
+                            if int(type["NSFWCategoryID"]) == channel.category.id:
+                                ticket_is_nsfw = True
+                                break
+
+                        try:
+                            if flag == "True" and not ticket_is_nsfw:
+                                await channel.edit(nsfw=True,
+                                                overwrites=category.overwrites,
+                                                category=category)
+                                await self.bot.channel_status.set_emoji(channel, None, False, True)
+
+                            elif flag == "False" and ticket_is_nsfw:
+                                await channel.edit(nsfw=False,
+                                                overwrites=category.overwrites,
+                                                category=category)
+                                await self.bot.channel_status.set_emoji(channel, None, False, False)
+                                
+                            else:
+                                await channel.edit(overwrites=category.overwrites,
+                                                category=category)
+                                
+                        except Exception:
+                            errorEmbed.description="❌ Failed to edit channel. Please try again later."
+                            await interaction.followup.send(embed=errorEmbed)
+                            return
+
+                        successEmbed = discord.Embed(description=f"✅ Moved this channel to **{category.name}**\n"
+                                                                "**NOTE:** This channel's emoji status may take up to "
+                                                                "5 minutes to update",
+                                                    color=discord.Color.green())
+                        await interaction.followup.send(embed=successEmbed)
                         return
-                    
-                    ticket_is_nsfw = False
-                    types_raw = await self.bot.data_manager.get_or_load_guild_types(guild.id)
-                    for type in types_raw:
-                        if int(type["NSFWCategoryID"]) == channel.category.id:
-                            ticket_is_nsfw = True
-                            break
+                    else:
+                        if location.id == channel.category.id:
+                            errorEmbed = discord.Embed(description="❌ Cannot move channel to the category it's already in.",
+                                            color=discord.Color.red())
+                            await interaction.followup.send(embed=errorEmbed)
+                            return
+                        try:
+                            await channel.edit(category=location)
+                                
+                        except Exception:
+                            errorEmbed.description="❌ Failed to edit channel. Please try again later."
+                            await interaction.followup.send(embed=errorEmbed)
+                            return
 
-                    try:
-                        if flag == "True" and not ticket_is_nsfw:
-                            await channel.edit(nsfw=True,
-                                               overwrites=category.overwrites,
-                                               category=category)
-                            await self.bot.channel_status.set_emoji(channel, None, False, True)
-
-                        elif flag == "False" and ticket_is_nsfw:
-                            await channel.edit(nsfw=False,
-                                               overwrites=category.overwrites,
-                                               category=category)
-                            await self.bot.channel_status.set_emoji(channel, None, False, False)
-                            
-                        else:
-                            await channel.edit(overwrites=category.overwrites,
-                                               category=category)
-                            
-                    except Exception:
-                        errorEmbed.description="❌ Failed to edit channel. Please try again later."
-                        await interaction.followup.send(embed=errorEmbed)
+                        successEmbed = discord.Embed(description=f"✅ Moved this channel to **{location.name}**\n"
+                                                                "**NOTE:** Using `/move` with a **location** will not "
+                                                                "sync channel permissions or stauses.",
+                                                    color=discord.Color.green())
+                        await interaction.followup.send(embed=successEmbed)
                         return
-
-                    successEmbed = discord.Embed(description=f"✅ Moved this channel to **{category.name}**\n"
-                                                              "**NOTE:** This channel's emoji status may take up to "
-                                                              "5 minutes to update",
-                                                 color=discord.Color.green())
-                    await interaction.followup.send(embed=successEmbed)
-                    return
                 
             await interaction.followup.send(embed=errorEmbed)
             

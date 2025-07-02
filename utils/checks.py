@@ -18,22 +18,25 @@ def is_owner():
 # Checks if user has Admin permissions for that channel or their ID is set as bot admin in Mantid's permissions cache
 def is_admin():
     def predicate(ctx):
-        data_manager = ctx.bot.data_manager
-        guild = ctx.guild
-        usrRoles = ctx.author.roles
+        try:
+            data_manager = ctx.bot.data_manager
+            guild = ctx.guild
+            usrRoles = ctx.author.roles
 
-        search_access = [
-            (roleID, permLevel) for guildID, roleID, permLevel 
-            in data_manager.access_roles if (guildID == guild.id)]
+            search_access = [
+                (roleID, permLevel) for guildID, roleID, permLevel 
+                in data_manager.access_roles if (guildID == guild.id)]
 
-        if (ctx.channel.permissions_for(ctx.author).administrator):
-            return True
-        
-        for role in usrRoles:
-            if ((role.id, "Bot Admin") in search_access):
+            if (ctx.channel.permissions_for(ctx.author).administrator):
                 return True
-        raise AccessError(f"You do not have access to use the **{ctx.command.name}** command.", 
-                          required_permission="Administrator or Bot Admin")
+            
+            for role in usrRoles:
+                if ((role.id, "Bot Admin") in search_access):
+                    return True
+            raise AccessError(f"You do not have access to use the **{ctx.command.name}** command.", 
+                            required_permission="Administrator or Bot Admin")
+        except Exception:
+            return False
     return commands.check(predicate)
 
 
@@ -41,39 +44,42 @@ def is_admin():
 # Checks if user has Admin permissions for that channel or their ID is in Mantid's permissions cache at all
 def is_user():
     async def predicate(ctx_or_interaction):
-        if isinstance(ctx_or_interaction, commands.Context):
-            # Prefix or hybrid command
-            bot = ctx_or_interaction.bot
-            guild_id = ctx_or_interaction.guild.id
-            user = ctx_or_interaction.author
-            channel = ctx_or_interaction.channel
-            command_name = ctx_or_interaction.command.name
+        try:
+            if isinstance(ctx_or_interaction, commands.Context):
+                # Prefix or hybrid command
+                bot = ctx_or_interaction.bot
+                guild_id = ctx_or_interaction.guild.id
+                user = ctx_or_interaction.author
+                channel = ctx_or_interaction.channel
+                command_name = ctx_or_interaction.command.name
 
-        else:
-            # App command (Interaction)
-            bot = ctx_or_interaction.client
-            guild_id = ctx_or_interaction.guild.id
-            user = ctx_or_interaction.user
-            channel = ctx_or_interaction.channel
-            command_name = ctx_or_interaction.command.name
+            else:
+                # App command (Interaction)
+                bot = ctx_or_interaction.client
+                guild_id = ctx_or_interaction.guild.id
+                user = ctx_or_interaction.user
+                channel = ctx_or_interaction.channel
+                command_name = ctx_or_interaction.command.name
 
-        data_manager = bot.data_manager
-        user_roles = user.roles
+            data_manager = bot.data_manager
+            user_roles = user.roles
 
-        search_access = [
-            tup[1] for tup 
-            in data_manager.access_roles
-            if tup[0] == guild_id]
+            search_access = [
+                tup[1] for tup 
+                in data_manager.access_roles
+                if tup[0] == guild_id]
 
-        if channel.permissions_for(user).administrator:
-            return True
-
-        for role in user_roles:
-            if role.id in search_access:
+            if channel.permissions_for(user).administrator:
                 return True
 
-        raise AccessError(f"You do not have access to use the **{command_name}** command.",
-                        required_permission="Bot User or Bot Admin")
+            for role in user_roles:
+                if role.id in search_access:
+                    return True
+
+            raise AccessError(f"You do not have access to use the **{command_name}** command.",
+                            required_permission="Bot User or Bot Admin")
+        except Exception:
+            return False
     return commands.check(predicate)
 
 
@@ -95,21 +101,24 @@ def is_guild():
 
 def is_setup():
     async def predicate(ctx_or_interaction):
-        if isinstance(ctx_or_interaction, commands.Context):
-            # Prefix or hybrid command
-            guild_id = ctx_or_interaction.guild.id
-            bot = ctx_or_interaction.bot
-        else:
-            # App command (Interaction)
-            guild_id = ctx_or_interaction.guild.id
-            bot = ctx_or_interaction.client
+        try:
+            if isinstance(ctx_or_interaction, commands.Context):
+                # Prefix or hybrid command
+                guild_id = ctx_or_interaction.guild.id
+                bot = ctx_or_interaction.bot
+            else:
+                # App command (Interaction)
+                guild_id = ctx_or_interaction.guild.id
+                bot = ctx_or_interaction.client
 
-        data_manager = bot.data_manager
-        config = await data_manager.get_or_load_config(guild_id)
-        if config is not None:
-            return True
+            data_manager = bot.data_manager
+            config = await data_manager.get_or_load_config(guild_id)
+            if config is not None:
+                return True
 
-        raise AccessError("You must run `/setup` before using this command.")
+            raise AccessError("You must run `/setup` before using this command.")
+        except Exception:
+            return False
 
     return commands.check(predicate)
 

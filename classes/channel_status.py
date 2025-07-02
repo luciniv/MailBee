@@ -7,9 +7,6 @@ from utils.logger import *
 from cogs.tools import close_ticket
 
 
-MAX_RETRIES = 2
-
-
 class ChannelStatus:
     def __init__(self, bot):
         self.bot = bot
@@ -69,15 +66,15 @@ class ChannelStatus:
                 # Apply updates for ready channels
                 for channel_id, new_name in channels_to_update:
                     channel = await self.bot.cache.get_channel(channel_id)
-
+                    pop_flag = True
                     try:
-                        if channel:
-                            for _ in range(MAX_RETRIES):
-                                try:
-                                    await asyncio.wait_for(channel.edit(name=new_name), timeout=1)
-                                    break
-                                except asyncio.TimeoutError:
-                                    continue
+                        if channel: 
+                            try:
+                                await asyncio.wait_for(channel.edit(name=new_name), timeout=1)
+                            except asyncio.TimeoutError:
+                                pop_flag = False
+                            except Exception:
+                                pass
 
                         # Update last update time
                         self.last_update_times[channel_id] = int(time.time())
@@ -86,7 +83,8 @@ class ChannelStatus:
                         logger.error(f"Failed to update channel {channel.id}: {e}")
 
                     # Remove channel from queue
-                    self.pending_updates.pop(channel_id, None)
+                    if pop_flag:
+                        self.pending_updates.pop(channel_id, None)
                     await asyncio.sleep(0.5)
             except Exception as e:
                 logger.exception(f"Channel worker sent an error: {e}")
