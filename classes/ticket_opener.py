@@ -333,7 +333,7 @@ class TicketOpener:
         ticketEmbed.timestamp = datetime.now(timezone.utc)
         ticketEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=(member.avatar and member.avatar.url) or member.display_avatar.url)
  
-        ticketEmbed.add_field(name="Opener Username", value=user.name, inline=True)
+        ticketEmbed.add_field(name="Opener @", value=f"<@{user.id}>", inline=True)
         ticketEmbed.add_field(name="Opener ID", value=user.id, inline=True)
         ticketEmbed.add_field(
                         name="Roles",

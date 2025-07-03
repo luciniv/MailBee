@@ -72,9 +72,13 @@ class ChannelStatus:
                             try:
                                 await asyncio.wait_for(channel.edit(name=new_name), timeout=1)
                             except asyncio.TimeoutError:
+                                logger.error(f"Status update timed out for channel {channel.name} ({channel_id})")
                                 pop_flag = False
-                            except Exception:
-                                pass
+                            except discord.NotFound:
+                                logger.error(f"Channel not found for update {channel.name} ({channel_id})")
+                            except Exception as e:
+                                logger.error(f"Status update errored for channel {channel.name} ({channel_id}): {e}")
+                                pop_flag = False
 
                         # Update last update time
                         self.last_update_times[channel_id] = int(time.time())

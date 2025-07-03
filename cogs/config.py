@@ -124,10 +124,10 @@ class Config(commands.Cog):
     #         raise BotError(f"/help2 sent an error: {e}")
         
 
-    @commands.hybrid_command(name="setup2", description="Setup the bot")
-    @checks.is_guild()
+    @commands.command(name="setup_mailbee")
     @checks.is_admin()
-    async def setup2(self, ctx):
+    @checks.is_guild()
+    async def setup_mailbee(self, ctx):
         try:
             guild = ctx.guild
             guildID = guild.id
@@ -250,9 +250,9 @@ class Config(commands.Cog):
         
 
     @app_commands.command(name="type_add", description="Add a new ticket type and create a corresponding tickets category")
-    @checks.is_guild()
-    @checks.is_user()   
+    @checks.is_user_app()   
     @checks.is_setup()
+    @checks.is_guild_app()
     @app_commands.describe(name="Type name")
     @app_commands.describe(description="Type description")
     @app_commands.describe(emoji="Emoji to show for select option")
@@ -314,9 +314,9 @@ class Config(commands.Cog):
             raise BotError(f"/add_type sent an error: {e}")
         
 
-    @commands.hybrid_command(name="type_remove", description="Remove a tickets category type, deleting the category")
-    @checks.is_guild()
+    @commands.command(name="type_remove", description="Remove a tickets category type, deleting the category")
     @checks.is_user()
+    @checks.is_guild()
     async def type_remove(self, ctx, category: discord.CategoryChannel):
         try:
             name = category.name
@@ -332,8 +332,8 @@ class Config(commands.Cog):
 
 
     @commands.hybrid_command(name="form_set", description="Change the form used by a ticket type")
-    @checks.is_guild()
     @checks.is_user()
+    @checks.is_guild()
     @app_commands.describe(category="Tickets category to edit the form for")
     @app_commands.describe(form_template="Template for the form, use /form_template to view a pre-made template")
     async def form_set(self, ctx, category: discord.CategoryChannel, form_template: str):
@@ -358,17 +358,16 @@ class Config(commands.Cog):
         
 
     @commands.hybrid_command(name="form_preview", description="Preview how a form template will look")
-    @checks.is_guild()
     @checks.is_user()
+    @checks.is_guild()
     @app_commands.describe(form_template="Form template JSON string")
     async def form_preview(self, ctx, form_template: str):
         await preview_form_template(ctx, form_template)
  
 
-    @commands.hybrid_command(name="greeting", description="Set the greeting message sent in new tickets")
-    @checks.is_guild()
+    @commands.command(name="greeting")
     @checks.is_user()
-    @app_commands.describe(greeting="Greeting text (max 4000 characters)")
+    @checks.is_guild()
     async def greeting(self, ctx, *, greeting: str):
         try:
             guild = ctx.guild
@@ -395,10 +394,9 @@ class Config(commands.Cog):
             raise BotError(f"/greeting sent an error: {e}")
         
 
-    @commands.hybrid_command(name="closing", description="Set the closing message sent in new tickets")
-    @checks.is_guild()
+    @commands.command(name="closing")
     @checks.is_user()
-    @app_commands.describe(closing="Closing text (max 4000 characters)")
+    @checks.is_guild()
     async def closing(self, ctx, *, closing: str):
         try:
             guild = ctx.guild
@@ -426,8 +424,8 @@ class Config(commands.Cog):
 
 
     @app_commands.command(name="set_type", description="Set the type of a tickets category")
-    @checks.is_guild()
-    @checks.is_user()
+    @checks.is_user_app()
+    @checks.is_guild_app()
     @app_commands.describe(category="Tickets category to set a type for")
     @app_commands.describe(type="Select a type, or search by keyword")
     async def set_type(self, interaction: discord.Interaction, category: discord.CategoryChannel, type: str):
@@ -521,9 +519,9 @@ class Config(commands.Cog):
 
 
     # Send embed of help guide + server commands
-    @commands.hybrid_command(name="help", description="Display Mantid's bio, setup guide, and all commands")
-    @checks.is_guild()
+    @commands.command(name="help")
     @checks.is_user()
+    @checks.is_guild()
     async def help(self, ctx):
         try:
             pages = []
@@ -575,9 +573,9 @@ class Config(commands.Cog):
 
 
     # Send setup steps and attempt to automatically configure channel monitor
-    @commands.hybrid_command(name="setup", description="Setup the bot (with steps)")
-    @checks.is_guild()
+    @commands.command(name="setup")
     @checks.is_admin()
+    @checks.is_guild()
     async def setup(self, ctx):
         try:
             guild = ctx.guild
@@ -661,8 +659,8 @@ class Config(commands.Cog):
 
     # Show roles with the 'Bot Admin' permission or all monitored channels / categories
     @commands.hybrid_command(name="show", description="List this server's role permissions or monitored channels and categories")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(selection="Select to show either server role permissions or monitored channels")
     @app_commands.choices(selection=[
         app_commands.Choice(name="role permissions", value="role permissions"),
@@ -721,8 +719,8 @@ class Config(commands.Cog):
 
     # Edit roles with the 'Bot Admin' permission
     @commands.hybrid_command(name="edit_permissions", description="Add or remove roles that can use Mantid in this server")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(action="Desired edit action. Use 'add' to grant permissions and 'remove' to delete them")
     @app_commands.choices(action=[
         app_commands.Choice(name="add", value="add"),
@@ -806,8 +804,8 @@ class Config(commands.Cog):
     # Edit monitored channels / categories
     @commands.hybrid_command(name="edit_monitor", description="Add or remove monitored modmail-log"
                                                               " channels and tickets categories in this server")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(action="Desired edit action. Use 'add' to add channels / categories and 'remove' to remove them")
     @app_commands.choices(action=[
         app_commands.Choice(name="add", value="add"),

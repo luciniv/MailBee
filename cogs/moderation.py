@@ -16,11 +16,9 @@ class Moderation(commands.Cog):
         self.bot = bot
 
 
-    @commands.hybrid_command(name="ticket_history", description="View a user's ticketing history", 
-                             aliases=["tickets", "history", "th"])
-    @checks.is_guild()
+    @commands.command(name="ticket_history", aliases=["tickets", "history", "th"])
     @checks.is_user()
-    @app_commands.describe(user="User to view history of")
+    @checks.is_guild()
     async def ticket_history(self, ctx, user: discord.Member):
         try:
             pages = []
@@ -83,10 +81,9 @@ class Moderation(commands.Cog):
             raise BotError(f"/ticket_history sent an error: {e}")
         
 
-    @commands.hybrid_command(name="noteadd", description="Add a note to a ticket or user")
-    @checks.is_guild()
+    @commands.command(name="noteadd")
     @checks.is_user()
-    @app_commands.describe(target="The ID to add a note to")
+    @checks.is_guild()
     async def notes_add(self, ctx, target, *, note: str):
         try:
             guild = ctx.guild
@@ -143,10 +140,9 @@ class Moderation(commands.Cog):
             raise BotError(f"+noteadd sent an error: {e}")
         
 
-    @commands.hybrid_command(name="notes", description="View the notes of a ticket or user")
-    @checks.is_guild()
+    @commands.command(name="notes")
     @checks.is_user()
-    @app_commands.describe(target="The ID to add a note to")
+    @checks.is_guild()
     async def notes(self, ctx, target):
         try:
             errorEmbed=discord.Embed(description="❌ This command is currently disabled for testing.", 
@@ -253,8 +249,8 @@ class Moderation(commands.Cog):
     note_group = app_commands.Group(name="note", description="Manage notes")
 
     @note_group.command(name="add", description="Add a note to a ticket or user")
-    @checks.is_guild()
-    @checks.is_user()
+    @checks.is_user_app()
+    @checks.is_guild_app()
     @app_commands.describe(ticket_id="The ticket ID to add a note to")
     @app_commands.describe(member="The member to add a note to")
     @app_commands.describe(note="The content of the note")
@@ -271,8 +267,8 @@ class Moderation(commands.Cog):
         
 
     @note_group.command(name="view", description="Add a note to a ticket or user")
-    @checks.is_guild()
-    @checks.is_user()
+    @checks.is_user_app()
+    @checks.is_guild_app()
     @app_commands.describe(ticket_id="The ticket ID to add a note to")
     @app_commands.describe(member="The member to add a note to")
     async def view(self, interaction: discord.Interaction, 
@@ -287,11 +283,9 @@ class Moderation(commands.Cog):
             raise BotError(f"/note view sent an error: {e}")
 
 
-    @commands.hybrid_command(name="blacklist", description="Blacklist a user from opening tickets", 
-                             aliases=["b"])
-    @app_commands.describe(user="User to blacklist", reason="Reason for blacklisting (required)")
-    @checks.is_guild()
+    @commands.command(name="blacklist", aliases=["b"])
     @checks.is_user()
+    @checks.is_guild()
     async def blacklist(self, ctx: commands.Context, user: discord.User, *, reason: str):
         try:
             guild = ctx.guild
@@ -313,10 +307,9 @@ class Moderation(commands.Cog):
             raise BotError(f"/blacklist sent an error: {e}")
 
 
-    @commands.hybrid_command(name="blacklist_view", description="View all blacklisted users in this server",
-                             aliases=["bv"])
-    @checks.is_guild()
+    @commands.command(name="blacklist_view", aliases=["bv"])
     @checks.is_user()
+    @checks.is_guild()
     async def blacklist_view(self, ctx: commands.Context):
         try:
             pages = []
@@ -379,11 +372,9 @@ class Moderation(commands.Cog):
             raise BotError(f"/blacklist_view sent an error: {e}")
         
 
-    @commands.hybrid_command(name="whitelist", description="Remove a user from the ticket blacklist", 
-                             aliases=["w"])
-    @app_commands.describe(user="User to remove from blacklist")
-    @checks.is_guild()
+    @commands.command(name="whitelist", aliases=["w"])
     @checks.is_user()
+    @checks.is_guild()
     async def whitelist(self, ctx: commands.Context, user: discord.User):
         try:
             guild = ctx.guild
@@ -403,11 +394,9 @@ class Moderation(commands.Cog):
             raise BotError(f"/whitelist sent an error: {e}")
         
 
-    @commands.hybrid_command(name="verbal", description="Send a verbal warning to a user")
-    @app_commands.describe(user="User to verbally warn")
-    @app_commands.describe(reason="Text content of the verbal warning")
-    @checks.is_guild()
+    @commands.command(name="verbal")
     @checks.is_user()
+    @checks.is_guild()
     async def verbal(self, ctx, user: discord.Member, *, reason: str):
         try:
             guild = ctx.guild
@@ -469,11 +458,9 @@ class Moderation(commands.Cog):
             raise BotError(f"/verbal sent an error: {e}")
         
 
-    @commands.hybrid_command(name="verbal_edit", description="Edit a user's verbal warning")
-    @app_commands.describe(verbal_id="The verbal's ID")
-    @app_commands.describe(new_reason="New content of the verbal")
-    @checks.is_guild()
+    @commands.command(name="verbal_edit")
     @checks.is_user()
+    @checks.is_guild()
     async def verbal_edit(self, ctx, verbal_id: str, *, new_reason: str):
         try:
             guild = ctx.guild
@@ -560,10 +547,9 @@ class Moderation(commands.Cog):
             raise BotError(f"/verbal_edit sent an error: {e}")
 
 
-    @commands.hybrid_command(name="verbal_delete", description="Delete a user's verbal warning")
-    @app_commands.describe(verbal_id="The verbal's ID")
-    @checks.is_guild()
+    @commands.command(name="verbal_delete")
     @checks.is_user()
+    @checks.is_guild()
     async def verbal_delete(self, ctx, verbal_id: str):
         try:
             guild = ctx.guild
@@ -634,9 +620,9 @@ class Moderation(commands.Cog):
             raise BotError(f"/verbal_delete sent an error: {e}")
         
 
-    @commands.hybrid_command(name="verbal_history", description="View a user's verbal warning history")
-    @checks.is_guild()
+    @commands.command(name="verbal_history")
     @checks.is_user()
+    @checks.is_guild()
     async def verbal_history(self, ctx: commands.Context, user: discord.Member):
         try:
             pages = []

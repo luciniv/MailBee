@@ -17,8 +17,8 @@ class Snips(commands.Cog):
         self.bot = bot
 
     @commands.command(name="snip", aliases=["s"])
-    @checks.is_guild()
     @checks.is_user()
+    @checks.is_guild()
     async def snip(self, ctx, *, snip: str):
         try:
             channel = ctx.channel
@@ -61,8 +61,8 @@ class Snips(commands.Cog):
         
 
     @commands.command(name="asnip", aliases=["as"])
-    @checks.is_guild()
     @checks.is_user()
+    @checks.is_guild()
     async def asnip(self, ctx, *, snip: str):
         try:
             channel = ctx.channel
@@ -105,8 +105,8 @@ class Snips(commands.Cog):
         
 
     @commands.command(name="nonasnip", aliases=["nas"])
-    @checks.is_guild()
     @checks.is_user()
+    @checks.is_guild()
     async def nonasnip(self, ctx, *, snip: str):
         try:
             channel = ctx.channel
@@ -148,10 +148,9 @@ class Snips(commands.Cog):
             raise BotError(f"+nonasnip sent an error: {e}")
         
 
-    @commands.command(name="snipview", description="List all current snips",
-                             aliases=["sv", "snip_view"])
-    @checks.is_guild()
+    @commands.command(name="snipview", aliases=["sv", "snip_view"])
     @checks.is_user()
+    @checks.is_guild()
     async def snipview(self, ctx, *, snip: str):   
         try:
             channel = ctx.channel
@@ -189,10 +188,9 @@ class Snips(commands.Cog):
             raise BotError(f"+snipview sent an error: {e}")
         
 
-    @commands.hybrid_command(name="sniplist", description="List all current snips",
-                             aliases=["list", "sl"])
-    @checks.is_guild()
+    @commands.command(name="sniplist", aliases=["list", "sl"])
     @checks.is_user()
+    @checks.is_guild()
     async def sniplist(self, ctx):     
         try:
             pages = []
@@ -260,8 +258,8 @@ class Snips(commands.Cog):
 
     # Send a snip from the database
     @snip_group.command(name="send", description="Send a snip in a ticket")
-    @checks.is_guild()
-    @checks.is_user()
+    @checks.is_user_app()
+    @checks.is_guild_app()
     @app_commands.describe(snip="Select a snip, or search by keyword")
     @app_commands.describe(anon="Whether your message is anonymous or not (default is per server)")
     async def send(self, interaction: discord.Interaction, snip: str, anon: bool = None):
@@ -327,8 +325,8 @@ class Snips(commands.Cog):
 
     # Send a snip for viewing
     @snip_group.command(name="view", description="View a snip")
-    @checks.is_guild()
-    @checks.is_user()
+    @checks.is_user_app()
+    @checks.is_guild_app()
     @app_commands.describe(snip="Select a snip, or search by keyword")
     async def view(self, interaction: discord.Interaction, snip: str):
         try:
@@ -384,8 +382,8 @@ class Snips(commands.Cog):
 
     # Add a snip to the database
     @snip_group.command(name="add", description="Create a snip, using inputted text or a message ID")
-    @checks.is_guild()
-    @checks.is_user()
+    @checks.is_user_app()
+    @checks.is_guild_app()
     @app_commands.describe(abbreviation="Short-form name for the snip (alphanumeric only)")
     @app_commands.describe(summary="Summary of the snip's purpose")
     @app_commands.describe(content="Text content of the snip (LEAVE BLANK IF USING A MESSAGE ID)")
@@ -468,8 +466,8 @@ class Snips(commands.Cog):
 
     # Delete a snip from the database
     @snip_group.command(name="remove", description="Remove a snip")
-    @checks.is_guild()
-    @checks.is_user()
+    @checks.is_user_app()
+    @checks.is_guild_app()
     @app_commands.describe(snip="Select a snip to remove")
     async def remove(self, interaction: discord.Interaction, snip: str):
         try:

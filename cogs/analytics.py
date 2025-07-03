@@ -21,6 +21,12 @@ SERVER_TO_GAME = {
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 20MB in bytes
 
 
+class MessageReceivedButton(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)  # no timeout needed
+        self.add_item(discord.ui.Button(label="Send a message to reply!", style=discord.ButtonStyle.blurple, disabled=True))
+
+
 class Analytics(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -454,10 +460,11 @@ class Analytics(commands.Cog):
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             try:
-                dm_message = await dm_channel.send(embed=sendEmbed, files=files)
+                dm_message = await dm_channel.send(embed=sendEmbed, files=files, view=MessageReceivedButton())
             except Exception:
                 errorEmbed.description=("❌ Unable to DM the ticket opener. Your last message was **not** sent. "
-                                        "If this error persists they have blocked the bot or no longer share a server with it.")
+                                        "**Please try again.** If this error persists they have their DM closed or "
+                                        "no longer share a server with the bot.")
                 await channel.send(embed=errorEmbed)
                 try:
                     member = await asyncio.wait_for(guild.fetch_member(userID), timeout=1)

@@ -21,7 +21,7 @@ owners = list(map(int, os.getenv("OWNERS").split(",")))
 startup = True
 ready = True
 
-class Mantid(commands.Bot):
+class MailBee(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()  # Start with default intents
         intents.messages = True  
@@ -167,7 +167,7 @@ class Mantid(commands.Bot):
         await self.data_manager.data_shutdown()
         await super().close()
 
-bot = Mantid()
+bot = MailBee()
 bot.patch_api_routes(bot.queue)
 
 
@@ -234,39 +234,13 @@ async def sync_commands(ctx):
 @bot.event
 async def on_command_error(ctx, error):
     try:
-        # Prevent a response if the user has no bot permissions
-        def check_perms():
-            guild_id = ctx.guild
-            user = ctx.author
-            if isinstance(user, discord.User):
-                return False
-            channel = ctx.channel
-            data_manager = bot.data_manager
-            user_roles = user.roles
-
-            search_access = [
-                tup[1] for tup 
-                in data_manager.access_roles
-                if tup[0] == guild_id]
-
-            if channel.permissions_for(user).administrator:
-                return True
-
-            for role in user_roles:
-                if role.id in search_access:
-                    return True
-            return False
-        
-        if not check_perms():
-            return
-
         errorMsg = "❌ An error occurred."
         
         if (ctx.author.id in owners):
                 errorMsg = f"❌ An unexpected error occurred: {error}"
 
         if isinstance(error, commands.NotOwner):
-            errorMsg = "❌ Ownership error: You need ownership of Mantid to use this command"
+            errorMsg = "❌ Ownership error: You need ownership of MailBee to use this command"
 
         elif isinstance(error, commands.MissingRequiredArgument):
             errorMsg = "❌ Command error: You are missing arguments"
@@ -281,6 +255,9 @@ async def on_command_error(ctx, error):
         elif isinstance(error, AccessError):
             errorMsg = f"❌ Access error: {error}"
 
+        elif isinstance(error, commands.CheckFailure):
+            errorMsg = str(error)
+
         elif isinstance(error, BotError):
 
             if (ctx.author.id in owners):
@@ -292,8 +269,8 @@ async def on_command_error(ctx, error):
 
         errorEmbed = discord.Embed(title="",
                                 description=f"{errorMsg}",
-                                color=0xFF0000)
-        await ctx.send(embed=errorEmbed, ephemeral=True)
+                                color=discord.Color.red())
+        await ctx.send(embed=errorEmbed)
 
     except discord.errors.NotFound:
         logger.warning("Failed to send error message: Message context no longer exists")
@@ -303,7 +280,6 @@ async def on_command_error(ctx, error):
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error):
     try:
-
         errorMsg = "❌ An error occurred."
 
         if interaction.user.id in owners:
@@ -320,10 +296,13 @@ async def on_app_command_error(interaction: discord.Interaction, error):
             errorMsg = f"❌ This command is on cooldown. Try again in {error.retry_after:.2f} seconds"
 
         elif isinstance(error, commands.NotOwner):
-            errorMsg = "❌ Ownership error: You need ownership of Mantid to use this command"
+            errorMsg = "❌ Ownership error: You need ownership of MailBee to use this command"
 
         elif isinstance(error, AppAccessError):
             errorMsg = f"❌ Access error: {error}"
+
+        elif isinstance(error, app_commands.CheckFailure):
+            errorMsg = str(error)
 
         elif isinstance(error, BotError):
 
@@ -334,7 +313,9 @@ async def on_app_command_error(interaction: discord.Interaction, error):
         else:
             logger.error(f"❌ Unexpected command error: {error}")
 
-        errorEmbed = discord.Embed(title="", description=errorMsg, color=0xFF0000)
+        errorEmbed = discord.Embed(title="", 
+                                   description=errorMsg, 
+                                   color=discord.Color.red())
 
         # Ensure the interaction is still valid before responding
         if interaction.response.is_done():

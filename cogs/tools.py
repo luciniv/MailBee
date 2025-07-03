@@ -279,10 +279,9 @@ class Tools(commands.Cog):
         self.bot = bot
         
 
-    @commands.command(name="reply", description="Send a reply in the current ticket", 
-                             aliases=["r"])
-    @checks.is_guild()
+    @commands.command(name="reply", aliases=["r"])
     @checks.is_user()
+    @checks.is_guild()
     async def reply(self, ctx, *, message):
         try:
             channel = ctx.channel
@@ -310,10 +309,9 @@ class Tools(commands.Cog):
             raise BotError(f"+reply sent an error: {e}")
         
 
-    @commands.command(name="areply", description="Send an anonymous reply in the current ticket", 
-                             aliases=["ar"])
-    @checks.is_guild()
+    @commands.command(name="areply", aliases=["ar"])
     @checks.is_user()
+    @checks.is_guild()
     async def areply(self, ctx, *, message):
         try:
             channel = ctx.channel
@@ -341,10 +339,9 @@ class Tools(commands.Cog):
             raise BotError(f"+areply sent an error: {e}")
         
 
-    @commands.command(name="nonareply", description="Send an NON-anonymous reply in the current ticket", 
-                             aliases=["nar"])
-    @checks.is_guild()
+    @commands.command(name="nonareply", aliases=["nar"])
     @checks.is_user()
+    @checks.is_guild()
     async def nonareply(self, ctx, *, message):
         try:
             channel = ctx.channel
@@ -373,8 +370,8 @@ class Tools(commands.Cog):
         
 
     @commands.command(name="ai_reply")
-    @checks.is_guild()
     @checks.is_user()
+    @checks.is_guild()
     async def ai_reply(self, ctx):
         await ctx.defer()
 
@@ -405,12 +402,9 @@ class Tools(commands.Cog):
         return f"This is a placeholder reply based on the transcript of {len(transcript.splitlines())} lines"
 
     
-    @commands.hybrid_command(name="reply_edit", description="Edit a ticket reply",
-                             aliases=["edit"])
-    @app_commands.describe(reply_id="The message ID of the ticket reply")
-    @app_commands.describe(new_content="The new content of the ticket reply")
-    @checks.is_guild()
+    @commands.command(name="reply_edit", aliases=["edit"])
     @checks.is_user()
+    @checks.is_guild()
     async def reply_edit(self, ctx, reply_id: str, *, new_content: str):
         try:
             guild = ctx.guild
@@ -553,11 +547,9 @@ class Tools(commands.Cog):
             raise BotError(f"/reply_edit sent an error: {e}")
         
 
-    @commands.hybrid_command(name="reply_delete", description="Delete a ticket reply",
-                             aliases=["delete"])
-    @app_commands.describe(reply_id="The message ID of the ticket reply")
-    @checks.is_guild()
+    @commands.command(name="reply_delete", aliases=["delete"])
     @checks.is_user()
+    @checks.is_guild()
     async def reply_delete(self, ctx, reply_id: str):
         try:
             guild = ctx.guild
@@ -688,10 +680,9 @@ class Tools(commands.Cog):
             raise BotError(f"/reply_delete sent an error: {e}")
 
 
-    @commands.command(name="close", description="Close the current ticket, with an optional reason", 
-                             aliases=["c"])
-    @checks.is_guild()
+    @commands.command(name="close", aliases=["c"])
     @checks.is_user()
+    @checks.is_guild()
     async def close(self, ctx, *, reason: str = "No reason provided"):
         try:
             ticket_channel = ctx.channel
@@ -731,10 +722,9 @@ class Tools(commands.Cog):
             raise BotError(f"/close sent an error: {e}")
         
 
-    @commands.command(name="aclose", description="Close the current ticket anonymously, with an optional reason", 
-                             aliases=["ac"])
-    @checks.is_guild()
+    @commands.command(name="aclose", aliases=["ac"])
     @checks.is_user()
+    @checks.is_guild()
     async def aclose(self, ctx, *, reason: str = "No reason provided"):
         try:
             ticket_channel = ctx.channel
@@ -773,10 +763,9 @@ class Tools(commands.Cog):
             raise BotError(f"/aclose sent an error: {e}")
         
 
-    @commands.command(name="nonaclose", description="Close the current ticket NON-anonymously, with an optional reason", 
-                             aliases=["nac"])
-    @checks.is_guild()
+    @commands.command(name="nonaclose", aliases=["nac"])
     @checks.is_user()
+    @checks.is_guild()
     async def nonaclose(self, ctx, *, reason: str = "No reason provided"):
         try:
             ticket_channel = ctx.channel
@@ -817,10 +806,9 @@ class Tools(commands.Cog):
 
     # Set a ticket as inactive for a period of time, then mark to close
     # Remove inactive / close marker if the user responds
-    @commands.command(name="inactive", description="Mark current ticket to close after X hours of non-response", 
-                             aliases=["inact"])
-    @checks.is_guild()
+    @commands.command(name="inactive", aliases=["inact"])
     @checks.is_user()
+    @checks.is_guild()
     async def inactive(self, ctx, hours: int = 24, *, reason: str = "Ticket closed due to inactivity"):
         try:    
             author = ctx.author
@@ -888,10 +876,9 @@ class Tools(commands.Cog):
 
     # Set a ticket as inactive for a period of time, then mark to close
     # Remove inactive / close marker if the user responds
-    @commands.command(name="active", description="Remove inactivity status from a ticket", 
-                             aliases=["act"])
-    @checks.is_guild()
+    @commands.command(name="active", aliases=["act"])
     @checks.is_user()
+    @checks.is_guild()
     async def active(self, ctx):
         try:    
             channel = ctx.channel
@@ -932,8 +919,8 @@ class Tools(commands.Cog):
 
     # Move a ticket channel
     @app_commands.command(name="move", description="Move a ticket to a different category")
-    @checks.is_guild()
-    @checks.is_user()
+    @checks.is_user_app()
+    @checks.is_guild_app()
     @app_commands.describe(category="Ticket category to move the current ticket channel to")
     @app_commands.describe(location="Any category to move the current ticket channel to")
     async def move(self, interaction: discord.Interaction, category: str = None, location: discord.CategoryChannel = None):
@@ -1070,9 +1057,9 @@ class Tools(commands.Cog):
     
 
     # Move a ticket channel
-    @commands.hybrid_command(name="nsfw", description="Move a ticket to a nsfw category")
-    @checks.is_guild()
+    @commands.command(name="nsfw")
     @checks.is_user()
+    @checks.is_guild()
     async def nsfw(self, ctx):
         try:
             guild = ctx.guild
@@ -1152,8 +1139,8 @@ class Tools(commands.Cog):
 
     # Manually update the status of a ticket channel
     @commands.hybrid_command(name="status", description="Change the emoji status of a ticket")
-    @checks.is_guild()
     @checks.is_user()
+    @checks.is_guild()
     @app_commands.describe(status="Select an emoji from the provided list")
     @app_commands.choices(status=[
         app_commands.Choice(name=f"🆕 - New ticket", value="new"),
@@ -1191,9 +1178,9 @@ class Tools(commands.Cog):
             raise BotError(f"/status sent an error: {e}")
         
 
-    @commands.hybrid_command(name="ticket_button", description="Creates a button users can click to open a ticket via DMs")
-    @checks.is_guild()
+    @commands.command(name="ticket_button")
     @checks.is_admin()
+    @checks.is_guild()
     async def post_ticket_button(self, ctx: commands.Context):
         guild_id = ctx.guild.id
 

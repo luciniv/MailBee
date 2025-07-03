@@ -19,10 +19,10 @@ class AccessError(BotError):
         details = ""
         if self.required_permission:
             details += f"Required permission: {self.required_permission}"
-        return f"{super().__str__()} \n\n({details})"
+        return f"{super().__str__()} \n({details})"
 
 
-# Raised if has_access fails for application commands
+# Raised if has_access fails for app commands
 class AppAccessError(CheckFailure):
     def __init__(self, message: str, required_permission: str = None):
         super().__init__(message)
@@ -32,6 +32,4 @@ class AppAccessError(CheckFailure):
         details = ""
         if self.required_permission:
             details += f"Required permission: {self.required_permission}"
-        return f"{super().__str__()} \n\n({details})"
-
-# Add more error classes if needed
+        return f"{super().__str__()} \n({details})"

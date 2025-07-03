@@ -43,8 +43,8 @@ class Stats(commands.Cog):
 
 
     @commands.hybrid_command(name="hourly_data", description="View certain data types per hour from a selected day")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(type="Select a data type to display hourly")
     @app_commands.choices(type=[
         app_commands.Choice(name="Tickets opened & closed", value="open")])
@@ -139,6 +139,7 @@ class Stats(commands.Cog):
     # Creates leaderboards for the selected data type
     @commands.hybrid_command(name="leaderboard", description="View certain data types as a leaderboard")
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(type="Select a data type to create a leaderboard for")
     @app_commands.choices(type=[
         app_commands.Choice(name="Current tickets open (server ranking)", value="open"),
@@ -239,8 +240,8 @@ class Stats(commands.Cog):
     
     @commands.hybrid_command(name="server_stats", description="Display this server's statistics,"
                             " includes ticket counts and response averages")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
@@ -297,8 +298,8 @@ class Stats(commands.Cog):
 
     @commands.hybrid_command(name="mod_activity", description="Display a moderator's ticketing activity" 
                              " over the past X amount of time")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(member="Selected moderator")
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
@@ -370,8 +371,8 @@ class Stats(commands.Cog):
     
 
     @commands.hybrid_command(name="export_week", description="Output a CSV file of one week's data")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(year="Select the year")
     @app_commands.choices(year=[
         app_commands.Choice(name="2024", value="2024"),
@@ -477,8 +478,8 @@ class Stats(commands.Cog):
 
 
     @commands.hybrid_command(name="export_week_v2", description="Output a CSV file of one week's data")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(year="Select the year")
     @app_commands.choices(year=[
         app_commands.Choice(name="2025", value="2025")])
@@ -541,8 +542,8 @@ class Stats(commands.Cog):
 
     @commands.hybrid_command(name="export_server_stats", description="Output a CSV file of every server's statistics,"
                             " includes ticket counts and response averages")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
@@ -615,8 +616,8 @@ class Stats(commands.Cog):
 
     @commands.hybrid_command(name="export_mod_activity", description="Output a CSV file of this server's moderators'"
                              " ticketing activity over the past X amount of time")
-    @checks.is_guild()
     @checks.is_admin()
+    @checks.is_guild()
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
