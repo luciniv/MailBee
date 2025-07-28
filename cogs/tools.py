@@ -1193,7 +1193,8 @@ class Tools(commands.Cog):
                    ("🔎 - Under review", "review")],
             "346515443869286410": [("🧡 - Admin assist (Contact)", "contact"), 
                                    ("💚 - Admin assist (Reimbursements)", "reimburse"), 
-                                   ("💜 - Admin assist (Appeal Assist)", "appeal")]}
+                                   ("💜 - Admin assist (Appeal Assist)", "appeal"),
+                                   ("🐟 - Phishing links", "phish")]}
 
         final_statuses = []
         for key, status_list in statuses.items():
