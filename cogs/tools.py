@@ -302,7 +302,7 @@ class Tools(commands.Cog):
 
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
                                        color=discord.Color.red())
-            await channel.send_message(embed=errorEmbed)
+            await channel.send(embed=errorEmbed)
             
         except Exception as e:
             logger.exception(e)
@@ -332,7 +332,7 @@ class Tools(commands.Cog):
 
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
                                        color=discord.Color.red())
-            await channel.send_message(embed=errorEmbed)
+            await channel.send(embed=errorEmbed)
             
         except Exception as e:
             logger.exception(e)
@@ -362,7 +362,7 @@ class Tools(commands.Cog):
 
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
                                        color=discord.Color.red())
-            await channel.send_message(embed=errorEmbed)
+            await channel.send(embed=errorEmbed)
             
         except Exception as e:
             logger.exception(e)
@@ -942,7 +942,7 @@ class Tools(commands.Cog):
                     if category is None and location is None:
                         errorEmbed = discord.Embed(description="❌ You must specify some category or location.",
                                         color=discord.Color.red())
-                        await interaction.followup.send(embed=errorEmbed)
+                        await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                         return
                     if category is not None:
                         categoryID, flag = category.split()
@@ -951,13 +951,19 @@ class Tools(commands.Cog):
                         if category is None:
                             errorEmbed = discord.Embed(description="❌ Category doesn't exist.",
                                             color=discord.Color.red())
-                            await interaction.followup.send(embed=errorEmbed)
+                            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                             return
                         
                         if category.id == channel.category.id:
                             errorEmbed = discord.Embed(description="❌ Cannot move channel to the category it's already in.",
                                             color=discord.Color.red())
-                            await interaction.followup.send(embed=errorEmbed)
+                            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                            return
+                        
+                        if len(category.channels) == 50:
+                            errorEmbed = discord.Embed(description="❌ Cannot move channel to a full category.",
+                                            color=discord.Color.red())
+                            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                             return
                         
                         ticket_is_nsfw = False
@@ -972,13 +978,13 @@ class Tools(commands.Cog):
                                 await channel.edit(nsfw=True,
                                                 overwrites=category.overwrites,
                                                 category=category)
-                                await self.bot.channel_status.set_emoji(channel, None, False, True)
+                                await self.bot.channel_status.set_emoji(channel, None, True, True)
 
                             elif flag == "False" and ticket_is_nsfw:
                                 await channel.edit(nsfw=False,
                                                 overwrites=category.overwrites,
                                                 category=category)
-                                await self.bot.channel_status.set_emoji(channel, None, False, False)
+                                await self.bot.channel_status.set_emoji(channel, None, True, False)
                                 
                             else:
                                 await channel.edit(overwrites=category.overwrites,
@@ -986,7 +992,7 @@ class Tools(commands.Cog):
                                 
                         except Exception:
                             errorEmbed.description="❌ Failed to edit channel. Please try again later."
-                            await interaction.followup.send(embed=errorEmbed)
+                            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                             return
 
                         successEmbed = discord.Embed(description=f"✅ Moved this channel to **{category.name}**\n"
@@ -999,14 +1005,14 @@ class Tools(commands.Cog):
                         if location.id == channel.category.id:
                             errorEmbed = discord.Embed(description="❌ Cannot move channel to the category it's already in.",
                                             color=discord.Color.red())
-                            await interaction.followup.send(embed=errorEmbed)
+                            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                             return
                         try:
                             await channel.edit(category=location)
                                 
                         except Exception:
                             errorEmbed.description="❌ Failed to edit channel. Please try again later."
-                            await interaction.followup.send(embed=errorEmbed)
+                            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                             return
 
                         successEmbed = discord.Embed(description=f"✅ Moved this channel to **{location.name}**\n"
@@ -1016,7 +1022,7 @@ class Tools(commands.Cog):
                         await interaction.followup.send(embed=successEmbed)
                         return
                 
-            await interaction.followup.send(embed=errorEmbed)
+            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
             
         except Exception as e:
             logger.exception(e)
@@ -1138,27 +1144,22 @@ class Tools(commands.Cog):
 
 
     # Manually update the status of a ticket channel
-    @commands.hybrid_command(name="status", description="Change the emoji status of a ticket")
+    @app_commands.command(name="status", description="Change the emoji status of a ticket")
     @checks.is_user()
     @checks.is_guild()
     @app_commands.describe(status="Select an emoji from the provided list")
-    @app_commands.choices(status=[
-        app_commands.Choice(name=f"🆕 - New ticket", value="new"),
-        app_commands.Choice(name=f"❗️ - Waiting for moderator response", value="alert"),
-        app_commands.Choice(name=f"⏳ - Waiting for user response", value="wait"),
-        app_commands.Choice(name=f"🔎 - Under review", value="review")])
-
-    async def status(self, ctx, status: discord.app_commands.Choice[str]):
+    async def status(self, interaction, status: str):
         try:    
-            channel = ctx.channel
-            emoji_name = status.name
-            emoji_str = status.value
+            await interaction.response.defer()
+            channel = interaction.channel
+            emoji_name = status[(status.index(":") + 1):]
+            emoji_str = status[:status.index(":")]
 
             current_name = self.bot.channel_status.pending_updates.get(channel.id, channel.name)
-            if current_name.startswith(emojis.emoji_map.get("inactive", "")):
+            if current_name.startswith((emojis.emoji_map.get("inactive"))[0]):
                 errorEmbed = discord.Embed(description="❌ Cannot change the status of an **inactive** ticket", 
                                            color=discord.Color.red())
-                await ctx.send(embed=errorEmbed)
+                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                 return
 
             result = await self.bot.channel_status.set_emoji(channel, emoji_str, True)
@@ -1170,7 +1171,7 @@ class Tools(commands.Cog):
                 statusEmbed.description=(f"❌ Failed to set channel status to **{emoji_name}**, current "
                                          "or pending status is already set as this")
                 statusEmbed.color=discord.Color.red()
-            await ctx.send(embed=statusEmbed)
+            await interaction.followup.send(embed=statusEmbed, ephemeral=True)
             return
 
         except Exception as e:
@@ -1178,22 +1179,54 @@ class Tools(commands.Cog):
             raise BotError(f"/status sent an error: {e}")
         
 
-    @commands.command(name="ticket_button")
+    @status.autocomplete('status')
+    async def move_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        if not guild:
+            return []
+        
+        #FIXME eventually this should be a database
+        statuses = {
+            None: [("🆕 - New ticket", "new"), 
+                   ("❗️ - Waiting for moderator response", "alert"),
+                   ("⏳ - Waiting for user response", "wait"), 
+                   ("🔎 - Under review", "review")],
+            "346515443869286410": [("🧡 - Admin assist (Contact)", "contact"), 
+                                   ("💚 - Admin assist (Reimbursements)", "reimburse"), 
+                                   ("💜 - Admin assist (Appeal Assist)", "appeal")]}
+
+        final_statuses = []
+        for key, status_list in statuses.items():
+            if key is None or key == str(guild.id):
+                final_statuses.extend(status_list)
+
+        matches = [
+            app_commands.Choice(name=description, value=f"{keyword}:{description}")
+            for description, keyword in final_statuses
+            if current.casefold() in description.casefold()]
+        
+        return matches[:25]
+        
+
+    @commands.command(name="button")
     @checks.is_admin()
     @checks.is_guild()
-    async def post_ticket_button(self, ctx: commands.Context):
+    async def post_ticket_button(self, ctx, *, text = None):
         guild_id = ctx.guild.id
 
         types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
-
         if not types:
             await ctx.send("❌ This server doesn't have any ticket types configured")
             return
+        
+        content = ("Click the button below to open a support ticket with staff "
+                   "in your direct messages. The bot will guide you through the process!")
+        if text:
+            content = text
 
         view = DMCategoryButtonView(self.bot)
         ticketEmbed=discord.Embed(title="Need Support?", 
-                                  description="Click the button below to open a support ticket with staff "
-                                              "in your direct messages. The bot will guide you through the process!",
+                                  description=content,
                                   color=discord.Color.green())
         await ctx.channel.send(embed=ticketEmbed, view=view)
     

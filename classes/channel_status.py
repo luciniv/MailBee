@@ -53,7 +53,7 @@ class ChannelStatus:
 
                     last_update_time = self.last_update_times.get(channel_id, None)
                     if (last_update_time is None):
-                        if (new_name.startswith(emojis.emoji_map.get("new", ""))):
+                        if (new_name.startswith((emojis.emoji_map.get("new"))[0])):
                             last_update_time = now - self.cooldown
                         else:
                             last_update_time = now
@@ -170,11 +170,15 @@ class ChannelStatus:
             # Check for restricted automatic updates
             if not manual:
                 for old_status, log_msg in restricted_updates.items():
-                    if current_name.startswith(emojis.emoji_map.get(old_status[0], "")) and new_name.startswith(emojis.emoji_map.get(old_status[1], "")):
+                    if current_name.startswith((emojis.emoji_map.get(old_status[0])[0])) and new_name.startswith((emojis.emoji_map.get(old_status[1], ""))[0]):
+                        return False
+                    
+                for emoji, permanent in emojis.emoji_map.values():
+                    if current_name.startswith(emoji) and permanent:
                         return False
 
                 # Handle special case: deleting timer if switching from inactive/close to alert
-                if current_name.startswith((emojis.emoji_map.get("inactive", ""), emojis.emoji_map.get("close", ""))) and new_name.startswith(emojis.emoji_map.get("alert", "")):
+                if current_name.startswith(((emojis.emoji_map.get("inactive"))[0], (emojis.emoji_map.get("close"))[0])) and new_name.startswith((emojis.emoji_map.get("alert", ""))[0]):
                     if self.timers.pop(channel.id, None):
                         pass
 
@@ -195,12 +199,12 @@ class ChannelStatus:
 
             # nsfw is True, make name nsfw
             if nsfw:
-                if any((current_name).startswith(value) for value in emojis.emoji_map.values()):
-                    new_name = f"{(current_name)[0]}{emojis.emoji_map.get('nsfw', '🔞')}{(current_name)[1:]}"
+                if any((current_name).startswith(emoji) for emoji, permanent in emojis.emoji_map.values()):
+                    new_name = f"{(current_name)[0]}{(emojis.emoji_map.get('nsfw'))[0]}{(current_name)[1:]}"
 
             # nsfw is false, make name non-nsfw
             elif not nsfw:
-                if any((current_name).startswith(value) for value in emojis.emoji_map.values()):
+                if any((current_name).startswith(emoji) for emoji, permanent in emojis.emoji_map.values()):
                     new_name = f"{(current_name)[0]}{(current_name)[2:]}"
 
         else:
@@ -208,10 +212,10 @@ class ChannelStatus:
                 self.queue_update(channel, None, manual)
                 return True
 
-            selected_emoji = emojis.emoji_map.get(emoji_str, "")
+            selected_emoji = (emojis.emoji_map.get(emoji_str))[0]
 
             # Remove prefixed emoji if there is one
-            if (channel.name)[0] in emoji.EMOJI_DATA and (not channel.name.startswith(emojis.emoji_map.get("nsfw", "🔞"))):
+            if (channel.name)[0] in emoji.EMOJI_DATA and (not channel.name.startswith((emojis.emoji_map.get("nsfw"))[0])):
                 new_name = f"{selected_emoji}{(channel.name)[1:]}" if selected_emoji else f"{emoji_str}{(channel.name)[1:]}"
             else:
                 new_name = f"{selected_emoji}{channel.name}" if selected_emoji else f"{emoji_str}{channel.name}"

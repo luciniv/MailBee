@@ -74,12 +74,14 @@ class Analytics(commands.Cog):
 
             # Selection menu for where to route ticket message
             elif (len(tickets) > 1):
-                ticketEmbed = discord.Embed(title="Choose Message Destination",
-                                        description="Use the dropdown menu to select which server to send your message to."
-                                        "\n\nThese are servers you **currently have an open ticket with**. "
+                ticketEmbed = discord.Embed(title="❗️You Have Multiple Tickets Open, Choose Your Message Destination",
+                                        description="Use the dropdown menu to select which server to send your message to. "
+                                        "These are servers you **currently have an open ticket with**.\n\n"
                                         "If you would like to create a new ticket with a different server, use `/create_ticket`",
                                         color=discord.Color.blue())
-                await channel.send(embed=ticketEmbed, view=TicketSelectView(self.bot, tickets))
+                view = TicketSelectView(self.bot, tickets, message)
+                view_message = await channel.send(embed=ticketEmbed, view=view)
+                view.message = view_message
 
         except Exception as e:
             logger.exception(f"bot_dm sent an error: {e}")

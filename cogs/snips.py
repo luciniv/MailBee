@@ -295,7 +295,7 @@ class Snips(commands.Cog):
    
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels.",
                                         color=discord.Color.red())
-            await interaction.followup.send(embed=errorEmbed)
+            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
             
         except Exception as e:
             logger.exception(e)

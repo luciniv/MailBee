@@ -126,7 +126,6 @@ class Events(commands.Cog):
             
             if (len(search_monitor) != 0):
                 await self.bot.data_manager.remove_monitor(channel.id)
-                print(f"removed {channel.name} from monitor")
 
             if (len(search_categories) != 0):
                 query = f"""
@@ -135,7 +134,6 @@ class Events(commands.Cog):
                     """
                 await self.bot.data_manager.execute_query(query, False)
                 await self.bot.data_manager.update_cache(2)
-                print(f"removed {channel.name} from category types")
 
 
     # TYPING system
@@ -145,24 +143,20 @@ class Events(commands.Cog):
 
             if before.category_id != after.category_id:
                 ticket_id = await self.bot.data_manager.get_ticket(before.id)
-                print("channel changed categories")
 
                 if ticket_id is not None:
-                    print("channel is a ticket channel")
                     search_categories = [
                         (type) for guildID, categoryID, type 
                         in self.bot.data_manager.category_types
                         if (categoryID == after.category_id)]
                     
                     if (len(search_categories) != 0):
-                        print("channel moved to typed category")
                         query = f"""
                             UPDATE tickets 
                             SET tickets.type = {search_categories[0]}
                             WHERE tickets.messageID = {ticket_id};
                             """
                         await self.bot.data_manager.execute_query(query, False)
-                        print(f"updated type in db to {search_categories[0]}")
 
 
 async def setup(bot):

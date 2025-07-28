@@ -26,7 +26,7 @@ class TimeoutSafeView(discord.ui.View):
 
                 try:
                     timeoutEmbed=discord.Embed(title="", 
-                                               description="Embed has timed out. Please run the command again.", 
+                                               description="Embed has timed out. Repeat your prior command or action if you need more time.", 
                                                color=discord.Color.red())
                     await self.message.edit(embed=timeoutEmbed)
                 except discord.Forbidden:
@@ -36,9 +36,10 @@ class TimeoutSafeView(discord.ui.View):
 
 
 class TicketSelect(discord.ui.Select):
-    def __init__(self, bot, tickets: list[dict]):
+    def __init__(self, bot, tickets: list[dict], message):
         self.bot = bot
         self.selected_ticket = None
+        self.message = message
 
         options = []
 
@@ -48,32 +49,37 @@ class TicketSelect(discord.ui.Select):
             if guild:
                 options.append(SelectOption(
                         label=f"{guild.name}",
-                        value=str(ticket['ticketID']),
-                        description=f"Channel ID: {ticket['channelID']}"))
+                        value=f"{ticket['guildID']} {ticket['channelID']}"))
 
         super().__init__(
-            placeholder="Select a ticket by server",
+            placeholder="Select a destination server",
             options=options,
             min_values=1,
             max_values=1
         )
 
     async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         self.selected_ticket = self.values[0]
-        await interaction.response.send_message(
-            f"Ticket {self.selected_ticket} selected.",
-            ephemeral=True
-        )
-        self.view.selected_ticket = self.selected_ticket
+        guildID = (self.selected_ticket.split())[0]
+        channelID = (self.selected_ticket.split())[1]
+        analytics = self.bot.get_cog("Analytics")
+        if analytics is not None:
+            await analytics.route_to_server(self.message, int(guildID), int(channelID))
+        else:
+            error = discord.Embed(description="❌ Internal error, please try sending your message again.", 
+                                  color=discord.Color.red())
+            await interaction.channel.send(embed=error)
         self.view.stop()
+        await self.view.message.delete()
 
 
 class TicketSelectView(TimeoutSafeView):
-    def __init__(self, bot, tickets: list[dict]):
+    def __init__(self, bot, tickets: list[dict], message):
         super().__init__()
         self.bot = bot
         self.selected_ticket = None
-        self.add_item(TicketSelect(bot, tickets))
+        self.add_item(TicketSelect(bot, tickets, message))
 
 
 class ServerSelect(discord.ui.Select):
