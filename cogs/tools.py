@@ -1053,6 +1053,13 @@ class Tools(commands.Cog):
             (cat.name, cat.id, id_flags[cat.id])
             for cat in guild.categories
             if cat.id in id_flags]
+        
+        #FIXME Add a database thing for this
+        extra_categories = {"346515443869286410": ("1273714180037283890")}
+
+        for category in guild.categories:
+            if str(category.id) in extra_categories[str(guild.id)]:
+                final_ids.append((category.name, category.id, False))
 
         matches = [
             app_commands.Choice(name=name, value=f"{id} {flag}")
