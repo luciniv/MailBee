@@ -2,7 +2,8 @@ import subprocess
 import tempfile
 import os
 import json
-from .compression.DA import ConversionTable
+from .compression.DA import DAConversionTable
+from .compression.HL import HLConversionTable
 
 
 def prettify_json(data):
@@ -34,7 +35,7 @@ def da_decoder(player_data):
     if not isinstance(player_data, str):
         player_data = json.dumps(player_data)
 
-    for uncompressed, compressed in ConversionTable:
+    for uncompressed, compressed in DAConversionTable:
         player_data = player_data.replace(f'"{compressed}"', f'"{uncompressed}"')
 
     return prettify_json(player_data)
