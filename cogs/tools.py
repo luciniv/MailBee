@@ -1057,9 +1057,11 @@ class Tools(commands.Cog):
         #FIXME Add a database thing for this
         extra_categories = {"346515443869286410": ("1273714180037283890")}
 
-        for category in guild.categories:
-            if str(category.id) in extra_categories[str(guild.id)]:
-                final_ids.append((category.name, category.id, False))
+        category_list = extra_categories.get(str(guild.id), None)
+        if category_list is not None:
+            for category in guild.categories:
+                if str(category.id) in extra_categories[str(guild.id)]:
+                    final_ids.append((category.name, category.id, False))
 
         matches = [
             app_commands.Choice(name=name, value=f"{id} {flag}")
