@@ -1,4 +1,4 @@
-ConversionTable = [
+HLConversionTable = [
 	["NewPlayer", "aaa"],
 	["WolperBasicBridle", "aab"],
 	["BisorseBasicBridle", "aac"],
