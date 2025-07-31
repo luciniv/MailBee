@@ -54,7 +54,7 @@ async def get_roblox_username(guild_id, discord_id, api_key):
         return roblox_id, username
             
     except asyncio.TimeoutError:
-        logger.exception("get_roblox_username request timed out")
+        logger.warning("get_roblox_username request timed out")
         return None
 
     except Exception as e:
