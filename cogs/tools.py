@@ -809,7 +809,7 @@ class Tools(commands.Cog):
     @commands.command(name="inactive", aliases=["inact"])
     @checks.is_user()
     @checks.is_guild()
-    async def inactive(self, ctx, hours: int = 24, *, reason: str = "Ticket closed due to inactivity"):
+    async def inactive(self, ctx, hours: str = "24", *, reason: str = "Ticket closed due to inactivity"):
         try:    
             author = ctx.author
             channel = ctx.channel
@@ -817,13 +817,22 @@ class Tools(commands.Cog):
             guild = channel.guild
             now = time.time()
 
-            errorEmbed = discord.Embed(description="❌ Hours must be between 1 to 72 (inclusive)", 
+            errorEmbed = discord.Embed(description="❌ Hours must be formatted as # or #h", 
                                        color=discord.Color.red())
 
             if (isinstance(channel, discord.TextChannel)):
                 if (channel.topic):
                     if ("Ticket channel" in channel.topic):
+
+                        hours_match = re.fullmatch(r'(\d+)h?', hours)
+                        if hours_match:
+                            hours = int(hours_match.group(1))
+                        else:
+                            await channel.send(embed=errorEmbed)
+                            return 
+                        
                         if ((hours < 1) or (hours > 72)):
+                            errorEmbed.description="❌ Hours must be between 1 to 72 (inclusive)"
                             await channel.send(embed=errorEmbed)
                             return
                         else:
@@ -922,8 +931,8 @@ class Tools(commands.Cog):
     @checks.is_user_app()
     @checks.is_guild_app()
     @app_commands.describe(category="Ticket category to move the current ticket channel to")
-    @app_commands.describe(location="Any category to move the current ticket channel to")
-    async def move(self, interaction: discord.Interaction, category: str = None, location: discord.CategoryChannel = None):
+    @app_commands.describe(anywhere="Any category to move the current ticket channel to")
+    async def move(self, interaction: discord.Interaction, category: str = None, anywhere: discord.CategoryChannel = None):
         try:
             await interaction.response.defer()
 
@@ -939,7 +948,7 @@ class Tools(commands.Cog):
                     id_list = (channel.topic).split()
                     threadID = id_list[-1]
                     userID = id_list[-2]
-                    if category is None and location is None:
+                    if category is None and anywhere is None:
                         errorEmbed = discord.Embed(description="❌ You must specify some category or location.",
                                         color=discord.Color.red())
                         await interaction.followup.send(embed=errorEmbed, ephemeral=True)
@@ -1002,21 +1011,21 @@ class Tools(commands.Cog):
                         await interaction.followup.send(embed=successEmbed)
                         return
                     else:
-                        if location.id == channel.category.id:
+                        if anywhere.id == channel.category.id:
                             errorEmbed = discord.Embed(description="❌ Cannot move channel to the category it's already in.",
                                             color=discord.Color.red())
                             await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                             return
                         try:
-                            await channel.edit(category=location)
+                            await channel.edit(category=anywhere)
                                 
                         except Exception:
                             errorEmbed.description="❌ Failed to edit channel. Please try again later."
                             await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                             return
 
-                        successEmbed = discord.Embed(description=f"✅ Moved this channel to **{location.name}**\n"
-                                                                "**NOTE:** Using `/move` with a **location** will not "
+                        successEmbed = discord.Embed(description=f"✅ Moved this channel to **{anywhere.name}**\n"
+                                                                "**NOTE:** Using `/move` with **anywhere** will not "
                                                                 "sync channel permissions or stauses.",
                                                     color=discord.Color.green())
                         await interaction.followup.send(embed=successEmbed)
