@@ -1163,8 +1163,8 @@ class Tools(commands.Cog):
 
     # Manually update the status of a ticket channel
     @app_commands.command(name="status", description="Change the emoji status of a ticket")
-    @checks.is_user()
-    @checks.is_guild()
+    @checks.is_user_app()
+    @checks.is_guild_app()
     @app_commands.describe(status="Select an emoji from the provided list")
     async def status(self, interaction, status: str):
         try:    

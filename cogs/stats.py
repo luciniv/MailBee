@@ -138,8 +138,8 @@ class Stats(commands.Cog):
 
     # Creates leaderboards for the selected data type
     @app_commands.command(name="leaderboard", description="View certain data types as a leaderboard")
-    @checks.is_admin()
-    @checks.is_guild()
+    @checks.is_admin_app()
+    @checks.is_guild_app()
     @app_commands.describe(type="Select a data type to create a leaderboard for")
     @app_commands.choices(type=[
         app_commands.Choice(name="Current tickets open (server ranking)", value="open"),
@@ -190,19 +190,25 @@ class Stats(commands.Cog):
                     return
 
                 else:
-                    page_counts = build_subsections(len(result)) 
+                    final_result = []
+                    # Clean out servers this bot isn't in FIXME not a huge fan of this setup
+                    for entry in result:
+                        if self.bot.get_guild(entry[0]) is not None:
+                            final_result.append(entry)
+                    
+                    page_counts = build_subsections(len(final_result)) 
                     for page_count in page_counts: 
                         limit += page_count 
                         if count != 0:
                             statsEmbed = discord.Embed(title=f"Leaderboard {time_name}", 
                                     description=f"{type_name}\r{'⎯' * 18}", 
-                                    color=0x3ad407)
+                                    color=discord.Color.green())
                             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
                             statsEmbed.set_footer(text="")
 
                         while (count < limit): 
                             increment = True
-                            row = result[count] 
+                            row = final_result[count] 
                             
                             if (type_value == "open"):
                                 if not (self.bot.get_guild(row[0]) is None):
@@ -248,8 +254,8 @@ class Stats(commands.Cog):
     
     @app_commands.command(name="server_stats", description="Display this server's statistics,"
                             " includes ticket counts and response averages")
-    @checks.is_admin()
-    @checks.is_guild()
+    @checks.is_admin_app()
+    @checks.is_guild_app()
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
         app_commands.Choice(name="Past Hour", value="1 HOUR"),
@@ -308,8 +314,8 @@ class Stats(commands.Cog):
 
     @app_commands.command(name="mod_activity", description="Display a moderator's ticketing activity" 
                              " over the past X amount of time")
-    @checks.is_admin()
-    @checks.is_guild()
+    @checks.is_admin_app()
+    @checks.is_guild_app()
     @app_commands.describe(member="Selected moderator")
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
