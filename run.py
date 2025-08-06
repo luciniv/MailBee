@@ -172,8 +172,11 @@ bot.patch_api_routes(bot.queue)
 
 
 # Sends a small query every 10 minutes to catch inactivity disconnects
+# Also saves statuses / inactive timers
 @tasks.loop(minutes=10)
 async def heartbeat():
+    await bot.data_manager.save_status_dicts_to_redis()
+    await bot.data_manager.save_timers_to_redis()
     status = await bot.data_manager.check_db_health()
     if not status:
         if bot.data_manager.db_pool is None:
