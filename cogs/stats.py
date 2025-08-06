@@ -285,7 +285,6 @@ class Stats(commands.Cog):
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
 
             query = queries.server_stats(guildID, intervals)
-            print(query)
             result = await self.bot.data_manager.execute_query(query)
 
             if result is not None: # Go ahead to build embed

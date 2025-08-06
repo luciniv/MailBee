@@ -21,14 +21,12 @@ MAX_RETRIES = 3
 async def get_roblox_username(guild_id, discord_id, api_key):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=4)) as session:
-            print(f"Guild ID: {guild_id}, Discord ID: {discord_id}, API Key: {api_key}")
             roblox_id = None
             username = None
             # Get Roblox ID from Bloxlink API
             bloxlink_url = f"https://api.blox.link/v4/public/guilds/{guild_id}/discord-to-roblox/{discord_id}"
             headers = {"Authorization": api_key}
             async with session.get(bloxlink_url, headers=headers) as response:
-                print("Got a response, status:", response.status)
                 if response.status != 200:
                     return None
                 
