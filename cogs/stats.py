@@ -137,7 +137,7 @@ class Stats(commands.Cog):
 
 
     # Creates leaderboards for the selected data type
-    @commands.hybrid_command(name="leaderboard", description="View certain data types as a leaderboard")
+    @app_commands.command(name="leaderboard", description="View certain data types as a leaderboard")
     @checks.is_admin()
     @checks.is_guild()
     @app_commands.describe(type="Select a data type to create a leaderboard for")
@@ -155,12 +155,12 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Past Week", value="1 WEEK"),
         app_commands.Choice(name="Past Month", value="1 MONTH"),
         app_commands.Choice(name="All Time", value="TOTAL")])
-    async def leaderboard(self, ctx, 
+    async def leaderboard(self, interaction, 
                           type: discord.app_commands.Choice[str], 
                           timeframe: discord.app_commands.Choice[str]):
         try:
             # Allows command to take longer than 3 seconds
-            await ctx.defer()
+            await interaction.response.defer()
             await self.bot.data_manager.flush_messages()
 
             pages = []
@@ -171,12 +171,12 @@ class Stats(commands.Cog):
             type_value = type.value
             time_name = timeframe.name
             time_value = timeframe.value
-            guild = ctx.guild
+            guild = interaction.guild
             guildID = guild.id
 
             statsEmbed = discord.Embed(title=f"Leaderboard {time_name}", 
                                     description=f"{type_name}\r{'⎯' * 18}", 
-                                    color=0x3ad407)
+                                    color=discord.Color.green())
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
             statsEmbed.set_footer(text="")
 
@@ -186,7 +186,7 @@ class Stats(commands.Cog):
             if result is not None: # Go ahead to build embed
                 if len(result) == 0:
                     statsEmbed.add_field(name="No data found", value="", inline=False)
-                    await ctx.send(embed=statsEmbed)
+                    await interaction.followup.send(embed=statsEmbed)
                     return
 
                 else:
@@ -201,29 +201,37 @@ class Stats(commands.Cog):
                             statsEmbed.set_footer(text="")
 
                         while (count < limit): 
+                            increment = True
                             row = result[count] 
                             
                             if (type_value == "open"):
                                 if not (self.bot.get_guild(row[0]) is None):
                                     statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
                                                         f" - **{row[1]}** ticket(s)", inline=False)
+                                else:
+                                    increment = False
 
                             elif (type_value == "duration"):
                                 if not (self.bot.get_guild(row[0]) is None):
                                     statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
                                                         f" - **{queries.format_time(row[1])}**", inline=False)
+                                else:
+                                    increment = False
 
                             elif (type_value == "response"):
                                 if not (self.bot.get_guild(row[0]) is None):
                                     statsEmbed.add_field(name="", value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
                                                         f" - **{queries.format_time(row[1])}**", inline=False)
+                                else:
+                                    increment = False
 
                             elif (type_value == "closed"):
                                 statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** ticket(s)", inline=False)
 
                             elif (type_value == "sent"):
                                 statsEmbed.add_field(name="", value=f"{count + 1}) <@{row[0]}> - **{row[1]}** message(s)", inline=False)
-                            count += 1 
+                            if increment:
+                                count += 1 
                         pages.append(statsEmbed) 
 
             for page in range(len(pages)):
@@ -231,14 +239,14 @@ class Stats(commands.Cog):
 
             # Create an instance of the pagination view
             view = Paginator(pages)
-            view.message = await ctx.send(embed=pages[0], view=view)
+            view.message = await interaction.followup.send(embed=pages[0], view=view)
             
         except Exception as e:
             logger.exception(e)
             raise BotError(f"/leaderboard sent an error: {e}")
   
     
-    @commands.hybrid_command(name="server_stats", description="Display this server's statistics,"
+    @app_commands.command(name="server_stats", description="Display this server's statistics,"
                             " includes ticket counts and response averages")
     @checks.is_admin()
     @checks.is_guild()
@@ -250,15 +258,15 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Past Month", value="1 MONTH"),
         app_commands.Choice(name="All Time", value="TOTAL"),
         app_commands.Choice(name="All of the above", value="ALL")])
-    async def server_stats(self, ctx, timeframe: discord.app_commands.Choice[str]):
+    async def server_stats(self, interaction, timeframe: discord.app_commands.Choice[str]):
         try:
             # Allows command to take longer than 3 seconds
-            await ctx.defer()
+            await interaction.response.defer()
             await self.bot.data_manager.flush_messages()
 
             time_value = timeframe.value
             time_name = timeframe.name
-            guild = ctx.guild
+            guild = interaction.guild
             guildID = guild.id
 
             intervals = self.intervals
@@ -271,11 +279,13 @@ class Stats(commands.Cog):
                 intervals = [f"{time_value}"]
                 rows = [f"{time_name}"]
 
-            statsEmbed = Embeds(self.bot, title=f"Server Statistics", 
-                                description=f"(selected server's data / all server data)")
+            statsEmbed = discord.Embed(title=f"Server Statistics", 
+                                description=f"[Selected server's data / All server data]",
+                                color=discord.Color.green())
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
 
             query = queries.server_stats(guildID, intervals)
+            print(query)
             result = await self.bot.data_manager.execute_query(query)
 
             if result is not None: # Go ahead to build embed
@@ -290,13 +300,13 @@ class Stats(commands.Cog):
                 
             else:
                 statsEmbed.add_field(name="No data found", value="", inline=False)
-            await ctx.send(embed=statsEmbed)
+            await interaction.followup.send(embed=statsEmbed)
             
         except Exception as e:
             raise BotError(f"/server_stats sent an error: {e}")
 
 
-    @commands.hybrid_command(name="mod_activity", description="Display a moderator's ticketing activity" 
+    @app_commands.command(name="mod_activity", description="Display a moderator's ticketing activity" 
                              " over the past X amount of time")
     @checks.is_admin()
     @checks.is_guild()
@@ -309,15 +319,15 @@ class Stats(commands.Cog):
         app_commands.Choice(name="Past Month", value="1 MONTH"),
         app_commands.Choice(name="All Time", value="TOTAL"),
         app_commands.Choice(name="All of the above", value="ALL")])
-    async def mod_activity(self, ctx, member: discord.Member, timeframe: discord.app_commands.Choice[str]):
+    async def mod_activity(self, interaction, member: discord.Member, timeframe: discord.app_commands.Choice[str]):
         try:
             # Allows command to take longer than 3 seconds
-            await ctx.defer()
+            await interaction.response.defer()
             await self.bot.data_manager.flush_messages()
 
             time_value = timeframe.value
             time_name = timeframe.name
-            guildID = ctx.guild.id
+            guildID = interaction.guild.id
             closeByID = member.id
 
             intervals = self.intervals
@@ -330,9 +340,10 @@ class Stats(commands.Cog):
                 intervals = [f"{time_value}"]
                 rows = [f"{time_name}"]
 
-            statsEmbed = Embeds(self.bot, title=f"Moderator Activity", 
-                                description=f"(selected mod's data / all mods in this server's data)")
-            statsEmbed.set_author(name=member.name, icon_url=member.display_avatar.url)
+            statsEmbed = discord.Embed(title=f"Moderator Activity", 
+                                description=f"[Selected mod's data / All mods in this server's data]",
+                                color=discord.Color.green())
+            statsEmbed.set_author(name=f"{member.name} | {member.id}", icon_url=member.display_avatar.url)
             
             query = queries.mod_activity(guildID, closeByID, intervals)
             result = await self.bot.data_manager.execute_query(query)
@@ -345,7 +356,7 @@ class Stats(commands.Cog):
 
             else:
                 statsEmbed.add_field(name="No data found", value="", inline=False)
-            await ctx.send(embed=statsEmbed)
+            await interaction.followup.send(embed=statsEmbed)
 
         except Exception as e:
             raise BotError(f"/mod_activity sent an error: {e}")

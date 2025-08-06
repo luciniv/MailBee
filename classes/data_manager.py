@@ -3,13 +3,14 @@ import asyncio
 import json
 import os
 import time
+from dotenv import load_dotenv
 from datetime import datetime, timezone
 import redis.asyncio as redis
 from typing import List, Dict
 from utils.logger import *
 from tenacity import retry, wait_random_exponential, stop_after_attempt, before_sleep
 
-
+load_dotenv()
 db_user = os.getenv("DB_USER")
 db_password = os.getenv("DB_PASSWORD")
 db_name = os.getenv("DB_NAME")
@@ -453,6 +454,15 @@ class DataManager:
     #         """
     #     await self.execute_query(query, False)
     #     print("added verified user", userID, token)
+
+
+    # Load APs from the database
+    async def load_aps_from_db(self, guildID):
+        query = f"""
+            SELECT * FROM config
+            WHERE guildID = {guildID};"""
+        data = await self.execute_query(query)
+        return data
 
 
     # Get a verified user from database
@@ -1027,6 +1037,32 @@ class DataManager:
             return None
 
         formatted = self.format_config(*config[0])
+        await self.set_with_expiry(redis_key, json.dumps(formatted))
+        return formatted
+    
+
+    def format_aps(self, guildID, modID, adjID, nounID, url):
+        return {
+            "guildID": guildID,
+            "modID": modID,
+            "adjID": adjID,
+            "nounID": nounID,
+            "url": url,}
+
+    
+    async def get_or_load_aps(self, guildID: int, get = True):
+        redis_key = f"aps:{guildID}"
+        if get:
+            cached = await self.redis.get(redis_key)
+
+            if cached:
+                return json.loads(cached)
+
+        aps = await self.load_aps_from_db(guildID)
+        if not aps:
+            return None
+
+        formatted = self.format_config(*aps[0])
         await self.set_with_expiry(redis_key, json.dumps(formatted))
         return formatted
 

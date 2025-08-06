@@ -20,7 +20,7 @@ MAX_RETRIES = 3
 
 async def get_roblox_username(guild_id, discord_id, api_key):
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=4)) as session:
             print(f"Guild ID: {guild_id}, Discord ID: {discord_id}, API Key: {api_key}")
             roblox_id = None
             username = None

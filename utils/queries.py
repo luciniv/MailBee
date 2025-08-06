@@ -156,110 +156,108 @@ def leaderboard_queries(type: str, guildID: int, interval: str):
     if (type == "open"):
         if (interval != "TOTAL"):
             query += f""" 
-                SELECT tickets.guildID, COUNT(*) AS count
-                FROM tickets
-                WHERE tickets.status = 'open'
-                AND tickets.dateClose >= NOW() - INTERVAL {interval}
-                GROUP BY tickets.guildID
+                SELECT tickets_v2.guildID, COUNT(*) AS count
+                FROM tickets_v2
+                WHERE tickets_v2.state = 'open'
+                AND tickets_v2.dateClose >= NOW() - INTERVAL {interval}
+                GROUP BY tickets_v2.guildID
                 ORDER BY count DESC;"""    
         else:
             query += f"""       
-                SELECT tickets.guildID, COUNT(*) AS count
-                FROM tickets
-                WHERE tickets.status = 'open'
-                GROUP BY tickets.guildID
+                SELECT tickets_v2.guildID, COUNT(*) AS count
+                FROM tickets_v2
+                WHERE tickets_v2.state = 'open'
+                GROUP BY tickets_v2.guildID
                 ORDER BY count DESC;"""
             
     elif (type == "duration"):
         if (interval != "TOTAL"):
             query += f""" 
-                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg
-                FROM tickets
-                WHERE tickets.status = 'closed'
-                AND tickets.dateClose >= NOW() - INTERVAL {interval}
-                GROUP BY tickets.guildID
+                SELECT tickets_v2.guildID, AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg
+                FROM tickets_v2
+                WHERE tickets_v2.state = 'closed'
+                AND tickets_v2.dateClose >= NOW() - INTERVAL {interval}
+                GROUP BY tickets_v2.guildID
                 ORDER BY avg ASC;"""    
         else:
             query += f"""       
-                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg
-                FROM tickets
-                WHERE tickets.status = 'closed'
-                GROUP BY tickets.guildID
+                SELECT tickets_v2.guildID, AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose)) AS avg
+                FROM tickets_v2
+                WHERE tickets_v2.state = 'closed'
+                GROUP BY tickets_v2.guildID
                 ORDER BY avg ASC;"""
             
     elif (type == "response"):
         if (interval != "TOTAL"):
             query += f""" 
-                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg
-                FROM tickets
+                SELECT tickets_v2.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets_v2.dateOpen, first_message.date)) AS avg
+                FROM tickets_v2
                 INNER JOIN (
-                    SELECT ticket_messages.modmail_messageID, MIN(date) AS date
-                    FROM ticket_messages
+                    SELECT ticket_messages_v2.channelID, MIN(date) AS date
+                    FROM ticket_messages_v2
                     WHERE type = 'Sent'
-                    GROUP BY ticket_messages.modmail_messageID
+                    GROUP BY ticket_messages_v2.channelID
                 ) AS first_message
-                ON tickets.messageID = first_message.modmail_messageID
-                WHERE tickets.status = 'closed'
-                AND tickets.flag = 'good'
-                AND tickets.dateClose >= NOW() - INTERVAL {interval}
-                GROUP BY tickets.guildID
+                ON tickets_v2.channelID = first_message.channelID
+                WHERE tickets_v2.state = 'closed'
+                AND tickets_v2.dateClose >= NOW() - INTERVAL {interval}
+                GROUP BY tickets_v2.guildID
                 ORDER BY avg ASC;"""     
         else:
             query += f"""       
-                SELECT tickets.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date)) AS avg
-                FROM tickets
+                SELECT tickets_v2.guildID, AVG(TIMESTAMPDIFF(MINUTE, tickets_v2.dateOpen, first_message.date)) AS avg
+                FROM tickets_v2
                 INNER JOIN (
-                    SELECT ticket_messages.modmail_messageID, MIN(date) AS date
-                    FROM ticket_messages
+                    SELECT ticket_messages_v2.channelID, MIN(date) AS date
+                    FROM ticket_messages_v2
                     WHERE type = 'Sent'
-                    GROUP BY ticket_messages.modmail_messageID
+                    GROUP BY ticket_messages_v2.channelID
                 ) AS first_message
-                ON tickets.messageID = first_message.modmail_messageID
-                WHERE tickets.status = 'closed'
-                AND tickets.flag = 'good'
-                GROUP BY tickets.guildID
+                ON tickets_v2.channelID = first_message.channelID
+                WHERE tickets_v2.state = 'closed'
+                GROUP BY tickets_v2.guildID
                 ORDER BY avg ASC;"""
             
     elif (type == "closed"):
         if (interval != "TOTAL"):
             query += f""" 
-                SELECT tickets.closeByID, COUNT(*) AS count
-                FROM tickets
-                WHERE tickets.guildID = {guildID} 
-                AND tickets.status = 'closed'
-                AND tickets.dateClose >= NOW() - INTERVAL {interval}
-                GROUP BY tickets.closeByID
+                SELECT tickets_v2.closerID, COUNT(*) AS count
+                FROM tickets_v2
+                WHERE tickets_v2.guildID = {guildID} 
+                AND tickets_v2.state = 'closed'
+                AND tickets_v2.dateClose >= NOW() - INTERVAL {interval}
+                GROUP BY tickets_v2.closerID
                 ORDER BY count DESC;"""   
         else:
             query += f"""       
-                SELECT tickets.closeByID, COUNT(*) AS count
-                FROM tickets
-                WHERE tickets.guildID = {guildID} 
-                AND tickets.status = 'closed'
-                GROUP BY tickets.closeByID
+                SELECT tickets_v2.closerID, COUNT(*) AS count
+                FROM tickets_v2
+                WHERE tickets_v2.guildID = {guildID} 
+                AND tickets_v2.state = 'closed'
+                GROUP BY tickets_v2.closerID
                 ORDER BY count DESC;"""
             
     elif (type == "sent"):
         if (interval != "TOTAL"):
             query += f""" 
                 SELECT authorID, COUNT(*) AS count
-                FROM tickets
-                INNER JOIN ticket_messages 
-                ON tickets.messageID = ticket_messages.modmail_messageID
-                WHERE tickets.guildID = {guildID}
-                AND ticket_messages.type = 'Sent'
-                AND ticket_messages.date >= NOW() - INTERVAL {interval}
-                GROUP BY ticket_messages.authorID
+                FROM tickets_v2
+                INNER JOIN ticket_messages_v2
+                ON tickets_v2.channelID = ticket_messages_v2.channelID
+                WHERE tickets_v2.guildID = {guildID}
+                AND ticket_messages_v2.type = 'Sent'
+                AND ticket_messages_v2.date >= NOW() - INTERVAL {interval}
+                GROUP BY ticket_messages_v2.authorID
                 ORDER BY count DESC;"""   
         else:
             query += f"""       
                 SELECT authorID, COUNT(*) AS count
-                FROM tickets
-                INNER JOIN ticket_messages 
-                ON tickets.messageID = ticket_messages.modmail_messageID
-                WHERE tickets.guildID = {guildID}
-                AND ticket_messages.type = 'Sent'
-                GROUP BY ticket_messages.authorID
+                FROM tickets_v2
+                INNER JOIN ticket_messages_v2
+                ON tickets_v2.channelID = ticket_messages_v2.channelID
+                WHERE tickets_v2.guildID = {guildID}
+                AND ticket_messages_v2.type = 'Sent'
+                GROUP BY ticket_messages_v2.authorID
                 ORDER BY count DESC;"""
             
     return query
@@ -270,145 +268,143 @@ def server_stats(guildID: int, intervals: List[str]):
     query = f"""
         SELECT 
         (SELECT COUNT(*)
-        FROM tickets
-        WHERE tickets.guildID = {guildID}
-        AND tickets.status = 'open'),
+        FROM tickets_v2
+        WHERE tickets_v2.guildID = {guildID}
+        AND tickets_v2.state = 'open'),
 
         (SELECT COUNT(*)
-        FROM tickets
-        WHERE tickets.status = 'open'),
+        FROM tickets_v2
+        WHERE tickets_v2.state = 'open'),
 
         (SELECT COUNT(*)
-        FROM tickets
-        WHERE tickets.guildID = {guildID}),
+        FROM tickets_v2
+        WHERE tickets_v2.guildID = {guildID}),
 
         (SELECT COUNT(*)
-        FROM tickets),
+        FROM tickets_v2),
         """
 
     for span in intervals:
         if (span != "TOTAL"):
             query += f"""
                 (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose))
-                FROM tickets
+                FROM tickets_v2
                 WHERE guildID = {guildID}
-                AND status = 'closed'
+                AND state = 'closed'
                 AND dateClose >= NOW() - INTERVAL {span}),
                 
                 (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose))
-                FROM tickets
-                WHERE status = 'closed'
+                FROM tickets_v2
+                WHERE state = 'closed'
                 AND dateClose >= NOW() - INTERVAL {span}),
                     
-                (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date))
-                FROM tickets
+                (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets_v2.dateOpen, first_message.date))
+                FROM tickets_v2
                 INNER JOIN (
-                    SELECT modmail_messageID, MIN(date) AS date
-                    FROM ticket_messages
+                    SELECT channelID, MIN(date) AS date
+                    FROM ticket_messages_v2
                     WHERE type = 'Sent'
-                    GROUP BY modmail_messageID
+                    GROUP BY channelID
                 ) AS first_message
-                ON tickets.messageID = first_message.modmail_messageID
-                WHERE tickets.guildID = {guildID}
-                AND tickets.status = 'closed'
-                AND tickets.flag = 'good'
-                AND tickets.dateClose >= NOW() - INTERVAL {span}),
+                ON tickets_v2.channelID = first_message.channelID
+                WHERE tickets_v2.guildID = {guildID}
+                AND tickets_v2.state = 'closed'
+                AND tickets_v2.dateClose >= NOW() - INTERVAL {span}),
                 
-                (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date))
-                FROM tickets
+                (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets_v2.dateOpen, first_message.date))
+                FROM tickets_v2
                 INNER JOIN (
-                    SELECT modmail_messageID, MIN(date) AS date
-                    FROM ticket_messages
+                    SELECT channelID, MIN(date) AS date
+                    FROM ticket_messages_v2
                     WHERE type = 'Sent'
-                    GROUP BY modmail_messageID
+                    GROUP BY channelID
                 ) AS first_message
-                ON tickets.messageID = first_message.modmail_messageID
-                WHERE tickets.status = 'closed'
-                AND tickets.flag = 'good'
-                AND tickets.dateClose >= NOW() - INTERVAL {span}),
+                ON tickets_v2.channelID = first_message.channelID
+                WHERE tickets_v2.state = 'closed'
+                AND tickets_v2.dateClose >= NOW() - INTERVAL {span}),
                 
                 (SELECT AVG(message_count)
                 FROM (
                     SELECT 
-                    COUNT(ticket_messages.messageID) AS message_count
-                    FROM tickets
-                    INNER JOIN ticket_messages 
-                    ON tickets.messageID = ticket_messages.modmail_messageID
-                    WHERE tickets.guildID = {guildID}
-                    AND tickets.status = 'closed'
-                    AND tickets.dateClose >= NOW() - INTERVAL {span}
-                    GROUP BY tickets.messageID
+                    COUNT(ticket_messages_v2.messageID) AS message_count
+                    FROM tickets_v2
+                    INNER JOIN ticket_messages_v2
+                    ON tickets_v2.channelID = ticket_messages_v2.channelID
+                    WHERE tickets_v2.guildID = {guildID}
+                    AND tickets_v2.state = 'closed'
+                    AND tickets_v2.dateClose >= NOW() - INTERVAL {span}
+                    GROUP BY tickets_v2.channelID
                 ) AS ticket_counts),
                 
                 (SELECT AVG(message_count)
                 FROM (
                     SELECT 
-                    COUNT(ticket_messages.messageID) AS message_count
-                    FROM tickets
-                    INNER JOIN ticket_messages 
-                    ON tickets.messageID = ticket_messages.modmail_messageID
-                    WHERE tickets.guildID = tickets.status = 'closed'
-                    AND tickets.dateClose >= NOW() - INTERVAL {span}
-                    GROUP BY tickets.messageID
+                    COUNT(ticket_messages_v2.messageID) AS message_count
+                    FROM tickets_v2
+                    INNER JOIN ticket_messages_v2
+                    ON tickets_v2.channelID = ticket_messages_v2.channelID
+                    WHERE tickets_v2.guildID = {guildID}
+                    AND tickets_v2.state = 'closed'
+                    AND tickets_v2.dateClose >= NOW() - INTERVAL {span}
+                    GROUP BY tickets_v2.channelID
                 ) AS ticket_counts),"""
 
     if "TOTAL" in intervals:
         query += f"""
             (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose))
-            FROM tickets
+            FROM tickets_v2
             WHERE guildID = {guildID}
-            AND status = 'closed'),
+            AND state = 'closed'),
             
             (SELECT AVG(TIMESTAMPDIFF(MINUTE, dateOpen, dateClose))
-            FROM tickets
-            WHERE status = 'closed'),
+            FROM tickets_v2
+            WHERE state = 'closed'),
                 
-            (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date))
-            FROM tickets
+            (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets_v2.dateOpen, first_message.date))
+            FROM tickets_v2
             INNER JOIN (
-                SELECT modmail_messageID, MIN(date) AS date
-                FROM ticket_messages
+                SELECT channelID, MIN(date) AS date
+                FROM ticket_messages_v2
                 WHERE type = 'Sent'
-                GROUP BY modmail_messageID
+                GROUP BY channelID
             ) AS first_message
-            ON tickets.messageID = first_message.modmail_messageID
-            WHERE tickets.guildID = {guildID}
-            AND tickets.status = 'closed'
-            AND tickets.flag = 'good'),
+            ON tickets_v2.channelID = first_message.channelID
+            WHERE tickets_v2.guildID = {guildID}
+            AND tickets_v2.state = 'closed'),
             
-            (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets.dateOpen, first_message.date))
-            FROM tickets
+            (SELECT AVG(TIMESTAMPDIFF(MINUTE, tickets_v2.dateOpen, first_message.date))
+            FROM tickets_v2
             INNER JOIN (
-                SELECT modmail_messageID, MIN(date) AS date
-                FROM ticket_messages
+                SELECT channelID, MIN(date) AS date
+                FROM ticket_messages_v2
                 WHERE type = 'Sent'
-                GROUP BY modmail_messageID
+                GROUP BY channelID
             ) AS first_message
-            ON tickets.messageID = first_message.modmail_messageID
-            WHERE tickets.status = 'closed'
-            AND tickets.flag = 'good'),
+            ON tickets_v2.channelID = first_message.channelID
+            WHERE tickets_v2.state = 'closed'),
 
             (SELECT AVG(message_count)
             FROM (
                 SELECT 
-                COUNT(ticket_messages.messageID) AS message_count
-                FROM tickets
-                INNER JOIN ticket_messages 
-                ON tickets.messageID = ticket_messages.modmail_messageID
-                WHERE tickets.guildID = {guildID}
-                AND tickets.guildID = tickets.status = 'closed'
-                GROUP BY tickets.messageID
+                COUNT(ticket_messages_v2.messageID) AS message_count
+                FROM tickets_v2
+                INNER JOIN ticket_messages_v2
+                ON tickets_v2.channelID = ticket_messages_v2.channelID
+                WHERE tickets_v2.guildID = {guildID}
+                AND tickets_v2.state = 'closed'
+                GROUP BY tickets_v2.channelID
             ) AS ticket_counts),
             
             (SELECT AVG(message_count)
             FROM (
                 SELECT 
-                COUNT(ticket_messages.messageID) AS message_count
-                FROM tickets
-                INNER JOIN ticket_messages 
-                ON tickets.messageID = ticket_messages.modmail_messageID
-                WHERE tickets.guildID = tickets.status = 'closed'
-                GROUP BY tickets.messageID
+                COUNT(ticket_messages_v2.messageID) AS message_count
+                FROM tickets_v2
+                INNER JOIN ticket_messages_v2 
+                ON tickets_v2.channelID = ticket_messages_v2.channelID
+                WHERE tickets_v2.guildID = {guildID}
+                AND tickets_v2.state = 'closed'
+                GROUP BY tickets_v2.channelID
             ) AS ticket_counts);"""
     else:
         # Fixes possible dangling comma
@@ -893,101 +889,101 @@ def server_stats_CSV(guildIDs: List[int], intervals: List[str]):
 
 
 # Query string for /mod_activity
-def mod_activity(guildID: int, closeByID: int, intervals: List[str]):
+def mod_activity(guildID: int, closerID: int, intervals: List[str]):
     query = "SELECT"
     
     for span in intervals:
         if (span != "TOTAL"):
             query += f"""
                 (SELECT COUNT(*) 
-                FROM tickets 
+                FROM tickets_v2
                 WHERE guildID = {guildID}
-                AND closeByID = {closeByID}
-                AND status = 'closed' 
+                AND closerID = {closerID}
+                AND state = 'closed' 
                 AND dateClose >= NOW() - INTERVAL {span}),
 
                 (SELECT COUNT(*) 
-                FROM tickets 
+                FROM tickets_v2 
                 WHERE guildID = {guildID}
-                AND status = 'closed' 
+                AND state = 'closed' 
                 AND dateClose >= NOW() - INTERVAL {span}),
             
                 (SELECT COUNT(*) 
-                FROM ticket_messages 
-                INNER JOIN tickets 
-                ON ticket_messages.modmail_messageID = tickets.messageID 
-                WHERE tickets.guildID = {guildID}
-                AND ticket_messages.authorID = {closeByID}
-                AND ticket_messages.type = 'Sent'
-                AND ticket_messages.date >= NOW() - INTERVAL {span}),
+                FROM ticket_messages_v2
+                INNER JOIN tickets_v2 
+                ON ticket_messages_v2.channelID = tickets_v2.channelID 
+                WHERE tickets_v2.guildID = {guildID}
+                AND ticket_messages_v2.authorID = {closerID}
+                AND ticket_messages_v2.type = 'Sent'
+                AND ticket_messages_v2.date >= NOW() - INTERVAL {span}),
 
                 (SELECT COUNT(*) 
-                FROM ticket_messages 
-                INNER JOIN tickets 
-                ON ticket_messages.modmail_messageID = tickets.messageID 
-                WHERE tickets.guildID = {guildID}
-                AND ticket_messages.type = 'Sent'
-                AND ticket_messages.date >= NOW() - INTERVAL {span}),
+                FROM ticket_messages_v2
+                INNER JOIN tickets_v2 
+                ON ticket_messages_v2.channelID = tickets_v2.channelID 
+                WHERE tickets_v2.guildID = {guildID}
+                AND ticket_messages_v2.type = 'Sent'
+                AND ticket_messages_v2.date >= NOW() - INTERVAL {span}),
 
                 (SELECT COUNT(*) 
-                FROM ticket_messages 
-                INNER JOIN tickets 
-                ON ticket_messages.modmail_messageID = tickets.messageID 
-                WHERE tickets.guildID = {guildID}
-                AND ticket_messages.authorID = {closeByID}
-                AND ticket_messages.type = 'Discussion'
-                AND ticket_messages.date >= NOW() - INTERVAL {span}),
+                FROM ticket_messages_v2
+                INNER JOIN tickets_v2 
+                ON ticket_messages_v2.channelID = tickets_v2.channelID
+                WHERE tickets_v2.guildID = {guildID}
+                AND ticket_messages_v2.authorID = {closerID}
+                AND ticket_messages_v2.type = 'Discussion'
+                AND ticket_messages_v2.date >= NOW() - INTERVAL {span}),
 
                 (SELECT COUNT(*) 
-                FROM ticket_messages 
-                INNER JOIN tickets 
-                ON ticket_messages.modmail_messageID = tickets.messageID 
-                WHERE tickets.guildID = {guildID}
-                AND ticket_messages.type = 'Discussion'
-                AND ticket_messages.date >= NOW() - INTERVAL {span}),"""
+                FROM ticket_messages_v2
+                INNER JOIN tickets_v2 
+                ON ticket_messages_v2.channelID = tickets_v2.channelID
+                WHERE tickets_v2.guildID = {guildID}
+                AND ticket_messages_v2.type = 'Discussion'
+                AND ticket_messages_v2.date >= NOW() - INTERVAL {span}),"""
         
     if "TOTAL" in intervals:
         query += f"""
             (SELECT COUNT(*) 
-            FROM tickets 
+            FROM tickets_v2 
             WHERE guildID = {guildID}
-            AND closeByID = {closeByID} 
-            AND status = 'closed'),
+            AND closerID = {closerID} 
+            AND state = 'closed'),
 
             (SELECT COUNT(*) 
-            FROM tickets 
+            FROM tickets_v2 
             WHERE guildID = {guildID}
-            AND status = 'closed'),
+            AND state = 'closed'),
 
             (SELECT COUNT(*) 
-            FROM ticket_messages 
-            INNER JOIN tickets 
-            ON ticket_messages.modmail_messageID = tickets.messageID 
-            WHERE tickets.guildID = {guildID}
-            AND ticket_messages.authorID = {closeByID}
-            AND ticket_messages.type = 'Sent'),
+            FROM ticket_messages_v2
+            INNER JOIN tickets_v2 
+            ON ticket_messages_v2.channelID = tickets_v2.channelID
+            WHERE tickets_v2.guildID = {guildID}
+            AND ticket_messages_v2.authorID = {closerID}
+            AND ticket_messages_v2.type = 'Sent'),
 
             (SELECT COUNT(*) 
-            FROM ticket_messages 
-            INNER JOIN tickets 
-            ON ticket_messages.modmail_messageID = tickets.messageID 
-            WHERE tickets.guildID = {guildID}
-            AND ticket_messages.type = 'Sent'),
+            FROM ticket_messages_v2
+            INNER JOIN tickets_v2 
+            ON ticket_messages_v2.channelID = tickets_v2.channelID
+            WHERE tickets_v2.guildID = {guildID}
+            AND ticket_messages_v2.type = 'Sent'),
 
             (SELECT COUNT(*) 
-            FROM ticket_messages 
-            INNER JOIN tickets 
-            ON ticket_messages.modmail_messageID = tickets.messageID 
-            WHERE tickets.guildID = {guildID}
-            AND ticket_messages.authorID = {closeByID}
-            AND ticket_messages.type = 'Discussion'),
+            FROM ticket_messages_v2
+            INNER JOIN tickets_v2 
+            ON ticket_messages_v2.channelID = tickets_v2.channelID
+            WHERE tickets_v2.guildID = {guildID}
+            AND ticket_messages_v2.authorID = {closerID}
+            AND ticket_messages_v2.type = 'Discussion'),
 
             (SELECT COUNT(*) 
-            FROM ticket_messages 
-            INNER JOIN tickets 
-            ON ticket_messages.modmail_messageID = tickets.messageID 
-            WHERE tickets.guildID = {guildID}
-            AND ticket_messages.type = 'Discussion');"""
+            FROM ticket_messages_v2
+            INNER JOIN tickets_v2 
+            ON ticket_messages_v2.channelID = tickets_v2.channelID
+            WHERE tickets_v2.guildID = {guildID}
+            AND ticket_messages_v2.type = 'Discussion');"""
     else:
         # Fixes possible dangling comma
         query = query.rstrip(',') + ';'

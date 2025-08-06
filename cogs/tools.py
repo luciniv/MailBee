@@ -1246,7 +1246,7 @@ class Tools(commands.Cog):
         view = DMCategoryButtonView(self.bot)
         ticketEmbed=discord.Embed(title="Need Support?", 
                                   description=content,
-                                  color=discord.Color.green())
+                                  color=discord.Color.yellow())
         await ctx.channel.send(embed=ticketEmbed, view=view)
     
 
