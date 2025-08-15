@@ -29,7 +29,7 @@ class DataManager:
         self.category_types = []          # Cache of categories to their types FIXME switch to redis - NOTE, did this
         self.types = []                   # Cache for ticket types FIXME switch to redis - NOTE, did this
         self.snip_list = []               # Cache for snip guildIDs, abbreviations, and summaries FIXME switch to redis MAYBE
-        self.mod_ids = {}              # Set of mod ids and names, will be removed for full system 
+        self.mod_ids = {}                 # Set of mod ids and names, will be removed for full system 
         self.redis_url = redis_url
         self.redis = None
         self.ticket_count = 0

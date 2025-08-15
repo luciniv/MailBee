@@ -103,8 +103,8 @@ class ServerSelect(discord.ui.Select):
         dm_channelID = self.dm_channelID
         user = interaction.user
 
-        existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id)
-        if existing is not None:
+        blacklisted = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id)
+        if blacklisted is not None:
             errorEmbed = discord.Embed(
                 description=f"❌ You are blacklisted from opening tickets with this server.",
                 color=discord.Color.red())
@@ -165,7 +165,24 @@ class ServerSelect(discord.ui.Select):
                 description=f"❌ You already have a ticket open with **{guild.name}**.\n\n"
                             "Send a message in this channel to reply to your open ticket instead.",
                 color=discord.Color.red())
-            
+            await interaction.channel.send(embed=errorEmbed)
+
+            try:
+                await interaction.message.delete()
+            except discord.HTTPException:
+                pass
+
+            if self.view:
+                self.view.stop()
+            return
+        
+        # Check if guild is accepting tickets
+        config = await self.bot.data_manager.get_or_load_config(guildID)
+        if config["accepting"] != "true":
+            errorEmbed = discord.Embed(
+                title="Ticket Creation is Disabled",
+                description=config["accepting"],
+                color=discord.Color.red())
             await interaction.channel.send(embed=errorEmbed)
 
             try:
@@ -184,7 +201,6 @@ class ServerSelect(discord.ui.Select):
                 description=f"❌ **{guild.name}** has not set up any ticket types yet.\n\n"
                             "Please contact a server admin if you believe this is a mistake.",
                 color=discord.Color.red())
-            
             await interaction.channel.send(embed=errorEmbed)
 
             try:
@@ -236,7 +252,7 @@ class DMCategoryButtonView(discord.ui.View):
         self.bot = bot
 
 
-    @discord.ui.button(label="Open a Ticket", style=discord.ButtonStyle.green, custom_id="persistent_dm_button", emoji="✉️")
+    @discord.ui.button(label="Open a Ticket", style=discord.ButtonStyle.blurple, custom_id="persistent_dm_button", emoji="✉️")
     async def send_dm(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.defer(ephemeral=True)
@@ -268,15 +284,22 @@ class DMCategoryButtonView(discord.ui.View):
                 errorEmbed.description="❌ You are blacklisted from opening tickets with this server."
                 await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                 return
+            
+            tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id)
+            if tickets and any(ticket["guildID"] == guild_id for ticket in tickets):
+                errorEmbed.description=("❌ You already have a ticket open with this server. "
+                                        "Direct message me to reply to that ticket instead.")
+                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                return
+            
+            config = await self.bot.data_manager.get_or_load_config(guild_id)
+            if config["accepting"] != "true":
+                errorEmbed.title="Ticket Creation is Disabled"
+                errorEmbed.description=config["accepting"]
+                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                return
 
             try:
-                tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id)
-                if tickets and any(ticket["guildID"] == guild_id for ticket in tickets):
-                    errorEmbed.description=("❌ You already have a ticket open with this server. "
-                                            "Direct message me to reply to that ticket instead.")
-                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
-                    return
-
                 dm_channel = user.dm_channel or await user.create_dm()
                 types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
 

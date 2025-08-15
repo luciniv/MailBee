@@ -421,6 +421,44 @@ class Config(commands.Cog):
         except Exception as e:
             logger.exception(f"/closing error: {e}")
             raise BotError(f"/closing sent an error: {e}")
+        
+
+    @commands.command(name="accepting")
+    @checks.is_user()
+    @checks.is_guild()
+    async def accepting(self, ctx, *, accepting: str = ("The server you are attempting to contact is not "
+                                                       "currently accepting new tickets. Please try again "
+                                                       "later.")):
+        try:
+            guild = ctx.guild
+
+            moderation = self.bot.get_cog("Moderation")
+            if moderation is not None:
+                accepting = await self.bot.helper.convert_mentions(accepting, guild)
+
+            if len(accepting) > 2000:
+                errorEmbed = discord.Embed(description="❌ Accepting text is too long, must be at most 2000 characters", 
+                                           color=discord.Color.red())
+                await ctx.send(embed=errorEmbed)
+                return
+            
+            successEmbed = discord.Embed(description="", color=discord.Color.green())
+        
+            config = await self.bot.data_manager.get_or_load_config(guild.id)
+            if config["accepting"] == "true":
+                successEmbed.description=f"✅ Ticket creation disabled with message:\n{accepting}"
+                await self.bot.data_manager.set_ticket_accepting(guild.id, accepting)
+                await ctx.send(embed=successEmbed)
+            else:
+                successEmbed.description="✅ Ticket creation enabled"
+                await self.bot.data_manager.set_ticket_accepting(guild.id, "true")
+                await ctx.send(embed=successEmbed)
+
+            await self.bot.data_manager.get_or_load_config(guild.id, False)
+
+        except Exception as e:
+            logger.exception(f"/accepting error: {e}")
+            raise BotError(f"/accepting sent an error: {e}")
 
 
     @app_commands.command(name="set_type", description="Set the type of a tickets category")
