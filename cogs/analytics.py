@@ -707,7 +707,7 @@ class Analytics(commands.Cog):
             await message.add_reaction(emojis.mantis)
 
             if (status == 'good'):
-                logger.success(f"*** Processed open modmail ticket (Message ID: {message.id}) GOOD DATA ***")
+                pass
             else:
                 logger.warning(f"*** Processed open modmail ticket (Message ID: {message.id}) BAD DATA ***")
 
@@ -785,7 +785,6 @@ class Analytics(commands.Cog):
                     status = 'closed' WHERE (messageID = {modmail_messageID});
                     """
                 await self.bot.data_manager.execute_query(query, False)
-                logger.success(f"*** Processed closed modmail ticket (Message ID: {modmail_messageID}) GOOD DATA ***")
             
                 # Remove from Redis 
                 await self.bot.data_manager.remove_ticket(this_channelID)

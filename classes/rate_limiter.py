@@ -115,7 +115,7 @@ class Queue:
                             await asyncio.sleep(sleep_time)
                             continue
                         else:
-                            logger.error(f"Execution failed (not retrying): {e}")
+                            logger.exception(f"Execution failed (not retrying): {e}")
                             break
 
                     except Exception as e:
