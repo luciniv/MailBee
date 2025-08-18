@@ -124,7 +124,6 @@ class ChannelStatus:
                             member = await self.bot.cache.get_guild_member(guild, modID)
                             
                             await close_ticket(self.bot, channel, member, openerID, guild.id, reason, None, True)
-                            logger.debug(f"Timer expired for channel {channel.id}")
 
                         except Exception as e:
                             logger.error(f"Failed to update channel {channel.id} after timer expired: {e}")

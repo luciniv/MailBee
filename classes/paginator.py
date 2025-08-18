@@ -52,5 +52,8 @@ class Paginator(View):
             child.disabled = True
 
         if self.message:
-            await self.message.edit(view=self)
+            try:
+                await self.message.edit(view=self)
+            except Exception:
+                pass
 

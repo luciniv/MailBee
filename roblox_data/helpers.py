@@ -15,7 +15,7 @@ api_key = os.getenv("API_KEY")
 
 from roblox_data.decoder import CONFIG
 HEADERS = {'x-api-key': api_key}
-MAX_RETRIES = 3
+MAX_RETRIES = 1
 
 
 async def get_roblox_username(guild_id, discord_id, api_key):

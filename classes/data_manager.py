@@ -857,7 +857,6 @@ class DataManager:
                     # Test connection
                     await cursor.execute("SELECT 1;")
                     await cursor.fetchall()
-            logger.info("Database connection is healthy")
             return True
         
         except Exception as e:
@@ -1537,7 +1536,6 @@ class DataManager:
             try:
                 keys = await self.redis.keys("ticket_messages_v2:*")
                 if not keys:
-                    logger.debug("Attempted to flush zero v2 messages")
                     return
 
                 messages_to_insert = []

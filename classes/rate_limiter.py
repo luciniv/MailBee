@@ -1,3 +1,4 @@
+import discord
 import asyncio
 import time
 from collections import deque
@@ -32,8 +33,8 @@ class Queue:
         # Customize delays and concurrency per route type
         self.route_delays = {
             "dm_send": (1, 1),
-            "message_send": (0.2, 10),
-            "message_delete": (0.5, 5),
+            "message_send": (0.1, 2),
+            "message_delete": (0.6, 1),
             "message_edit": (0.5, 5),
             "channel_edit": (0.5, 5),
             "add_reaction": (0.5, 5),
@@ -87,29 +88,40 @@ class Queue:
         bucket = self._get_bucket(route)
 
         async with bucket.semaphore:
-            while True:
-                now = time.time()
+            now = time.time()
 
-                async with self.global_lock:
-                    if now < self.global_reset:
-                        await asyncio.sleep(self.global_reset - now)
+            async with self.global_lock:
+                if now < self.global_reset:
+                    await asyncio.sleep(self.global_reset - now)
 
-                async with bucket.lock:
-                    if time.time() < bucket.reset_time:
-                        await asyncio.sleep(bucket.reset_time - time.time())
-                    await self._enforce_global_rate()
+            async with bucket.lock:
+                if time.time() < bucket.reset_time:
+                    await asyncio.sleep(bucket.reset_time - time.time())
+                await self._enforce_global_rate()
 
+                for attempt in range(3):  # give yourself 3 shots total
                     try:
                         result = await func(*args, **kwargs)
                         bucket.reset_time = time.time() + bucket.delay
                         return result
 
-                    except Exception as e:
-                        if "429" in str(e):
-                            self.global_reset = time.time() + 2
-                            await asyncio.sleep(2)
+                    except discord.HTTPException as e:
+                        # Explicitly catch known Discord transient errors
+                        if e.status in (429, 500, 502, 503, 504):
+                            retry_after = getattr(e, "retry_after", 1.0)
+                            sleep_time = retry_after if e.status == 429 else (2 ** attempt)
+                            self.global_reset = time.time() + sleep_time
+                            logger.warning(f"Discord HTTP {e.status}, retrying after {sleep_time:.1f}s")
+                            await asyncio.sleep(sleep_time)
                             continue
-                        raise e
+                        else:
+                            logger.error(f"Execution failed (not retrying): {e}")
+                            break
+
+                    except Exception as e:
+                        logger.error(f"Non HTTP exception: {e}")
+                        break
+
                     
     def check_user_action_cooldown(self, route: str, user_id: int):
         now = time.time()

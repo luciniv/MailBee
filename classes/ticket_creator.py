@@ -370,7 +370,6 @@ class CategorySelect(discord.ui.Select):
 
         # Only calls for parent types WITH subtypes
         if (len(subtypes) > 0):
-
             subtype_embed = discord.Embed(
                 title="Select a Ticket Sub-Type",
                 description=f"You selected ticket type **{category.name}**.\n\nPlease choose "
@@ -387,12 +386,13 @@ class CategorySelect(discord.ui.Select):
             newView = CategorySelectView(self.bot, self.guild, self.dm_channelID, self.types, 
                                       parent_category_id=selected_categoryID)
             await newView.setup()
-
             await interaction.response.edit_message(embed=subtype_embed, view=newView)
             newView.message = interaction.message
 
+        # No subtypes selected, proceed past selection
         else:
-            # No subtypes, proceed to modal OR reply with redirect
+            errorEmbed = None
+            # Handle redirect type
             if selected_categoryID == 0:
                 redirect_text = next(
                 (entry["redirectText"] for entry in self.types if int(entry["typeID"]) == selected_typeID), 
@@ -411,29 +411,47 @@ class CategorySelect(discord.ui.Select):
                     await interaction.message.delete()
                 except discord.HTTPException:
                     pass
-
                 if self.view:
                     self.view.stop()
-
                 await interaction.channel.send(embed=redirectEmbed)
                 return
-
-            modal_template = next(
-                (entry["form"] for entry in self.types if int(entry["typeID"]) == selected_typeID), 
-                None)
-            source_view = self.view
-
-            if modal_template:
-                await send_dynamic_modal(
-                    self.bot, interaction, self.guild, category, selected_typeID, selected_NSFWID, dm_channelID,
-                    modal_template, source_view)
-            else:
+            
+            # Handle max channels in target category
+            elif len(category.channels) >= 50:
                 errorEmbed = discord.Embed(
-                    description="❌ The server you are trying to contact has improperly set up this ticket type option. Please contact a server admin.",
+                    description="Thank you for reaching out to the moderation team!\n\n"
+                               f"Unfortunately, tickets of type **{category.name}** have "
+                               "reached maximum capacity. Please try again later for an "
+                               "opening, we thank you in advance for your patience.",
                     color=discord.Color.red())
-                
-                await interaction.response.send_message(embed=errorEmbed, ephemeral=True)
-
+            else:
+                # Determine if modal is valid or not
+                modal_template = next(
+                    (entry["form"] for entry in self.types if int(entry["typeID"]) == selected_typeID), 
+                    None)
+                if modal_template:
+                    source_view = self.view
+                    await send_dynamic_modal(
+                        self.bot, interaction, self.guild, category, selected_typeID, selected_NSFWID, dm_channelID,
+                        modal_template, source_view)
+                    return
+                # Handle invalid modal template
+                else:
+                    errorEmbed = discord.Embed(
+                        description="❌ The server you are trying to contact has improperly set "
+                                    "up this ticket type option. Please contact a server admin.",
+                        color=discord.Color.red())
+            
+            # Finally, send error message if needed
+            try:
+                await interaction.message.delete()
+            except discord.HTTPException:
+                pass
+            if self.view:
+                self.view.stop()
+            await interaction.channel.send(embed=errorEmbed)
+            return
+    
 
     @classmethod
     async def create(cls, bot, guild, dm_channelID, types, parent_category_id=None):

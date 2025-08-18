@@ -296,8 +296,7 @@ class Tools(commands.Cog):
 
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
-                        task = asyncio.create_task(analytics.route_to_dm(full_message, channel, author, threadID, userID, None, False))
-                        result = await task
+                        asyncio.create_task(analytics.route_to_dm(full_message, channel, author, threadID, userID, None, False))
                     return
 
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
@@ -326,8 +325,7 @@ class Tools(commands.Cog):
 
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
-                        task = asyncio.create_task(analytics.route_to_dm(full_message, channel, author, threadID, userID, True, False))
-                        result = await task
+                        asyncio.create_task(analytics.route_to_dm(full_message, channel, author, threadID, userID, True, False))
                     return
 
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",
@@ -356,8 +354,7 @@ class Tools(commands.Cog):
 
                     analytics = self.bot.get_cog("Analytics")
                     if analytics is not None:
-                        task = asyncio.create_task(analytics.route_to_dm(full_message, channel, author, threadID, userID, False, False))
-                        result = await task
+                        asyncio.create_task(analytics.route_to_dm(full_message, channel, author, threadID, userID, False, False))
                     return
 
             errorEmbed = discord.Embed(description="❌ This command can only be used in ticket channels",

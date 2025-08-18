@@ -109,7 +109,6 @@ class Events(commands.Cog):
         if (isinstance(channel, discord.TextChannel)):
             if channel.id in self.bot.channel_status.last_update_times:
                 del self.bot.channel_status.last_update_times[channel.id]  # Remove the entry from the dictionary
-                logger.debug(f"Removed last update time for channel {channel.id}")
 
         if (isinstance(channel, discord.CategoryChannel)):
             guild = channel.guild

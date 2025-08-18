@@ -119,31 +119,39 @@ class Analytics(commands.Cog):
             server_channel = await self.bot.cache.get_channel(channelID)
             if server_channel is None:
                 errorEmbed.description=("❌ Could not find your ticket channel in this server. "
-                                        "Please contact staff another way if this error persists.")
+                                        "Please send your message again, or contact staff another "
+                                        "way if this error persists.")
+                await message.channel.send(embed=errorEmbed)
+                return
+            
+            id_list = (server_channel.topic).split()
+            threadID = id_list[-1]
+            thread = await self.bot.cache.get_channel(threadID)
+            if thread is None:
+                errorEmbed.description=("❌ Could not find your ticket log in this server. "
+                                        "Please send your message again, or contact staff another "
+                                        "way if this error persists.")
                 await message.channel.send(embed=errorEmbed)
                 return
                 
-            id_list = (server_channel.topic).split()
-            threadID = id_list[-1]
-            guild = server_channel.guild
             timestamp = datetime.now(timezone.utc)
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
             snapshot_flag = False
             content = None
 
-            if message.type.name == "FORWARD":
-                snapshots = getattr(message, "message_snapshots", None)
-                if snapshots:
-                    snapshot_flag = True
-                    snapshot = snapshots[0].message
-                    content = snapshot.content
-                else:
-                    errorEmbed.description=("❌ Failed to process forwarded message. "
-                                            "Send the message via copy-paste instead.")
-                    await message.channel.send(embed=errorEmbed)
-                    return
-            else:
-                content = message.content
+            # if message.type.name == "FORWARD":
+            #     snapshots = getattr(message, "message_snapshots", None)
+            #     if snapshots:
+            #         snapshot_flag = True
+            #         snapshot = snapshots[0].message
+            #         content = snapshot.content
+            #     else:
+            #         errorEmbed.description=("❌ Failed to process forwarded message. "
+            #                                 "Send the message via copy-paste instead.")
+            #         await message.channel.send(embed=errorEmbed)
+            #         return
+            # else:
+            content = message.content
 
             if content is None:
                 errorEmbed.description=("❌ Failed to read forwarded message content. "
@@ -159,15 +167,6 @@ class Analytics(commands.Cog):
                                         "channel links add ~70 additional characters each.")
                 await message.channel.send(embed=errorEmbed)
                 return
-
-            # gif_links = re.findall(r'https?://[^\s)]+', text, flags=re.IGNORECASE)
-            # gif = None
-
-            # for link in gif_links:
-            #     gif_candidate = await self.bot.helper.convert_to_direct_gif(link)
-            #     if gif_candidate:
-            #         gif = gif_candidate
-            #         break
 
             # Process any attachments
             attachments = []
@@ -204,7 +203,7 @@ class Analytics(commands.Cog):
                     total_size += file.size
 
             if len(text) == 0 and len(final_attachments) == 0:
-                emptyEmbed = discord.Embed(description="❌ Message not sent, you cannot send an empty message.",
+                emptyEmbed = discord.Embed(description="❌ Message not sent, you cannot send an empty or forwarded message.",
                                            color=discord.Color.red())
                 await message.channel.send(embed=emptyEmbed)
                 return
@@ -255,8 +254,6 @@ class Analytics(commands.Cog):
                 errorEmbed.description=("❌ Failed to send message to server. Please try again.")
                 await message.channel.send(embed=errorEmbed)
                 return
-
-            thread = await self.bot.cache.get_channel(threadID)
             
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             try:
@@ -276,17 +273,6 @@ class Analytics(commands.Cog):
         except Exception as e:
             await message.add_reaction("❌")
             logger.exception(f"route_to_server sent an error: {e}")
-
-
-    async def staff_message(self, message: discord.Message, anon: bool = None):
-        channel = message.channel
-        author = message.author
-        id_list = (channel.topic).split()
-        threadID = id_list[-1]
-        userID = id_list[-2]
-        
-        # Process message to ticket opener
-        await self.route_to_dm(message, channel, author, threadID, userID, anon, False)
 
 
     async def route_to_dm(self, message, channel, author, threadID: int, userID: int, 
@@ -321,6 +307,12 @@ class Analytics(commands.Cog):
                 await channel.send(embed=errorEmbed)
                 return
             
+            thread = await self.bot.cache.get_channel(threadID)
+            if thread is None:
+                errorEmbed.description=("❌ Failed to fetch logging thread. Please re-send your message again.")
+                await channel.send(embed=errorEmbed)
+                return
+            
             content = message
             if isinstance(message, discord.Message):
                 content = message.content
@@ -335,15 +327,6 @@ class Analytics(commands.Cog):
                                         "channel links add ~70 additional characters each.")
                 await channel.send(embed=errorEmbed)
                 return
-            
-            # gif_links = re.findall(r'https?://[^\s)]+', content, flags=re.IGNORECASE)
-            # gif = None
-
-            # for link in gif_links:
-            #     gif_candidate = await self.bot.helper.convert_to_direct_gif(link)
-            #     if gif_candidate:
-            #         gif = gif_candidate
-            #         break
 
             timestamp = datetime.now(timezone.utc)
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
@@ -465,7 +448,7 @@ class Analytics(commands.Cog):
                 dm_message = await dm_channel.send(embed=sendEmbed, files=files, view=MessageReceivedButton())
             except Exception:
                 errorEmbed.description=("❌ Unable to DM the ticket opener. Your last message was **not** sent. "
-                                        "**Please try again.** If this error persists they have their DM closed or "
+                                        "**Please try again.** If this error persists, they have their DMs closed or "
                                         "no longer share a server with the bot.")
                 await channel.send(embed=errorEmbed)
                 try:
@@ -474,12 +457,11 @@ class Analytics(commands.Cog):
                     pass
                 return
 
-            thread = await self.bot.cache.get_channel(threadID)
-
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             try:
                 thread_message = await thread.send(embed=receiptEmbed, files=files, allowed_mentions=discord.AllowedMentions(users=False))
-            except Exception:
+            except Exception as e:
+                print("Thread send exception", e)
                 pass
 
             await self.bot.data_manager.add_ticket_message(sent_message.id, 
@@ -637,11 +619,9 @@ class Analytics(commands.Cog):
         title = embed.title
         if isCatchup:
             if (title == "New Ticket"):
-                logger.debug("Processing open ticket with bad data")
                 await self.log_open_ticket(message, "bad")
 
             if (title == "Ticket Closed"):
-                logger.debug("Processing closed ticket with bad data")
                 await self.log_closed_ticket(message, None)
 
         else:
@@ -852,8 +832,13 @@ class Analytics(commands.Cog):
         if (isinstance(this_channel, discord.TextChannel)):
             if (this_channel.topic):
                 if ("Ticket channel" in this_channel.topic):
+                    author = message.author
+                    id_list = (this_channel.topic).split()
+                    threadID = id_list[-1]
+                    userID = id_list[-2]
+
                     if (message.content.startswith("+")):
-                        asyncio.create_task(self.staff_message(message, None))
+                        asyncio.create_task(self.route_to_dm(message, this_channel, author, threadID, userID, None, False))
                         return
                         
                     else:

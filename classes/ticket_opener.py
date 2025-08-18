@@ -36,6 +36,12 @@ async def get_overwrites(guild, roles) -> Dict:
     return dict(overwrites)
 
 
+class AddInfoButton(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)  # no timeout needed
+        self.add_item(discord.ui.Button(label="Send messages in this DM to add to your ticket!", style=discord.ButtonStyle.blurple, disabled=True))
+
+
 class TicketOpener:
     def __init__(self, bot):
         self.bot = bot
@@ -337,7 +343,7 @@ class TicketOpener:
         await dm_channel.send(embed=dmEmbed)
         if greetingEmbed:
             await dm_channel.send(embed=greetingEmbed)
-        await dm_channel.send(embed=submissionEmbed)
+        await dm_channel.send(embed=submissionEmbed, view=AddInfoButton())
 
 
     async def create_submission_embed(self, guild, member, values, title):
