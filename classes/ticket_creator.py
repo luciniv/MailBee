@@ -319,6 +319,11 @@ class DMCategoryButtonView(discord.ui.View):
                 await view.setup()
 
                 sent_msg = await dm_channel.send(embed=embed, view=view)
+                if sent_msg is None:
+                    errorEmbed.description="❌ I couldn’t message you! Please enable direct messages and try again."
+                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                    return
+
                 view.message = sent_msg
 
                 startView = View()
@@ -332,7 +337,7 @@ class DMCategoryButtonView(discord.ui.View):
             except discord.Forbidden:
                 errorEmbed.description="❌ I couldn’t message you! Please enable direct messages and try again."
                 await interaction.followup.send(embed=errorEmbed, ephemeral=True)
-        except Exception:
+        except Exception as e:
             errorEmbed.description="❌ An error occurred. Please wait a bit and try again."
             await interaction.followup.send(embed=errorEmbed, ephemeral=True)
 
