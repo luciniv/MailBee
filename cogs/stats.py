@@ -138,7 +138,7 @@ class Stats(commands.Cog):
 
     # Creates leaderboards for the selected data type
     @app_commands.command(name="leaderboard", description="View certain data types as a leaderboard")
-    @checks.is_user_app()
+    @checks.is_admin_app()
     @checks.is_guild_app()
     @app_commands.describe(type="Select a data type to create a leaderboard for")
     @app_commands.choices(type=[
