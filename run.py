@@ -156,7 +156,7 @@ class MailBee(commands.Bot):
             logger.log("SYSTEM", f"Bot is ready! Logged in as {self.user} (ID: {self.user.id})")
         else:
             logger.critical("❌❌❌ Bot experienced core failures: Resolve listed errors before further use ❌❌❌")
-            await super().close()
+            await super().aclose()
 
 
     # Shuts down database, redis, and workers before bot shutdown
@@ -165,7 +165,7 @@ class MailBee(commands.Bot):
         
         heartbeat.cancel()
         await self.data_manager.data_shutdown()
-        await super().close()
+        await super().aclose()
 
 bot = MailBee()
 bot.patch_api_routes(bot.queue)

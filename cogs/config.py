@@ -363,21 +363,82 @@ class Config(commands.Cog):
     @app_commands.describe(form_template="Form template JSON string")
     async def form_preview(self, ctx, form_template: str):
         await preview_form_template(ctx, form_template)
- 
+
+
+    @commands.command(name="config")
+    @checks.is_admin()
+    @checks.is_guild()
+    async def config(self, ctx):
+        try:
+            guild = ctx.guild
+            config = await self.bot.data_manager.get_or_load_config(guild.id)
+
+            configEmbed = discord.Embed(title="Server Config", color=discord.Color.green())
+            if guild.icon:
+                configEmbed.set_author(name=f"{guild.name}", icon_url=guild.icon.url)
+            else:
+                configEmbed.set_author(name=f"{guild.name}")
+
+            log = config["logID"]
+            responses = config["responsesID"]
+            feedback = config["feedbackID"]
+            reports = config["reportID"]
+
+            accepting = config["accepting"]
+            anon = config["anon"]
+            logging = config["logging"]
+            analytics = config["analytics"]
+
+            def convert_state(state):
+                if state.casefold() == "true":
+                    return "Enabled"
+                else:
+                    return "Disabled"
+
+            greeting = config["greeting"]
+            if len(greeting) == 0:
+                greeting = ("Hi {mention}, thanks for reaching out! We'll get back to you "
+                            "as soon as we can.\n\nIn the meantime, please refer to the "
+                            "informational channels in our server regarding MailBee and its "
+                            "rules.")
+            closing = config["closing"]
+            if len(closing) == 0:
+                closing = ("Your ticket has been closed. Please do not reply to this message. "
+                            "\n\nIf you require support again in the future, you may open a new ticket."
+                            "\n\nHow did we do? Let us know below!")
+
+            configEmbed.add_field(name="MailBee Channels", 
+                                  value=f"Ticket log: <#{log}>\n"
+                                  f"Close responses: <#{responses}>\n"
+                                  f"Feedback thread: <#{feedback}>\n"
+                                  f"Reports thread: <#{reports}>", inline=True)
+            configEmbed.add_field(name="Server Settings", 
+                                  value=f"Accepting tickets: **{convert_state(accepting)}**\n"
+                                  f"Default anonymous: **{convert_state(anon)}**\n"
+                                  f"History logging: **{convert_state(logging)}**\n"
+                                  f"Analytics: **{convert_state(analytics)}**", inline=True)
+            configEmbed.add_field(name="Greeting", value=greeting, inline=False)
+            configEmbed.add_field(name="Closing", value=closing, inline=False)
+            await ctx.send(embed=configEmbed)
+            
+        
+        except Exception as e:
+            logger.exception(f"/config error: {e}")
+            raise BotError(f"/config sent an error: {e}")
+
 
     @commands.command(name="greeting")
-    @checks.is_user()
+    @checks.is_admin()
     @checks.is_guild()
     async def greeting(self, ctx, *, greeting: str):
         try:
             guild = ctx.guild
-
             moderation = self.bot.get_cog("Moderation")
             if moderation is not None:
                 greeting = await self.bot.helper.convert_mentions(greeting, guild)
 
-            if len(greeting) > 4000:
-                errorEmbed = discord.Embed(description="❌ Greeting text is too long, must be at most 4000 characters", 
+            if len(greeting) > 1000:
+                errorEmbed = discord.Embed(description="❌ Greeting text is too long, must be at most 1000 characters", 
                                            color=discord.Color.red())
                 await ctx.send(embed=errorEmbed)
                 return
@@ -395,18 +456,17 @@ class Config(commands.Cog):
         
 
     @commands.command(name="closing")
-    @checks.is_user()
+    @checks.is_admin()
     @checks.is_guild()
     async def closing(self, ctx, *, closing: str):
         try:
             guild = ctx.guild
-
             moderation = self.bot.get_cog("Moderation")
             if moderation is not None:
                 closing = await self.bot.helper.convert_mentions(closing, guild)
 
-            if len(closing) > 4000:
-                errorEmbed = discord.Embed(description="❌ Closing text is too long, must be at most 4000 characters", 
+            if len(closing) > 1000:
+                errorEmbed = discord.Embed(description="❌ Closing text is too long, must be at most 1000 characters", 
                                            color=discord.Color.red())
                 await ctx.send(embed=errorEmbed)
                 return
@@ -424,14 +484,13 @@ class Config(commands.Cog):
         
 
     @commands.command(name="accepting")
-    @checks.is_user()
+    @checks.is_admin()
     @checks.is_guild()
     async def accepting(self, ctx, *, accepting: str = ("The server you are attempting to contact is not "
                                                        "currently accepting new tickets. Please try again "
                                                        "later.")):
         try:
             guild = ctx.guild
-
             moderation = self.bot.get_cog("Moderation")
             if moderation is not None:
                 accepting = await self.bot.helper.convert_mentions(accepting, guild)
@@ -459,6 +518,30 @@ class Config(commands.Cog):
         except Exception as e:
             logger.exception(f"/accepting error: {e}")
             raise BotError(f"/accepting sent an error: {e}")
+        
+
+    @commands.command(name="anon")
+    @checks.is_admin()
+    @checks.is_guild()
+    async def anon(self, ctx):
+        try:
+            guild = ctx.guild
+            config = await self.bot.data_manager.get_or_load_config(guild.id)
+            successEmbed = discord.Embed(description="", color=discord.Color.green())
+            if config["anon"] == "true":
+                successEmbed.description=f"✅ Moderator anonyminity setting changed to: **default non-anonymous**"
+                await self.bot.data_manager.set_anon_status(guild.id, "false")
+                await ctx.send(embed=successEmbed)
+            else:
+                successEmbed.description=f"✅ Moderator anonyminity setting changed to: **default anonymous**"
+                await self.bot.data_manager.set_anon_status(guild.id, "true")
+                await ctx.send(embed=successEmbed)
+
+            await self.bot.data_manager.get_or_load_config(guild.id, False)
+
+        except Exception as e:
+            logger.exception(f"/anon error: {e}")
+            raise BotError(f"/anon sent an error: {e}")
 
 
     @app_commands.command(name="set_type", description="Set the type of a tickets category")

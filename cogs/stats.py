@@ -21,7 +21,7 @@ def fill_embed(statsEmbed: discord.Embed,
         count = 0
         fields = queries.generate_fields(data, index, columns) 
         
-        statsEmbed.add_field(name=f"", value=f"**{'⎯' * 30}\r{row}**", inline=False)
+        statsEmbed.add_field(name=row, value="", inline=False)
 
         # Outputs the three fields from generate_fields
         for col, field in zip(columns, fields):
@@ -138,7 +138,7 @@ class Stats(commands.Cog):
 
     # Creates leaderboards for the selected data type
     @app_commands.command(name="leaderboard", description="View certain data types as a leaderboard")
-    @checks.is_admin_app()
+    @checks.is_user_app()
     @checks.is_guild_app()
     @app_commands.describe(type="Select a data type to create a leaderboard for")
     @app_commands.choices(type=[
@@ -175,7 +175,7 @@ class Stats(commands.Cog):
             guildID = guild.id
 
             statsEmbed = discord.Embed(title=f"Leaderboard {time_name}", 
-                                    description=f"{type_name}\r{'⎯' * 18}", 
+                                    description=f"{type_name}", 
                                     color=discord.Color.green())
             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
             statsEmbed.set_footer(text="")
@@ -203,7 +203,7 @@ class Stats(commands.Cog):
                         limit += page_count 
                         if count != 0:
                             statsEmbed = discord.Embed(title=f"Leaderboard {time_name}", 
-                                    description=f"{type_name}\r{'⎯' * 18}", 
+                                    description=f"{type_name}", 
                                     color=discord.Color.green())
                             statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
                             statsEmbed.set_footer(text="")
@@ -248,7 +248,7 @@ class Stats(commands.Cog):
     
     @app_commands.command(name="server_stats", description="Display this server's statistics,"
                             " includes ticket counts and response averages")
-    @checks.is_admin_app()
+    @checks.is_user_app()
     @checks.is_guild_app()
     @app_commands.describe(timeframe="Select a timeframe for the output data")
     @app_commands.choices(timeframe=[
@@ -290,7 +290,7 @@ class Stats(commands.Cog):
             if result is not None: # Go ahead to build embed
                 index = 0
                 data = result[0]
-
+                statsEmbed.add_field(name=f"Current Data", value="", inline=False)
                 statsEmbed.add_field(name="📬 Tickets Open", value=queries.format_data(data, index, None), inline=True)
                 index += 2
                 statsEmbed.add_field(name="📮 Total Tickets", value=queries.format_data(data, index, None), inline=True)
@@ -307,7 +307,7 @@ class Stats(commands.Cog):
 
     @app_commands.command(name="mod_activity", description="Display a moderator's ticketing activity" 
                              " over the past X amount of time")
-    @checks.is_admin_app()
+    @checks.is_user_app()
     @checks.is_guild_app()
     @app_commands.describe(member="Selected moderator")
     @app_commands.describe(timeframe="Select a timeframe for the output data")

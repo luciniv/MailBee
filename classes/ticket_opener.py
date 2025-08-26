@@ -118,7 +118,7 @@ class TicketOpener:
             # Create ticket channel
             channel = await self.create_ticket_channel(guild, category, user, thread.id, NSFW_flag)
             if channel is None:
-                errorEmbed.description="❌ Unable to create ticket channel. Contact a server admin with this error."
+                errorEmbed.description="❌ Unable to create ticket channel. Tickets for this server are currently full."
                 await dm_channel.send(embed=errorEmbed)
                 await thread.delete()
                 await log_message.delete()
@@ -220,8 +220,8 @@ class TicketOpener:
                             topic=f"Ticket channel {user.id} {threadID}")
                 except Exception:
                     return None
-
-            # Set channel status
+            # FIXME this errors if channel doesnt exist
+            # Issue is in ticket channel not existing
             await self.bot.channel_status.set_emoji(ticket_channel, "new")
             return ticket_channel
         
@@ -236,9 +236,12 @@ class TicketOpener:
         member = await self.bot.cache.get_guild_member(guild, user.id)
 
         if member is None:
-            logger.error("Failed to find member object for user: ", user.id)
-            return
-        
+            logger.error(f"Failed to find member object for user: {user.id}")
+            member = await self.bot.cache.get_guild_member(guild, user.id) 
+            if member is None:
+                logger.error("Creating ticket embeds without member object")
+                member = None
+
         count = await self.bot.data_manager.get_ticket_count(guild.id, user.id)
         if count is not None:
             count = int(count[0][0])
@@ -246,9 +249,6 @@ class TicketOpener:
                 count -= 1
         else:
             count = 0
-         
-        roles = member.roles
-        default = guild.default_role
 
         ticketEmbed = discord.Embed(title=f"New \"{title}\" Ticket [ID {ticketID}]",
                                     description="To reply, send a message in this channel prefixed with `+`. "
@@ -257,35 +257,42 @@ class TicketOpener:
                                     "list.\n\n`+close [reason]` will close a ticket. `+inactive [hours] [reason]` "
                                     "will close a ticket after X hours of inactivity from the ticket opener.")
         ticketEmbed.timestamp = datetime.now(timezone.utc)
-        ticketEmbed.set_footer(text=f"{member.name} | {member.id}", icon_url=(member.avatar and member.avatar.url) or member.display_avatar.url)
- 
+        ticketEmbed.set_footer(text=f"{user.name} | {user.id}")
+        if member is not None:
+            ticketEmbed.footer.icon_url=(member.avatar and member.avatar.url) or member.display_avatar.url
+        else:
+            ticketEmbed.footer.icon_url=(user.avatar and user.avatar.url) or None
         ticketEmbed.add_field(name="Opener @", value=f"<@{user.id}>", inline=True)
         ticketEmbed.add_field(name="Opener ID", value=user.id, inline=True)
-        ticketEmbed.add_field(
-                        name="Roles",
-                        value=(
-                            "*None*"
-                            if len(roles) <= 1  # Only @everyone
-                            else ((
-                                " ".join([f"<@&{role.id}>" for role in roles if role != default])
-                                if len(" ".join([f"<@&{role.id}>" for role in roles if role != default])) <= 1024
-                                else f"*{len([r for r in roles if r != default])} roles*"
-                                ))),
-                        inline=True)
-        ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name="Join Date", value=f"<t:{int(member.joined_at.timestamp())}:R>", inline=True)
-        ticketEmbed.add_field(name="Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
-        ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name="Roblox Username", value=roblox_data[1], inline=True)
-        ticketEmbed.add_field(name="Roblox ID", value=roblox_data[0], inline=True)
-        ticketEmbed.add_field(name="", value="", inline=False)
-        ticketEmbed.add_field(name="Robux Spent", value=roblox_data[2], inline=True)
-        ticketEmbed.add_field(name="Hours Ingame", value=roblox_data[3], inline=True)
+
+        if member is not None:
+            roles = member.roles
+            default = guild.default_role
+            ticketEmbed.add_field(
+                            name="Roles",
+                            value=(
+                                "*None*"
+                                if len(roles) <= 1  # Only @everyone
+                                else ((
+                                    " ".join([f"<@&{role.id}>" for role in roles if role != default])
+                                    if len(" ".join([f"<@&{role.id}>" for role in roles if role != default])) <= 1024
+                                    else f"*{len([r for r in roles if r != default])} roles*"
+                                    ))),
+                            inline=True)
+            ticketEmbed.add_field(name="", value="", inline=False)
+            ticketEmbed.add_field(name="Join Date", value=f"<t:{int(member.joined_at.timestamp())}:R>", inline=True)
+            ticketEmbed.add_field(name="Account Age", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True)
+            ticketEmbed.add_field(name="", value="", inline=False)
+            ticketEmbed.add_field(name="Roblox Username", value=roblox_data[1], inline=True)
+            ticketEmbed.add_field(name="Roblox ID", value=roblox_data[0], inline=True)
+            ticketEmbed.add_field(name="", value="", inline=False)
+            ticketEmbed.add_field(name="Robux Spent", value=roblox_data[2], inline=True)
+            ticketEmbed.add_field(name="Hours Ingame", value=roblox_data[3], inline=True)
         ticketEmbed.add_field(name="", value="", inline=False)
         ticketEmbed.add_field(name="Time Taken on Form", value=f"`{time_taken}` seconds", inline=True)
         ticketEmbed.add_field(name="Prior Tickets", value=count, inline=True)
 
-        submissionEmbed = await self.create_submission_embed(None, member, values, title)
+        submissionEmbed = await self.create_submission_embed(None, user, values, title)
             
         await channel.send(embed=ticketEmbed)
         await channel.send(embed=submissionEmbed)

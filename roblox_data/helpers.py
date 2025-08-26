@@ -52,11 +52,12 @@ async def get_roblox_username(guild_id, discord_id, api_key):
         return roblox_id, username
             
     except asyncio.TimeoutError:
-        logger.warning("get_roblox_username request timed out")
+        # logger.warning("get_roblox_username request timed out")
         return None
 
     except Exception as e:
-        logger.error(f"get_roblox_username sent an error: {e}")
+        # logger.error(f"get_roblox_username sent an error: {e}")
+        return None
 
 
 async def get_roblox_user_info(username):
@@ -76,11 +77,12 @@ async def get_roblox_user_info(username):
         return None
     
     except asyncio.TimeoutError:
-        logger.warning("get_roblox_user_info request timed out")
+        # logger.warning("get_roblox_user_info request timed out")
         return None
     
     except Exception as e:
-        logger.error(f"get_roblox_user_info sent an error: {e}")
+        # logger.error(f"get_roblox_user_info sent an error: {e}")
+        return None
 
 
 async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='global'):
@@ -97,11 +99,12 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
         return None
     
     except asyncio.TimeoutError:
-        logger.warning("get_datastore_entry request timed out")
+        # logger.warning("get_datastore_entry request timed out")
         return None
 
     except Exception as e:
-        logger.error(f"get_datastore_entry sent an error: {e}")
+        # logger.error(f"get_datastore_entry sent an error: {e}")
+        return None
 
 
 async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
@@ -119,11 +122,12 @@ async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope=
         return None
     
     except asyncio.TimeoutError:
-        logger.warning("list_ordered_data_store_entries request timed out")
+        # logger.warning("list_ordered_data_store_entries request timed out")
         return None
 
     except Exception as e:
-        logger.error(f"list_ordered_data_store_entries sent an error: {e}")
+        # logger.error(f"list_ordered_data_store_entries sent an error: {e}")
+        return None
         
 
 async def get_player_data(game_type, game_id, user_id):
@@ -150,7 +154,8 @@ async def get_player_data(game_type, game_id, user_id):
         else:
             return player_data
     except Exception as e:
-        logger.error(f"get_player_data sent an error: {e}")
+        # logger.error(f"get_player_data sent an error: {e}")
+        return None
 
 
 async def get_user_and_player_data(user: str, game_type: discord.app_commands.Choice[int]):
@@ -210,11 +215,11 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
             message = f'{game_type.name} - {username} - R${robux_spent} - {time_played}hrs'
         except Exception as e:
-            print(e)
             message = "Error retriving engagement statistics"
 
         return message, 'output.json', user_info
     except Exception as e:
+
         logger.error(f"get_user_and_player_data sent an error: {e}")
 
 

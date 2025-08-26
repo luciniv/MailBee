@@ -59,9 +59,9 @@ class Cache:
             
             epoch_time = int(time.time())
             try:
-                member = await asyncio.wait_for(guild.fetch_member(memberID), timeout=2)
+                member = await asyncio.wait_for(guild.fetch_member(memberID), timeout=5)
             except Exception as e:
-                logger.error(f"failed to fetch guild member using id {memberID}:", e)
+                logger.error(f"failed to fetch guild member using id {memberID}: {e}")
                 return None
             self.member_cache[(str(member.id), str(guild.id))] = (member, epoch_time)
             return member
