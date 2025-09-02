@@ -23,6 +23,13 @@ class Util(commands.Cog):
 
     @commands.command()
     @checks.is_owner()
+    async def refresh_ap(self, ctx, user: discord.Member):
+        await self.bot.data_manager.get_or_load_ap(ctx.guild.id, user.id, False)
+        await ctx.send(f"Refreshed AP for {user.name}")
+
+
+    @commands.command()
+    @checks.is_owner()
     async def leave(self, ctx, *, guild_name: str):
         for guild in self.bot.guilds:
             print("found guild", guild.name)

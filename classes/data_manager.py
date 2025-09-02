@@ -488,7 +488,8 @@ class DataManager:
             SELECT ap_adjs.adj, ap_nouns.noun, ap_nouns.nounURL, ap_links.date FROM
             ap_links JOIN ap_adjs ON ap_links.adjID = ap_adjs.adjID
             JOIN ap_nouns ON ap_links.nounID = ap_nouns.nounID
-            WHERE ap_links.guildID = {guildID} 
+            WHERE ap_links.guildID = {guildID}
+            AND ap_nouns.guildID = {guildID}
             AND ap_links.modID = {userID}
             ORDER BY ap_links.date DESC
             LIMIT 1;"""
