@@ -264,7 +264,7 @@ class Snips(commands.Cog):
     @app_commands.describe(anon="Whether your message is anonymous or not (default is per server)")
     async def send(self, interaction: discord.Interaction, snip: str, anon: bool = None):
         try:
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
 
             channel = interaction.channel
             author = interaction.user

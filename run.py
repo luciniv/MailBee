@@ -181,6 +181,7 @@ async def heartbeat():
     if not status:
         if bot.data_manager.db_pool is None:
             await bot.data_manager.connect_to_db()
+    pass
 
 
 # Save channel_status dictionaries to cache every 2 minutes

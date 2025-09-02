@@ -456,13 +456,44 @@ class DataManager:
     #     print("added verified user", userID, token)
 
 
-    # Load APs from the database
-    async def load_aps_from_db(self, guildID):
+    # Load all ajectives
+    async def load_adjs_from_db(self):
         query = f"""
-            SELECT * FROM config
-            WHERE guildID = {guildID};"""
-        data = await self.execute_query(query)
-        return data
+            SELECT * FROM ap_adjs;"""
+        adjs = await self.execute_query(query)
+        return adjs
+
+
+    # Load all of a guild's ap options
+    async def load_nouns_from_db(self, guildID):
+        query = f"""
+            SELECT ap_nouns.nounID, ap_nouns.noun FROM
+            ap_nouns WHERE ap_nouns.guildID = {guildID};"""
+        nouns = await self.execute_query(query)
+        return nouns
+    
+
+    # Load all of a guild's ap options
+    async def load_links_from_db(self, guildID):
+        query = f"""
+            SELECT ap_links.modID, ap_links.nounID, ap_links.adjID FROM
+            ap_links WHERE ap_links.guildID = {guildID};"""
+        links = await self.execute_query(query)
+        return links
+
+
+    # Load specific AP from the database
+    async def load_ap_from_db(self, guildID, userID):
+        query = f"""
+            SELECT ap_adjs.adj, ap_nouns.noun, ap_nouns.nounURL, ap_links.date FROM
+            ap_links JOIN ap_adjs ON ap_links.adjID = ap_adjs.adjID
+            JOIN ap_nouns ON ap_links.nounID = ap_nouns.nounID
+            WHERE ap_links.guildID = {guildID} 
+            AND ap_links.modID = {userID}
+            ORDER BY ap_links.date DESC
+            LIMIT 1;"""
+        ap = await self.execute_query(query)
+        return ap
 
 
     # Get a verified user from database
@@ -998,9 +1029,9 @@ class DataManager:
 
     def format_config(self, guildID, logID, inboxID, 
                       responsesID, feedbackID, reportID,
-                      accepting, anon, blacklisted, 
                       greeting, closing, 
-                      analytics, logging):
+                      accepting, anon, blacklisted, 
+                      analytics, logging, aps):
         
         if greeting is None:
             greeting = ""
@@ -1014,13 +1045,14 @@ class DataManager:
             "responsesID": responsesID,
             "feedbackID": feedbackID,
             "reportID": reportID,
+            "greeting": greeting,
+            "closing": closing,
             "accepting": accepting,
             "anon": anon,
             "blacklisted": blacklisted,
-            "greeting": greeting,
-            "closing": closing,
             "analytics": analytics,
-            "logging": logging}
+            "logging": logging,
+            "aps": aps}
 
     
     async def get_or_load_config(self, guildID: int, get = True):
@@ -1040,28 +1072,27 @@ class DataManager:
         return formatted
     
 
-    def format_aps(self, guildID, modID, adjID, nounID, url):
+    def format_aps(self, adj, noun, url, date):
         return {
-            "guildID": guildID,
-            "modID": modID,
-            "adjID": adjID,
-            "nounID": nounID,
-            "url": url,}
+            "adj": adj,
+            "noun": noun,
+            "url": url,
+            "date": date}
 
     
-    async def get_or_load_aps(self, guildID: int, get = True):
-        redis_key = f"aps:{guildID}"
+    async def get_or_load_ap(self, guildID: int, userID: int, get = True):
+        redis_key = f"aps:{guildID}:{userID}"
         if get:
             cached = await self.redis.get(redis_key)
 
             if cached:
                 return json.loads(cached)
 
-        aps = await self.load_aps_from_db(guildID)
-        if not aps:
+        ap = await self.load_ap_from_db(guildID, userID)
+        if not ap:
             return None
 
-        formatted = self.format_config(*aps[0])
+        formatted = self.format_aps(*ap[0])
         await self.set_with_expiry(redis_key, json.dumps(formatted))
         return formatted
 

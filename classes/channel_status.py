@@ -4,7 +4,7 @@ import emoji
 import time
 from utils import emojis
 from utils.logger import *
-from cogs.tools import close_ticket
+from cogs.tickets import close_ticket
 
 
 class ChannelStatus:

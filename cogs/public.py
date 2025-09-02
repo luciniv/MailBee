@@ -71,8 +71,7 @@ class Public(commands.Cog):
                     serverEmbed = discord.Embed(title="Choose A Server",
                                                 description="Please select a server for your ticket. Use "
                                                 "the provided drop-down menu by clicking **\"Choose a server...\"**\n\n"
-                                                "If you don't see your server, use `/verify` to re-verify your server "
-                                                "list with the bot, then run `/create_ticket` again.",
+                                                "If you don't see your server, wait a moment and run `/create_ticket` again.",
                                                 color=discord.Color.blue())
                     
                     view = ServerSelectView(self.bot, shared_guilds, channelID)

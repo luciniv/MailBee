@@ -99,8 +99,16 @@ async def close_ticket(bot, ticket_channel, closer,
 
             name = f"{closerName} | {closerID}"
             url = (closer.avatar and closer.avatar.url) or closer.display_avatar.url
+            ap = None
             if anon:
-                name = f"{name} (Anonymous)"
+                if (config["aps"] == 'true'):
+                    ap = await bot.data_manager.get_or_load_ap(guild.id, closerID)
+                    if ap is not None:
+                        name += " (Anonymous Profile)"
+                    else:
+                        name = f"{name} (Anonymous)"
+                else:
+                    name = f"{name} (Anonymous)"
             closeLogEmbed.set_author(name=name, icon_url=url)
 
             if inactive:
@@ -120,6 +128,11 @@ async def close_ticket(bot, ticket_channel, closer,
                         closeUserEmbed.set_footer(text=guild.name)
                     if not anon:
                         closeUserEmbed.set_author(name=name, icon_url=url)
+                    else:
+                        if ap is not None:
+                            if ap["adj"] == 'none':
+                                    ap["adj"] = ""
+                            closeUserEmbed.set_author(name=f"{ap['adj']} {ap['noun']}", icon_url=ap["url"])
                     try:
                         await dm_channel.send(embed=closeUserEmbed)
                         await send_closing(bot, guild, dm_channel, ticket_channel.id, opener, closing)
@@ -274,7 +287,7 @@ class GenerateReplyView(discord.ui.View):
             self.stop()
 
 
-class Tools(commands.Cog):
+class Tickets(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         
@@ -1248,4 +1261,4 @@ class Tools(commands.Cog):
     
 
 async def setup(bot):
-    await bot.add_cog(Tools(bot))
+    await bot.add_cog(Tickets(bot))

@@ -332,13 +332,15 @@ class Analytics(commands.Cog):
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
             files = []
 
-            if anon is None:
+            config = None
+            if anon is not False:
                 config = await self.bot.data_manager.get_or_load_config(guild.id)
-                if config is not None:
-                    if (config["anon"] == 'true'):
-                        anon = True
-                    else:
-                        anon = False
+
+            if anon is None:
+                if (config["anon"] == 'true'):
+                    anon = True
+                else:
+                    anon = False
 
             dm_channel = None
             try:
@@ -407,9 +409,17 @@ class Analytics(commands.Cog):
             for count, url in enumerate(final_attachments, start=1):
                 receiptEmbed.add_field(name=f"Attachment {count}", value=url, inline=False)
 
+            ap = None
             name = f"{author.name} | {author.id}"
             if anon:
-                name += " (Anonymous)"
+                if (config["aps"] == 'true'):
+                    ap = await self.bot.data_manager.get_or_load_ap(guild.id, author.id)
+                    if ap is not None:
+                        name += " (Anonymous Profile)"
+                    else:
+                        name += " (Anonymous)"  
+                else:
+                    name += " (Anonymous)"
         
             receiptEmbed.set_author(name=name, icon_url=(author.avatar and author.avatar.url) or author.display_avatar.url)
 
@@ -442,6 +452,10 @@ class Analytics(commands.Cog):
 
             if not anon:
                 sendEmbed.set_author(name=f"{author.name} | {author.id}", icon_url=(author.avatar and author.avatar.url) or author.display_avatar.url)
+            elif ap is not None:
+                if ap["adj"] == 'none':
+                    ap["adj"] = ""
+                sendEmbed.set_author(name=f"{ap['adj']} {ap['noun']}", icon_url=ap["url"])
 
             files = [discord.File(io.BytesIO(data), filename=filename) for data, filename in raw_files]
             try:
@@ -892,6 +906,7 @@ class Analytics(commands.Cog):
                             if (embed.title == "Message Received"):
                                 footer = embed.footer.text
                                 authorID = (footer.split())[-1]
+                                print("RECEIVED MESSAGE FOOTER", footer)
                             
                                 await self.bot.data_manager.add_ticket_message(messageID, 
                                                                                modmail_messageID, 

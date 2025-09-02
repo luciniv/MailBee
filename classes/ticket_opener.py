@@ -39,7 +39,7 @@ async def get_overwrites(guild, roles) -> Dict:
 class AddInfoButton(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)  # no timeout needed
-        self.add_item(discord.ui.Button(label="Send messages in this DM to add to your ticket!", style=discord.ButtonStyle.blurple, disabled=True))
+        self.add_item(discord.ui.Button(label="Send more messages in this DM!", style=discord.ButtonStyle.blurple, disabled=True))
 
 
 class TicketOpener:
@@ -257,11 +257,11 @@ class TicketOpener:
                                     "list.\n\n`+close [reason]` will close a ticket. `+inactive [hours] [reason]` "
                                     "will close a ticket after X hours of inactivity from the ticket opener.")
         ticketEmbed.timestamp = datetime.now(timezone.utc)
-        ticketEmbed.set_footer(text=f"{user.name} | {user.id}")
+        name = f"{user.name} | {user.id}"
         if member is not None:
-            ticketEmbed.footer.icon_url=(member.avatar and member.avatar.url) or member.display_avatar.url
+            ticketEmbed.set_footer(text=name, icon_url=((member.avatar and member.avatar.url) or member.display_avatar.url))
         else:
-            ticketEmbed.footer.icon_url=(user.avatar and user.avatar.url) or None
+            ticketEmbed.set_footer(text=name, icon_url=((user.avatar and user.avatar.url) or None))
         ticketEmbed.add_field(name="Opener @", value=f"<@{user.id}>", inline=True)
         ticketEmbed.add_field(name="Opener ID", value=user.id, inline=True)
 

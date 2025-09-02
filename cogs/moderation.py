@@ -252,10 +252,10 @@ class Moderation(commands.Cog):
     @checks.is_user_app()
     @checks.is_guild_app()
     @app_commands.describe(ticket_id="The ticket ID to add a note to")
-    @app_commands.describe(member="The member to add a note to")
+    @app_commands.describe(user="The user to add a note to")
     @app_commands.describe(note="The content of the note")
     async def note_add(self, interaction: discord.Interaction, 
-                   ticket_id: int = None, member: discord.Member = None, note: str = None):
+                   ticket_id: int = None, user: discord.Member = None, note: str = None):
         try:
             errorEmbed=discord.Embed(description="❌ This command is currently disabled for testing.", 
                                      color=discord.Color.red())
@@ -270,9 +270,9 @@ class Moderation(commands.Cog):
     @checks.is_user_app()
     @checks.is_guild_app()
     @app_commands.describe(ticket_id="The ticket ID to add a note to")
-    @app_commands.describe(member="The member to add a note to")
+    @app_commands.describe(user="The user to add a note to")
     async def view(self, interaction: discord.Interaction, 
-                   ticket_id: int = None, member: discord.Member = None, note: str = None):
+                   ticket_id: int = None, user: discord.Member = None, note: str = None):
         try:
             errorEmbed=discord.Embed(description="❌ This command is currently disabled for testing.", 
                                      color=discord.Color.red())

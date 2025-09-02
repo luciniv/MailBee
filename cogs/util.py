@@ -85,9 +85,14 @@ class Util(commands.Cog):
 
     @commands.command()
     @checks.is_owner()
-    async def refresh_config(self, ctx):
-        await self.bot.data_manager.get_or_load_config(ctx.guild.id, False)
-        await ctx.send("Refreshed config")
+    async def refresh_config(self, ctx, all: str = None):
+        if all == "all":
+            for guild in self.bot.guilds:
+                await self.bot.data_manager.get_or_load_config(guild.id, False)
+            await ctx.send("Refreshed all configs")
+        else:
+            await self.bot.data_manager.get_or_load_config(ctx.guild.id, False)
+            await ctx.send("Refreshed config")
 
 
     @commands.command()
