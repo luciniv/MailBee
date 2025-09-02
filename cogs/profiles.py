@@ -13,7 +13,7 @@ class Profiles(commands.Cog):
         self.adjs = {}
         self.nouns = {}
         self.links = {}
-        
+
 
     @app_commands.command(name="profile", description="View a user's current anonymous profile")
     @app_commands.describe(user="Leave this field empty to view your own profile")
@@ -42,7 +42,7 @@ class Profiles(commands.Cog):
                     adjective = ""
                 profileEmbed = discord.Embed(description=f"### {adjective} {noun}\n"
                                             f"**Moderator:** <@{user.id}>\n"
-                                            f"**Aquired:** <t:{date}:D> (<t:{date}:R>)", 
+                                            f"**Acquired:** <t:{date}:D> (<t:{date}:R>)", 
                                             color=discord.Color.green())
                 if url is not None:
                     profileEmbed.set_thumbnail(url=url)
