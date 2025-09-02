@@ -1117,7 +1117,7 @@ class Tickets(commands.Cog):
                             break
 
                     if ticket_is_nsfw:
-                        errorEmbed.description=("❌ This ticket is already in a NSFW catgeory.\n"
+                        errorEmbed.description=("❌ This ticket is already in a NSFW category.\n"
                                                 "Use `/move` to move it manually elsewhere.")
                         await ctx.send(embed=errorEmbed)
                         return
@@ -1128,7 +1128,7 @@ class Tickets(commands.Cog):
                             nsfwID = int(type["NSFWCategoryID"])
 
                     if nsfwID in (0, -1):
-                        errorEmbed.description=("❌ This ticket's type does not have a NSFW catgeory set.\n"
+                        errorEmbed.description=("❌ This ticket's type does not have a NSFW category set.\n"
                                                 "Use `/move` to move it manually.")
                         await ctx.send(embed=errorEmbed)
                         return

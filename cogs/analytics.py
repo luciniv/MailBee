@@ -764,7 +764,7 @@ class Analytics(commands.Cog):
                     else:
                         logger.debug("Found two or more matching open logs in DB, selected the oldest one")
                 else: 
-                    logger.error(f"Could not find open compliement to close embed {message.id}, sent on {format_time}")
+                    logger.error(f"Could not find open compliment to close embed {message.id}, sent on {format_time}")
                     err = True
 
                 # Update ticket at modmail_messageID
