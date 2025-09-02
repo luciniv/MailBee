@@ -906,8 +906,6 @@ class Analytics(commands.Cog):
                             if (embed.title == "Message Received"):
                                 footer = embed.footer.text
                                 authorID = (footer.split())[-1]
-                                print("RECEIVED MESSAGE FOOTER", footer)
-                            
                                 await self.bot.data_manager.add_ticket_message(messageID, 
                                                                                modmail_messageID, 
                                                                                this_channelID, 
@@ -921,13 +919,14 @@ class Analytics(commands.Cog):
                                 author_name = (embed.author.name).split()
                                 author_username = (author_name[0])[:-2]
                                 authorID = self.bot.data_manager.mod_ids.get(author_username, None)
-
-                                await self.bot.data_manager.add_ticket_message(messageID, 
-                                                                               modmail_messageID, 
-                                                                               this_channelID, 
-                                                                               authorID, 
-                                                                               format_time, 
-                                                                               "Sent")
+                                # FIXME fix this soon, but not rn, issue with stored moderator IDs
+                                if authorID is not None:
+                                    await self.bot.data_manager.add_ticket_message(messageID, 
+                                                                                modmail_messageID, 
+                                                                                this_channelID, 
+                                                                                authorID, 
+                                                                                format_time, 
+                                                                                "Sent")
                                 await self.bot.channel_status.set_emoji(channel, "wait")
                            
                             else:
