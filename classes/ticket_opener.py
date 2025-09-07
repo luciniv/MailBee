@@ -48,7 +48,7 @@ class TicketOpener:
 
 
     async def open_ticket(self, user, guild, category, 
-                          typeID, values, title, 
+                          typeID, ping_roles, values, title, 
                           time_taken, NSFW):
         try:
             NSFW_flag = "🔞"
@@ -133,7 +133,7 @@ class TicketOpener:
 
             # Task for sending server info
             server = asyncio.create_task(self.handle_server_embeds(guild, channel, thread, 
-                                                          user, values, title, 
+                                                          user, ping_roles, values, title, 
                                                           time_taken, roblox_data, ticketID))
             # Task for sending dm info
             dm = asyncio.create_task(self.handle_dm_embeds(guild, dm_channel, user, 
@@ -147,7 +147,7 @@ class TicketOpener:
             return True
         
         except Exception as e:
-            print("ticket_opener sent an exception:", e)
+            logger.exception("ticket_opener sent an exception:", e)
 
 
     async def get_roblox_data(self, guild, user):
@@ -231,7 +231,7 @@ class TicketOpener:
 
 
     async def handle_server_embeds(self, guild, channel, thread, 
-                                   user, values, title, 
+                                   user, ping_roles, values, title, 
                                    time_taken, roblox_data, ticketID):
         member = await self.bot.cache.get_guild_member(guild, user.id)
 
@@ -293,12 +293,13 @@ class TicketOpener:
         ticketEmbed.add_field(name="Prior Tickets", value=count, inline=True)
 
         submissionEmbed = await self.create_submission_embed(None, user, values, title)
-            
-        await channel.send(embed=ticketEmbed)
-        await channel.send(embed=submissionEmbed)
 
-        await thread.send(embed=ticketEmbed)
-        await thread.send(embed=submissionEmbed)
+        pings = None
+        if ping_roles is not None:
+            pings = " ".join([f"<@&{role}>" for role in ping_roles])
+            
+        await channel.send(pings, embeds=[ticketEmbed, submissionEmbed])
+        await thread.send(embeds=[ticketEmbed, submissionEmbed])
         
 
     async def handle_dm_embeds(self, guild, dm_channel, user, 
@@ -347,10 +348,15 @@ class TicketOpener:
 
         submissionEmbed = await self.create_submission_embed(guild, None, values, title)
 
-        await dm_channel.send(embed=dmEmbed)
+        infoEmbed = discord.Embed(description="**Tip**: Any messages sent in this DM will go to the staff team. "
+                                              "If you have additional images / files to add to your ticket, **send "
+                                              "them now.**")
+        infoEmbed.set_footer(text="This is an automated message. Further messages you may receive are from staff.")
+      
         if greetingEmbed:
-            await dm_channel.send(embed=greetingEmbed)
-        await dm_channel.send(embed=submissionEmbed, view=AddInfoButton())
+            await dm_channel.send(embeds=[dmEmbed, greetingEmbed, submissionEmbed, infoEmbed])
+        else:
+            await dm_channel.send(embeds=[dmEmbed, submissionEmbed, infoEmbed])
 
 
     async def create_submission_embed(self, guild, member, values, title):

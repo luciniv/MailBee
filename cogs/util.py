@@ -85,9 +85,14 @@ class Util(commands.Cog):
 
     @commands.command()
     @checks.is_owner()
-    async def refresh_types(self, ctx):
-        await self.bot.data_manager.get_or_load_guild_types(ctx.guild.id, False)
-        await ctx.send("Refreshed ticket types")
+    async def refresh_types(self, ctx, all: str = None):
+        if all == "all":
+            for guild in self.bot.guilds:
+                await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
+            await ctx.send("Refreshed all ticket types")
+        else:
+            await self.bot.data_manager.get_or_load_guild_types(ctx.guild.id, False)
+            await ctx.send("Refreshed ticket types")
 
 
     @commands.command()

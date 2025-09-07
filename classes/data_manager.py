@@ -740,6 +740,22 @@ class DataManager:
         await self.update_cache(2)
 
 
+    async def set_ping_roles(self, guildID, roles):
+        types = await self.get_or_load_guild_types(guildID)
+        type_ids = []
+        for type in types:
+            if int(type["subType"]) == -1:
+                type_ids.append(type["typeID"])
+
+        query = f"""
+            UPDATE ticket_types
+            SET pingRoles = %s
+            WHERE guildID = {guildID} 
+            AND typeID IN ({', '.join(map(str, type_ids))});
+            """
+        await self.execute_query(query, False, False, (json.dumps(roles),))
+
+
     # Adds verbal to DB
     async def add_note(self, guildID: int, userID: int, ticketID: int, authorID: int, authorName: str, content: str):
         epoch_time = int(datetime.now(timezone.utc).timestamp())
@@ -1226,7 +1242,7 @@ class DataManager:
 
 
     def format_guild_type_entry(self, typeID, categoryID, typeName, typeDescrip, 
-                                typeEmoji, form, subType, redirectText, NSFWCategoryID):
+                                typeEmoji, form, subType, redirectText, NSFWCategoryID, pingRoles):
         return {
             "typeID": typeID,
             "categoryID": categoryID,
@@ -1236,7 +1252,8 @@ class DataManager:
             "form": form,
             "subType": subType,
             "redirectText": redirectText,
-            "NSFWCategoryID": NSFWCategoryID}
+            "NSFWCategoryID": NSFWCategoryID,
+            "pingRoles": json.loads(pingRoles) if pingRoles else []}
     
 
     async def get_or_load_guild_types(self, guildID, get = True):
@@ -1254,10 +1271,11 @@ class DataManager:
 
         result = []
         for entry in types:
-            typeID, _, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText, NSFWCategoryID = entry
+            typeID, _, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText, NSFWCategoryID, pingRoles = entry
             form = json.loads(formJson)
             data = self.format_guild_type_entry(typeID, categoryID, typeName, typeDescrip, 
-                                                typeEmoji, form, subType, redirectText, NSFWCategoryID)
+                                                typeEmoji, form, subType, redirectText, 
+                                                NSFWCategoryID, pingRoles)
             result.append(data)
 
         await self.set_with_expiry(redis_key, json.dumps(result))

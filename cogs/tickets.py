@@ -15,16 +15,16 @@ from utils import checks, queries, emojis
 from utils.logger import *
 
 
-async def close_ticket(bot, ticket_channel, closer, 
+async def close_ticket(bot, ticket_channel, mod, 
                        userID, guildID, 
                        reason, anon, inactive = False):
     try:
         deleted = False
-        closerID = -1
-        closerName = "Unknown"
-        if closer is not None:
-            closerID = closer.id
-            closerName = closer.name
+        modID = -1
+        modName = "Unknown"
+        if mod is not None:
+            modID = mod.id
+            modName = mod.name
         closingMessage = None
         closingEmbed = discord.Embed(description="Closing ticket...",
                                          color=discord.Color.blue())
@@ -37,7 +37,7 @@ async def close_ticket(bot, ticket_channel, closer,
             except Exception:
                 pass
             try:
-                await bot.data_manager.close_ticket(ticket_channel.id, closerID, closerName)
+                await bot.data_manager.close_ticket(ticket_channel.id, modID, modName)
                 await bot.data_manager.delete_user_ticket(userID, guildID)
                 await bot.data_manager.clear_channel_links(ticket_channel.id)
                 await bot.channel_status.set_emoji(ticket_channel, None)
@@ -54,10 +54,6 @@ async def close_ticket(bot, ticket_channel, closer,
             threadID = id_list[-1]
             opener = None
             config = await bot.data_manager.get_or_load_config(guild.id)
-
-            if config is None:
-                # FIXME
-                return False
 
             if anon is None:
                 if (config["anon"] == 'true'):
@@ -97,12 +93,12 @@ async def close_ticket(bot, ticket_channel, closer,
             closeLogEmbed.add_field(name="Ticket Duration", value=duration, inline=True)
             closeLogEmbed.add_field(name="First Response Time", value=response, inline=True)
 
-            name = f"{closerName} | {closerID}"
-            url = (closer.avatar and closer.avatar.url) or closer.display_avatar.url
+            name = f"{modName} | {modID}"
+            url = (mod.avatar and mod.avatar.url) or mod.display_avatar.url
             ap = None
             if anon:
                 if (config["aps"] == 'true'):
-                    ap = await bot.data_manager.get_or_load_ap(guild.id, closerID)
+                    ap = await bot.data_manager.get_or_load_ap(guild.id, modID)
                     if ap is not None:
                         name += " (Anonymous Profile)"
                     else:
@@ -119,23 +115,9 @@ async def close_ticket(bot, ticket_channel, closer,
 
                 dm_channel = opener.dm_channel or await opener.create_dm()
                 if dm_channel:
-                    closeUserEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
-                                            color=discord.Color.red())
-                    closeUserEmbed.timestamp = datetime.now(timezone.utc)
-                    if guild.icon:
-                        closeUserEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
-                    else:
-                        closeUserEmbed.set_footer(text=guild.name)
-                    if not anon:
-                        closeUserEmbed.set_author(name=name, icon_url=url)
-                    else:
-                        if ap is not None:
-                            if ap["adj"] == 'none':
-                                    ap["adj"] = ""
-                            closeUserEmbed.set_author(name=f"{ap['adj']} {ap['noun']}", icon_url=ap["url"])
                     try:
-                        await dm_channel.send(embed=closeUserEmbed)
-                        await send_closing(bot, guild, dm_channel, ticket_channel.id, opener, closing)
+                        await send_closing(bot, guild, dm_channel, ticket_channel.id, 
+                                           mod, opener, closing, reason, anon, ap)
                     except Exception:
                         logger.warning("Failed to DM closing messages to a user")
                         pass
@@ -175,17 +157,35 @@ async def delete_channel(ticket_channel, closingMessage, deleted):
     return
 
 
-async def send_closing(bot, guild, dm_channel, channelID, user, closing_text):
+async def send_closing(bot, guild, dm_channel, channelID, mod, opener, closing_text, reason, anon, ap):
     try:
+        name = f"{mod.name} | {mod.id}"
+        url = (mod.avatar and mod.avatar.url) or mod.display_avatar.url
+        closeUserEmbed = discord.Embed(title=f"Ticket Closed", description=reason, 
+                                            color=discord.Color.red())
+        closeUserEmbed.timestamp = datetime.now(timezone.utc)
+        if guild.icon:
+            closeUserEmbed.set_footer(text=guild.name, icon_url=guild.icon.url)
+        else:
+            closeUserEmbed.set_footer(text=guild.name)
+        if not anon:
+            closeUserEmbed.set_author(name=name, icon_url=url)
+        else:
+            if ap is not None:
+                if ap["adj"] == 'none':
+                        ap["adj"] = ""
+                closeUserEmbed.set_author(name=f"{ap['adj']} {ap['noun']}", icon_url=ap["url"])
+
         if (closing_text is None or len(closing_text) <= 1):
             closing_text = ("Your ticket has been closed. Please do not reply to this message. "
                        "\n\nIf you require support again in the future, you may open a new ticket."
                        "\n\nHow did we do? Let us know below!")
         closing = closing_text.format(
-            mention=f"<@{user.id}>",
-            name=user.name,
-            id=user.id)
-    except KeyError:
+            mention=f"<@{opener.id}>",
+            name=opener.name,
+            id=opener.id)
+    except Exception as e:
+        logger.error(e)
         return
 
     closingEmbed = discord.Embed(title="Closing Message", description=closing)
@@ -197,7 +197,7 @@ async def send_closing(bot, guild, dm_channel, channelID, user, closing_text):
     closingEmbed.set_footer(text=f"{guild.name} | {channelID}", icon_url=url)
 
     view = TicketRatingView(bot=bot)
-    message = await dm_channel.send(embed=closingEmbed, view=view)
+    message = await dm_channel.send(embeds=[closeUserEmbed, closingEmbed], view=view)
     view.message = message
 
 

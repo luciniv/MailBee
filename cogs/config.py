@@ -543,6 +543,42 @@ class Config(commands.Cog):
             logger.exception(f"/anon error: {e}")
             raise BotError(f"/anon sent an error: {e}")
 
+    @commands.command(name="pingrole")
+    @checks.is_admin()
+    @checks.is_guild()
+    async def pingrole(self, ctx, *, role_ids = None):
+        try:
+            guild = ctx.guild
+            if role_ids is None:
+                await self.bot.data_manager.set_ping_roles(guild.id, [])
+                await ctx.send(embed=discord.Embed(description="✅ Cleared ping roles", 
+                                                   color=discord.Color.green()))
+                return
+
+            role_ids = role_ids.split()
+            valid_role_ids = []
+            for role_id in role_ids:
+                try:
+                    role = guild.get_role(int(role_id))
+                    if role:
+                        valid_role_ids.append(role_id)
+                    else:
+                        await ctx.send(embed=discord.Embed(description=f"❌ Role ID {role_id} not found in this server", 
+                                                           color=discord.Color.red()))
+                        return
+                except ValueError:
+                    await ctx.send(embed=discord.Embed(description=f"❌ Invalid role ID: {role_id}", 
+                                                       color=discord.Color.red()))
+                    return
+
+            await self.bot.data_manager.set_ping_roles(guild.id, valid_role_ids)
+            await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
+            await ctx.send(embed=discord.Embed(description=f"✅ Set ping role(s) to: {' '.join(f'<@&{id}>' for id in valid_role_ids)}", 
+                                               color=discord.Color.green()))
+
+        except Exception as e:
+            logger.exception(f"/pingrole error: {e}")
+            raise BotError(f"/pingrole sent an error: {e}")
 
     @app_commands.command(name="set_type", description="Set the type of a tickets category")
     @checks.is_user_app()

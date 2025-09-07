@@ -423,6 +423,7 @@ class CategorySelect(discord.ui.Select):
             
             # Handle max channels in target category
             elif len(category.channels) >= 50:
+                # FIXME use the type name from the DB instead of category name
                 errorEmbed = discord.Embed(
                     description="Thank you for reaching out to the moderation team!\n\n"
                                f"Unfortunately, tickets of type **{category.name}** have "
@@ -436,9 +437,18 @@ class CategorySelect(discord.ui.Select):
                     None)
                 if modal_template:
                     source_view = self.view
+                    
+                    ping_roles = next(
+                        (entry["pingRoles"] for entry in self.types if int(entry["typeID"]) == selected_typeID), 
+                        None)
+                    if (not ping_roles) and (self.parent_category_id is not None):
+                        ping_roles = next(
+                            (entry["pingRoles"] for entry in self.types if int(entry["categoryID"]) == self.parent_category_id), 
+                            None)
+                        
                     await send_dynamic_modal(
                         self.bot, interaction, self.guild, category, selected_typeID, selected_NSFWID, dm_channelID,
-                        modal_template, source_view)
+                        ping_roles, modal_template, source_view)
                     return
                 # Handle invalid modal template
                 else:
@@ -537,7 +547,7 @@ class BackButton(discord.ui.Button):
             view.message = message
 
 
-async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, dm_channelID, modal_template, source_view):
+async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, dm_channelID, ping_roles, modal_template, source_view):
     if not category:
         errorEmbed = discord.Embed(
             description="❌ Couldn't find ticket category in the destination server. Please contact a server admin.",
@@ -569,7 +579,7 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, 
                                         color=discord.Color.red())
 
                 # Build and send the NSFW button view
-                view = NSFWButtonView(bot, guild, category, typeID, NSFWID, dm_channelID, values, title, time_taken)
+                view = NSFWButtonView(bot, guild, category, typeID, NSFWID, dm_channelID, ping_roles, values, title, time_taken)
 
                 try:
                     message = await interaction.message.edit(embed=NSFWembed, view=view)
@@ -592,7 +602,7 @@ async def send_dynamic_modal(bot, interaction, guild, category, typeID, NSFWID, 
                 user = interaction.user
 
                 opener = TicketOpener(bot)
-                status = await opener.open_ticket(user, guild, category, typeID, values, title, time_taken, False)
+                status = await opener.open_ticket(user, guild, category, typeID, ping_roles, values, title, time_taken, False)
                 await opening_message.delete()
 
                 if not status:
@@ -648,7 +658,7 @@ class DynamicFormModal(discord.ui.Modal):
 
 
 class NSFWButtonView(TimeoutSafeView):
-    def __init__(self, bot, guild, category, typeID, NSFWID, dm_channelID, values, title, time_taken):
+    def __init__(self, bot, guild, category, typeID, NSFWID, dm_channelID, ping_roles, values, title, time_taken):
         super().__init__(timeout=None)
         self.bot = bot
         self.guild = guild
@@ -656,6 +666,7 @@ class NSFWButtonView(TimeoutSafeView):
         self.typeID = typeID
         self.NSFWID = NSFWID
         self.dm_channelID = dm_channelID
+        self.ping_roles = ping_roles
         self.values = values
         self.title = title
         self.time_taken = time_taken
@@ -691,7 +702,7 @@ class NSFWButtonView(TimeoutSafeView):
 
         opener = TicketOpener(self.bot)
         status = await opener.open_ticket(user, self.guild, self.category, self.typeID, 
-                                          self.values, self.title, self.time_taken, True)
+                                          self.ping_roles, self.values, self.title, self.time_taken, True)
         await opening_message.delete()
 
         if not status:
@@ -720,7 +731,7 @@ class NSFWButtonView(TimeoutSafeView):
 
         opener = TicketOpener(self.bot)
         status = await opener.open_ticket(user, self.guild, self.category, self.typeID, 
-                                          self.values, self.title, self.time_taken, False)
+                                          self.ping_roles, self.values, self.title, self.time_taken, False)
         await opening_message.delete()
 
         if not status:
@@ -779,7 +790,7 @@ class TicketRatingView(discord.ui.View):
             await interaction.message.edit(view=self)
 
             message = interaction.message
-            embed = message.embeds[0]
+            embed = message.embeds[1]
             footer = (embed.footer.text).split()
             channelID = footer[-1]
 
@@ -799,7 +810,7 @@ class TicketRatingView(discord.ui.View):
             await interaction.message.edit(view=self)
 
             message = interaction.message
-            embed = message.embeds[0]
+            embed = message.embeds[1]
             footer = (embed.footer.text).split()
             channelID = footer[-1]
 
@@ -834,7 +845,7 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
     async def on_submit(self, interaction: discord.Interaction):
         message = interaction.message
         user = interaction.user
-        embed = message.embeds[0]
+        embed = message.embeds[1]
         footer = (embed.footer.text).split()
         channelID = footer[-1]
         guildID = None
@@ -883,7 +894,7 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
     async def on_submit(self, interaction: discord.Interaction):
         message = interaction.message
         user = interaction.user
-        embed = message.embeds[0]
+        embed = message.embeds[1]
         footer = (embed.footer.text).split()
         channelID = footer[-1]
         guildID = None
