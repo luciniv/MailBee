@@ -181,7 +181,7 @@ class ServerSelect(discord.ui.Select):
         if config is None or config["accepting"] != "true":
             errorEmbed = discord.Embed(
                 title="Ticket Creation is Disabled",
-                description=config["accepting"],
+                description=config["accepting"] if config else "This server has not set up ticket creation yet.",
                 color=discord.Color.red())
             await interaction.channel.send(embed=errorEmbed)
 
