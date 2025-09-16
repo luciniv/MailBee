@@ -94,7 +94,7 @@ class Analytics(commands.Cog):
                                        color=discord.Color.red())
             # Check blacklist
             author = message.author
-            entry = await self.bot.data_manager.get_or_load_blacklist_entry(guildID, author.id)
+            entry = await self.bot.data_manager.get_blacklist_entry(guildID, author.id)
             if entry is not None:
                 await message.channel.send(embed=errorEmbed)
                 return
@@ -300,7 +300,7 @@ class Analytics(commands.Cog):
             await self.bot.cache.store_guild_member(guild.id, author)
 
             # Check if blacklisted
-            entry = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, userID)
+            entry = await self.bot.data_manager.get_blacklist_entry(guild.id, userID)
             if entry is not None:
                 errorEmbed.description=("❌ Ticket opener is blacklisted. `+whitelist` them before "
                                         "attempting to send a message.")
