@@ -1174,7 +1174,6 @@ class DataManager:
 
     async def get_blacklist_entry(self, guildID: int, userID: int):
         redis_key = f"blacklist:{guildID}:{userID}"
-        print("redis_key", redis_key)
         cached = await self.redis.get(redis_key)
 
         if cached:
