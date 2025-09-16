@@ -289,13 +289,12 @@ class Moderation(commands.Cog):
     async def blacklist(self, ctx: commands.Context, user: discord.User, *, reason: str):
         try:
             guild = ctx.guild
-            existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id)
+            blacklisted = await self.bot.data_manager.get_blacklist_entry(guild.id, user.id)
             resultEmbed = discord.Embed(description=f"❌ **{user.name}** ({user.id}) is already blacklisted",
                                         color=discord.Color.red())
             
-            if existing is None:
-                await self.bot.data_manager.add_blacklist_to_db(guild.id, user.id, reason, ctx.author)
-                await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id, False)
+            if blacklisted is None:
+                await self.bot.data_manager.add_blacklist_entry(guild.id, user.id, reason, ctx.author)
                 resultEmbed.description=(f"✅ **{user.name}** ({user.id}) has been blacklisted from "
                                          f"opening tickets\n**Reason:** {reason}")
                 resultEmbed.color=discord.Color.green()
@@ -378,11 +377,11 @@ class Moderation(commands.Cog):
     async def whitelist(self, ctx: commands.Context, user: discord.User):
         try:
             guild = ctx.guild
-            existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id)
+            blacklisted = await self.bot.data_manager.get_blacklist_entry(guild.id, user.id)
             resultEmbed = discord.Embed(description=f"❌ **{user.name}** ({user.id}) is not blacklisted",
                                         color=discord.Color.red())
 
-            if existing is not None:
+            if blacklisted is not None:
                 await self.bot.data_manager.delete_blacklist_entry(guild.id, user.id)
                 resultEmbed.description=f"✅ **{user.name}** ({user.id}) has been removed from the blacklist"
                 resultEmbed.color=discord.Color.green()

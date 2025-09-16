@@ -118,11 +118,15 @@ class TicketOpener:
             # Create ticket channel
             channel = await self.create_ticket_channel(guild, category, user, thread.id, NSFW_flag)
             if channel is None:
-                errorEmbed.description="❌ Unable to create ticket channel. Tickets for this server are currently full."
+                errorEmbed.description=("Thank you for reaching out to the moderation team!\n\n"
+                                       f"Unfortunately, tickets of type **{category.name}** have "
+                                        "reached maximum capacity. Please try again later for an "
+                                        "opening, we thank you in advance for your patience.",)
                 await dm_channel.send(embed=errorEmbed)
                 await thread.delete()
                 await log_message.delete()
                 return False
+            await self.bot.channel_status.set_emoji(channel, "new")
             await self.bot.cache.store_channel(channel)
 
             # Add new ticket to database + refresh tickets
@@ -220,9 +224,6 @@ class TicketOpener:
                             topic=f"Ticket channel {user.id} {threadID}")
                 except Exception:
                     return None
-            # FIXME this errors if channel doesnt exist
-            # Issue is in ticket channel not existing
-            await self.bot.channel_status.set_emoji(ticket_channel, "new")
             return ticket_channel
         
         except Exception as e:

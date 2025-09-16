@@ -219,8 +219,8 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
         return message, 'output.json', user_info
     except Exception as e:
-
-        logger.error(f"get_user_and_player_data sent an error: {e}")
+        #logger.error(f"get_user_and_player_data sent an error: {e}")
+        pass
 
 
 async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: int):
@@ -276,7 +276,8 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
 
         return values, 'output.json', user_info
     except Exception as e:
-        logger.error(f"ticket_get_user_and_player_data sent an error: {e}")
+        #logger.error(f"ticket_get_user_and_player_data sent an error: {e}")
+        pass
 
 
 async def get_priority(game_type: tuple, guildID: int, openID: int, roblox_username):
@@ -286,7 +287,8 @@ async def get_priority(game_type: tuple, guildID: int, openID: int, roblox_usern
             return values
         return None
     except Exception as e:
-        logger.error(f"get_priority sent an error: {e}")
+        #logger.error(f"get_priority sent an error: {e}")
+        pass
 
 
 async def get_roblox_info(game_type: tuple, guildID: int, openID: int):
@@ -298,5 +300,5 @@ async def get_roblox_info(game_type: tuple, guildID: int, openID: int):
             roblox_id, roblox_username = result
         return roblox_id, roblox_username
     except Exception as e:
-        logger.error(f"get_roblox_info sent an error: {e}")
+        #logger.error(f"get_roblox_info sent an error: {e}")
         return None, None

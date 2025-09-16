@@ -1172,22 +1172,24 @@ class DataManager:
         return {"userID": userID}
 
 
-    async def get_or_load_blacklist_entry(self, guildID: int, userID: int, get = True):
+    async def get_blacklist_entry(self, guildID: int, userID: int):
         redis_key = f"blacklist:{guildID}:{userID}"
-        if get:
-            cached = await self.redis.get(redis_key)
+        print("redis_key", redis_key)
+        cached = await self.redis.get(redis_key)
 
-            if cached:
-                return json.loads(cached)
+        if cached:
+            return json.loads(cached)
+        else:
             return None
+    
 
-        entry = await self.get_blacklist_from_db(guildID, userID)
-        if len(entry) < 1:
-            return None
-
-        formatted = self.format_blacklist_entry(entry[0][0])
-        await self.set_with_expiry(redis_key, json.dumps(formatted))
-        return formatted
+    async def add_blacklist_entry(self, guildID: int, userID: int, reason: str, mod):
+        # Add to DB
+        await self.add_blacklist_to_db(guildID, userID, reason, mod)
+       
+        # Add to Redis
+        redis_key = f"blacklist:{guildID}:{userID}"
+        await self.redis.set(redis_key, json.dumps({"userID": userID}))   
 
 
     async def delete_blacklist_entry(self, guildID: int, userID: int):

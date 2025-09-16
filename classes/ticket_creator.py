@@ -103,7 +103,7 @@ class ServerSelect(discord.ui.Select):
         dm_channelID = self.dm_channelID
         user = interaction.user
 
-        blacklisted = await self.bot.data_manager.get_or_load_blacklist_entry(guild.id, user.id)
+        blacklisted = await self.bot.data_manager.get_blacklist_entry(guild.id, user.id)
         if blacklisted is not None:
             errorEmbed = discord.Embed(
                 description=f"❌ You are blacklisted from opening tickets with this server.",
@@ -178,7 +178,7 @@ class ServerSelect(discord.ui.Select):
         
         # Check if guild is accepting tickets
         config = await self.bot.data_manager.get_or_load_config(guildID)
-        if config["accepting"] != "true":
+        if config is None or config["accepting"] != "true":
             errorEmbed = discord.Embed(
                 title="Ticket Creation is Disabled",
                 description=config["accepting"],
@@ -279,8 +279,8 @@ class DMCategoryButtonView(discord.ui.View):
 
             guild_id = guild.id
 
-            existing = await self.bot.data_manager.get_or_load_blacklist_entry(guild_id, user.id)
-            if existing is not None:
+            blacklisted = await self.bot.data_manager.get_blacklist_entry(guild_id, user.id)
+            if blacklisted is not None:
                 errorEmbed.description="❌ You are blacklisted from opening tickets with this server."
                 await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                 return
