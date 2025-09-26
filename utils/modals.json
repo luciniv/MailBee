@@ -1,46 +1,45 @@
 {
-    "1334213483469869139": {
-      "discord": {
-        "title": "Discord Report",
-        "fields": [
-            {
-            "label": "Report type: Phishing, DM Ads, Harassment",
-            "placeholder": "placeholder text here",
-            "style": "short",
-            "max_length": 50
-            },
-            {
-            "label": "Offender's Discord username (not nickname)",
-            "style": "short",
-            "max_length": 50
-            },
-            {
-            "label": "Briefly explain the situation.",
-            "style": "paragraph",
-            "max_length": 800
-            },
-            {
-            "label": "Link evidence (Imgur, YouTube, Medal, etc.)",
-            "style": "paragraph",
-            "max_length": 800
-            }
-        ]
+  "1334213483469869139": {
+    "discord": {
+      "title": "Discord Report",
+      "fields": [
+        {
+          "label": "Report type: Phishing, DM Ads, Harassment",
+          "placeholder": "placeholder text here",
+          "style": "short",
+          "max_length": 50
         },
-      "appeal": {
-        "title": "Ban Appeal",
-        "fields": [
-          {
-            "label": "Why were you banned?",
-            "style": "short",
-            "max_length": 100
-          },
-          {
-            "label": "Your appeal message",
-            "style": "paragraph",
-            "max_length": 500
-          }
-        ]
-      }
+        {
+          "label": "Offender's Discord username (not nickname)",
+          "style": "short",
+          "max_length": 50
+        },
+        {
+          "label": "Briefly explain the situation.",
+          "style": "paragraph",
+          "max_length": 800
+        },
+        {
+          "label": "Link evidence (Imgur, YouTube, Medal, etc.)",
+          "style": "paragraph",
+          "max_length": 800
+        }
+      ]
+    },
+    "appeal": {
+      "title": "Ban Appeal",
+      "fields": [
+        {
+          "label": "Why were you banned?",
+          "style": "short",
+          "max_length": 100
+        },
+        {
+          "label": "Your appeal message",
+          "style": "paragraph",
+          "max_length": 500
+        }
+      ]
     }
   }
-  
+}

@@ -1,56 +1,75 @@
-import discord
-import os
-import requests
-import aiohttp
-import urllib.parse
-import json
 import asyncio
-from dotenv import load_dotenv
+import json
+import os
+import urllib.parse
 from pathlib import Path
+
+import aiohttp
+import discord
+from dotenv import load_dotenv
+
+from roblox_data.decoder import CONFIG
 from utils.logger import *
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 api_key = os.getenv("API_KEY")
 
-from roblox_data.decoder import CONFIG
-HEADERS = {'x-api-key': api_key}
+
+HEADERS = {"x-api-key": api_key}
 MAX_RETRIES = 1
 
 
-async def get_roblox_username(guild_id, discord_id, api_key):
+async def get_roblox_user_data(
+    guild_id: int, discord_id: int, api_key: str
+) -> tuple[str, int] | None:
+    """Fetch Roblox username and ID linked to a Discord user via Bloxlink.
+
+    Args:
+        guild_id: The Discord guild ID.
+        discord_id: The Discord user ID.
+        api_key: API key for Bloxlink authorization.
+
+    Returns:
+        [username, roblox_id] if successful, otherwise None.
+    """
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=4)) as session:
-            roblox_id = None
+        timeout = aiohttp.ClientTimeout(total=4)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             username = None
-            # Get Roblox ID from Bloxlink API
-            bloxlink_url = f"https://api.blox.link/v4/public/guilds/{guild_id}/discord-to-roblox/{discord_id}"
+            roblox_id = None
+
+            bloxlink_url = (
+                "https://api.blox.link/v4/public/guilds/"
+                f"{guild_id}/discord-to-roblox/{discord_id}"
+            )
             headers = {"Authorization": api_key}
+
             async with session.get(bloxlink_url, headers=headers) as response:
                 if response.status != 200:
                     return None
-                
+
                 data = await response.json()
                 roblox_id = data.get("robloxID")
                 if not roblox_id:
                     return None
-                
+
                 resolved = data.get("resolved", {})
                 roblox_info = resolved.get("Roblox")
                 if roblox_info:
-                     username = roblox_info["Name"]
+                    username = roblox_info["Name"]
                 else:
-                    # Get Roblox username from Roblox API
+                    # Fallback: fetch Roblox username from Roblox API
                     roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
                     async with session.get(roblox_url) as response:
                         if response.status != 200:
                             return None
-                        
+
                         data = await response.json()
                         username = data.get("name")
-                    
-        return roblox_id, username
-            
+
+        return [username, roblox_id]
+
     except asyncio.TimeoutError:
         # logger.warning("get_roblox_username request timed out")
         return None
@@ -60,44 +79,40 @@ async def get_roblox_username(guild_id, discord_id, api_key):
         return None
 
 
-async def get_roblox_user_info(username):
+async def get_datastore_entry(
+    universe_id: int, datastore_name: str, entry_key: str, scope: str = "global"
+) -> str | None:
+    """
+    Retrieve an entry from a Roblox datastore.
+
+    Args:
+        universe_id (int): The Roblox universe ID.
+        datastore_name (str): The name of the datastore.
+        entry_key (str): The key of the entry to retrieve.
+        scope (str, optional): The datastore scope. Defaults to "global".
+
+    Returns:
+        str | None: The datastore entry content if successful,
+        otherwise None.
+    """
     try:
-        url = "https://users.roblox.com/v1/usernames/users"
+        url = (
+            "https://apis.roblox.com/datastores/v1/universes/"
+            f"{universe_id}/standard-datastores/datastore/entries/entry"
+        )
+        params = {
+            "datastoreName": datastore_name,
+            "entryKey": entry_key,
+            "scope": scope,
+        }
+        timeout = aiohttp.ClientTimeout(total=3)
 
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
-            async with session.post(url, json={"usernames": [username]}) as response:
-
-                if response.status == 200:
-                    data = await response.json()
-                    user_data = data.get('data')
-                    
-                    if user_data:
-                        return user_data[0]  # Return first result
-
-        return None
-    
-    except asyncio.TimeoutError:
-        # logger.warning("get_roblox_user_info request timed out")
-        return None
-    
-    except Exception as e:
-        # logger.error(f"get_roblox_user_info sent an error: {e}")
-        return None
-
-
-async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='global'):
-    try:
-        url = f'https://apis.roblox.com/datastores/v1/universes/{universe_id}/standard-datastores/datastore/entries/entry'
-        params = {'datastoreName': datastore_name, 'entryKey': entry_key, 'scope': scope}
-
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, params=params, headers=HEADERS) as response:
-
                 if response.status == 200:
                     return await response.text()  # Successful response
-
         return None
-    
+
     except asyncio.TimeoutError:
         # logger.warning("get_datastore_entry request timed out")
         return None
@@ -107,20 +122,28 @@ async def get_datastore_entry(universe_id, datastore_name, entry_key, scope='glo
         return None
 
 
-async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope='global'):
+async def list_ordered_data_store_entries(
+    universe_id: int, ordered_datastore: str, scope="global"
+) -> dict | None:
     try:
-        ordered_datastore = urllib.parse.quote(ordered_datastore, safe='')
-        url = f'https://apis.roblox.com/ordered-data-stores/v1/universes/{universe_id}/orderedDataStores/{ordered_datastore}/scopes/{scope}/entries'
-        params = {'max_page_size': 1, 'order_by': 'desc'}
+        ordered_datastore = urllib.parse.quote(ordered_datastore, safe="")
+        url = (
+            f"https://apis.roblox.com/ordered-data-stores/v1/universes/"
+            f"{universe_id}/orderedDataStores/{ordered_datastore}"
+            f"/scopes/{scope}/entries"
+        )
+        params = {"max_page_size": 1, "order_by": "desc"}
 
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=3)
+        ) as session:
             async with session.get(url, params=params, headers=HEADERS) as response:
 
                 if response.status == 200:
-                    return await response.json()  # Parse JSON response
+                    return await response.json()
 
         return None
-    
+
     except asyncio.TimeoutError:
         # logger.warning("list_ordered_data_store_entries request timed out")
         return None
@@ -128,24 +151,28 @@ async def list_ordered_data_store_entries(universe_id, ordered_datastore, scope=
     except Exception as e:
         # logger.error(f"list_ordered_data_store_entries sent an error: {e}")
         return None
-        
+
 
 async def get_player_data(game_type, game_id, user_id):
-    try: 
+    try:
         game_config = CONFIG[game_type]
 
-        if 'keys_prefix' in game_config:
-            key_data = await list_ordered_data_store_entries(game_id, f"{game_config['keys_prefix']}{user_id}")
+        if "keys_prefix" in game_config:
+            key_data = await list_ordered_data_store_entries(
+                game_id, f"{game_config['keys_prefix']}{user_id}"
+            )
             if key_data is None:
                 return None
-            time_key = key_data.get('entries', [{}])[0].get('value')
+            time_key = key_data.get("entries", [{}])[0].get("value")
         else:
             time_key = None
 
         user_key = f"{game_config['data_prefix']}{user_id}"
 
-        if 'data_store_name' in game_config:
-            player_data = await get_datastore_entry(game_id, game_config['data_store_name'], user_key)
+        if "data_store_name" in game_config:
+            player_data = await get_datastore_entry(
+                game_id, game_config["data_store_name"], user_key
+            )
         else:
             player_data = await get_datastore_entry(game_id, user_key, time_key)
 
@@ -153,26 +180,27 @@ async def get_player_data(game_type, game_id, user_id):
             return None
         else:
             return player_data
+
     except Exception as e:
         # logger.error(f"get_player_data sent an error: {e}")
         return None
 
 
-async def get_user_and_player_data(user: str, game_type: discord.app_commands.Choice[int]):
+async def get_user_and_player_data(
+    user: str, game_type: discord.app_commands.Choice[int]
+):
     try:
         game_config = CONFIG[game_type.name]
-        user_info = await get_roblox_user_info(user)
-        
-        if user_info is None:
-            return None, None, "User account does not exist on Roblox"
+        username, user_id = await get_roblox_user_data(user)
 
-        user_id = user_info['id']
-        username = user_info['name']
-        display_name = user_info['displayName']
+        if user_id is None:
+            return None, None, "User account does not exist on Roblox"
 
         retries = 0
         while retries < MAX_RETRIES:
-            player_data = await get_player_data(game_type.name, game_type.value, user_id)
+            player_data = await get_player_data(
+                game_type.name, game_type.value, user_id
+            )
 
             if player_data is not None:
                 retries = MAX_RETRIES
@@ -188,10 +216,9 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
 
         if player_data is None:
             return None, None, "User has no data"
-                
 
-        if 'json_decoder' in game_config:
-            result = game_config['json_decoder'](player_data)
+        if "json_decoder" in game_config:
+            result = game_config["json_decoder"](player_data)
         else:
             result = player_data
 
@@ -204,38 +231,33 @@ async def get_user_and_player_data(user: str, game_type: discord.app_commands.Ch
         time_played = None
         try:
             try:
-                robux_spent = game_config['robux_parser'](result_dict)
-                time_played = game_config['time_parser'](result_dict)
+                robux_spent = game_config["robux_parser"](result_dict)
+                time_played = game_config["time_parser"](result_dict)
             except Exception as e:
-               message = "Error retriving engagement statistics"
-               return message, 'output.json', user_info
-            
+                message = "Error retriving engagement statistics"
+                return message, "output.json", username
+
             values.append(int(robux_spent.replace(",", "")))
             values.append(time_played)
 
-            message = f'{game_type.name} - {username} - R${robux_spent} - {time_played}hrs'
+            message = (
+                f"{game_type.name} - {username} - R${robux_spent} - {time_played}hrs"
+            )
         except Exception as e:
             message = "Error retriving engagement statistics"
 
-        return message, 'output.json', user_info
+        return message, "output.json", username
     except Exception as e:
-        #logger.error(f"get_user_and_player_data sent an error: {e}")
+        # logger.error(f"get_user_and_player_data sent an error: {e}")
         pass
 
 
-async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: int):
+async def ticket_get_player_data(game_name: str, game_id: int, user_id: int):
     try:
         game_config = CONFIG[game_name]
-        user_info = await get_roblox_user_info(user)
-        
-        if user_info is None:
-            return None, None, "User account does not exist on Roblox"
-
-        user_id = user_info['id']
-        username = user_info['name']
-        display_name = user_info['displayName']
-
         retries = 0
+        invalid_data = [-1, -1]
+
         while retries < MAX_RETRIES:
             player_data = await get_player_data(game_name, game_id, user_id)
 
@@ -245,17 +267,17 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
             elif player_data is None:
                 pass
             elif "NOT_FOUND" in player_data:
-                return None, None, "User has no data"
+                return invalid_data
 
             retries += 1
             if retries < MAX_RETRIES:
                 await asyncio.sleep(3 * retries)
 
         if player_data is None:
-            return None, None, "User has no data"
-                
-        if 'json_decoder' in game_config:
-            result = game_config['json_decoder'](player_data)
+            return invalid_data
+
+        if "json_decoder" in game_config:
+            result = game_config["json_decoder"](player_data)
         else:
             result = player_data
 
@@ -265,40 +287,32 @@ async def ticket_get_user_and_player_data(user: str, game_name: str, game_id: in
         result_dict = json.loads(result)
         values = []
         try:
-            robux_spent = game_config['robux_parser'](result_dict)
-            time_played = game_config['time_parser'](result_dict)
-            
+            robux_spent = game_config["robux_parser"](result_dict)
+            time_played = game_config["time_parser"](result_dict)
+
             values.append(int(robux_spent.replace(",", "")))
             values.append(time_played)
 
-        except Exception as e:
-            values = None
-
-        return values, 'output.json', user_info
-    except Exception as e:
-        #logger.error(f"ticket_get_user_and_player_data sent an error: {e}")
-        pass
-
-
-async def get_priority(game_type: tuple, guildID: int, openID: int, roblox_username):
-    try:
-        if roblox_username:
-            values, file_path, error = await ticket_get_user_and_player_data(roblox_username, game_type[0], game_type[1])
             return values
-        return None
+
+        except Exception as e:
+            return invalid_data
+
     except Exception as e:
-        #logger.error(f"get_priority sent an error: {e}")
-        pass
+        # logger.error(f"ticket_get_player_data sent an error: {e}")
+        return invalid_data
 
 
-async def get_roblox_info(game_type: tuple, guildID: int, openID: int):
+async def get_roblox_data(game_type: tuple, guild_id: int, user_id: int) -> list | None:
     try:
-        roblox_id = None
-        roblox_username = None
-        result = await get_roblox_username(guildID, openID, game_type[2])
-        if result is not None:
-            roblox_id, roblox_username = result
-        return roblox_id, roblox_username
+        user_info = await get_roblox_user_data(guild_id, user_id, game_type[2])
+        if user_info:
+            values = await ticket_get_player_data(
+                game_type[0], game_type[1], user_info[1]
+            )
+            return user_info.extend(values)
+        else:
+            return None
     except Exception as e:
-        #logger.error(f"get_roblox_info sent an error: {e}")
-        return None, None
+        # logger.error(f"get_roblox_data sent an error: {e}")
+        return None

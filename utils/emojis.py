@@ -11,5 +11,5 @@ emoji_map = {
     "contact": ("🧡", True),
     "reimburse": ("💚", True),
     "appeal": ("💜", True),
-    "phish": ("🐟", True)
+    "phish": ("🐟", True),
 }

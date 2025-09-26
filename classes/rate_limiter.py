@@ -1,8 +1,10 @@
-import discord
 import asyncio
 import time
 from collections import deque
 from typing import Any, Awaitable, Callable, Dict
+
+import discord
+
 from utils.logger import *
 
 
@@ -23,7 +25,7 @@ class Queue:
         self.max_actions_per_sec = max_actions_per_sec
         self.user_action_cooldowns = {
             "open_ticket_button": {},  # {user_id: timestamp}
-            "dm_start": {},            # {user_id: timestamp}
+            "dm_start": {},  # {user_id: timestamp}
         }
         self.per_user_cooldown_seconds = {
             "open_ticket_button": 5,  # seconds
@@ -42,7 +44,7 @@ class Queue:
             "fetch_member": (1, 5),
             "fetch_user": (1, 5),
             "fetch_generic": (1, 5),
-            "generic": (1, 5)
+            "generic": (1, 5),
         }
 
     def _classify_route(self, func: Callable, *args, **kwargs) -> str:
@@ -83,7 +85,9 @@ class Queue:
                 now = time.time()
         self.call_timestamps.append(now)
 
-    async def call(self, func: Callable[..., Awaitable], *args, route_type: str = None, **kwargs) -> Any:
+    async def call(
+        self, func: Callable[..., Awaitable], *args, route_type: str = None, **kwargs
+    ) -> Any:
         route = route_type or self._classify_route(func, *args, **kwargs)
         bucket = self._get_bucket(route)
 
@@ -109,9 +113,13 @@ class Queue:
                         # Explicitly catch known Discord transient errors
                         if e.status in (429, 500, 502, 503, 504):
                             retry_after = getattr(e, "retry_after", 1.0)
-                            sleep_time = retry_after if e.status == 429 else (2 ** attempt)
+                            sleep_time = (
+                                retry_after if e.status == 429 else (2**attempt)
+                            )
                             self.global_reset = time.time() + sleep_time
-                            logger.warning(f"Discord HTTP {e.status}, retrying after {sleep_time:.1f}s")
+                            logger.warning(
+                                f"Discord HTTP {e.status}, retrying after {sleep_time:.1f}s"
+                            )
                             await asyncio.sleep(sleep_time)
                             continue
                         else:
@@ -122,8 +130,13 @@ class Queue:
                         logger.error(f"Non HTTP exception: {e}")
                         break
 
-                    
-    def check_user_action_cooldown(self, route: str, user_id: int):
+    def check_user_action_cooldown(
+        self, route: str, user_id: int
+    ) -> tuple[bool, float, bool]:
+        """
+        Check and update per-user action cooldowns.
+        Returns (is_rate_limited, retry_after_seconds, was_notified)
+        """
         now = time.time()
 
         cooldowns = self.user_action_cooldowns.setdefault(route, {})
@@ -135,6 +148,7 @@ class Queue:
         attempt_count = attempts.get(user_id, 0)
         was_notified = notified.get(user_id, False)
 
+        # Calculate retry after using exponential backoff
         base_delay = self.per_user_cooldown_seconds.get(route, 3)
         retry_after = (last_time + base_delay * (2 ** max(0, attempt_count - 1))) - now
 
@@ -145,7 +159,6 @@ class Queue:
         if now - last_time > base_delay * 4:
             attempt_count = 0
 
-        # Update state
         attempts[user_id] = attempt_count + 1
         timestamps[user_id] = now
         notified[user_id] = False  # reset notification status

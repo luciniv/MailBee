@@ -1,14 +1,14 @@
-import discord
 import os
-from discord.ext import commands
-from discord import app_commands
 from typing import List
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
 from classes.error_handler import *
-from classes.embeds import *
-from classes.ticket_creator import ServerSelectView
+from classes.ticket_submitter import ServerSelectView
 from utils import checks
 from utils.logger import *
-
 
 # CLIENT_ID = os.getenv("CLIENT_ID")
 # REDIRECT_URI = "http://localhost:5000/callback"
@@ -41,57 +41,54 @@ class Public(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-
     # Create ticket command
-    @commands.hybrid_command(name="create_ticket", description="Open a support ticket with a server")
+    @commands.hybrid_command(
+        name="create_ticket", description="Open a support ticket with a server"
+    )
     async def create_ticket(self, ctx):
         try:
             channel = ctx.channel
-            channelID = channel.id
+            channel_id = channel.id
             user = ctx.author
-            errorEmbed = discord.Embed(title="", description="", color=discord.Color.red())
+            errorEmbed = discord.Embed(
+                title="", description="", color=discord.Color.red()
+            )
 
             await self.bot.cache.store_user(user)
-            
+
             # Ensure command is DM only
-            if (isinstance(channel, discord.DMChannel) or not ctx.guild):
+            if isinstance(channel, discord.DMChannel) or not ctx.guild:
 
-                # Check if verified, skip for now
-                if (True):
-                    shared_guilds = []
-                    for guild in self.bot.guilds:
-                        shared_guilds.append(guild)
-    
-                    if not shared_guilds:
-                        errorEmbed.description = "❌ You do not share any servers with the bot"
-                        await ctx.send(embed=errorEmbed)
-                        return
+                shared_guilds = []
+                for guild in self.bot.guilds:
+                    shared_guilds.append(guild)
 
-                    # Send server selection embed
-                    serverEmbed = discord.Embed(title="Choose A Server",
-                                                description="Please select a server for your ticket. Use "
-                                                "the provided drop-down menu by clicking **\"Choose a server...\"**\n\n"
-                                                "If you don't see your server, wait a moment and run `/create_ticket` again.",
-                                                color=discord.Color.blue())
-                    
-                    view = ServerSelectView(self.bot, shared_guilds, channelID)
-                    message = await ctx.send(embed=serverEmbed, view=view)
-                    view.message = message
+                if not shared_guilds:
+                    errorEmbed.description = (
+                        "❌ You do not share any servers with the bot"
+                    )
+                    await ctx.send(embed=errorEmbed)
+                    return
 
-                # Not verified
-                else:
-                    verifyEmbed = discord.Embed(title="Verify Your Servers", 
-                                                description="Click the button below to verify your servers. The bot must "
-                                                "know which servers you are in before you can open a ticket.",
-                                                color=discord.Color.blue())
-                    
-                    
-                    pass
+                # Send server selection embed
+                serverEmbed = discord.Embed(
+                    title="Choose A Server",
+                    description="Please select a server for your ticket. Use "
+                    'the provided drop-down menu by clicking **"Choose a server..."**\n\n'
+                    "If you don't see your server, wait a moment and run `/create_ticket` again.",
+                    color=discord.Color.blue(),
+                )
+
+                view = ServerSelectView(self.bot, shared_guilds, channel_id)
+                message = await ctx.send(embed=serverEmbed, view=view)
+                view.message = message
+                pass
+
             else:
-                errorEmbed.description="❌ Cannot open ticket outside of bot DMs"
+                errorEmbed.description = "❌ Cannot open ticket outside of bot DMs"
                 await ctx.send(embed=errorEmbed, ephemeral=True)
                 return
-            
+
         except discord.Forbidden:
             print("dm failed, user has dms off")
             return
@@ -99,7 +96,7 @@ class Public(commands.Cog):
         except Exception as e:
             logger.exception(e)
             raise BotError(f"/create_ticket sent an error: {e}")
-    
+
 
 async def setup(bot):
     await bot.add_cog(Public(bot))

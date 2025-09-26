@@ -10,3 +10,6 @@ __pycache__/
 
 # MacOS exclusive
 .DS_Store
+
+# Instructions
+.github/

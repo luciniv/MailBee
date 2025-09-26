@@ -1,16 +1,18 @@
 import discord
+from discord import Interaction, app_commands
 from discord.ext import commands
-from discord import app_commands, Interaction
+
 from classes.error_handler import *
 
 
 # Checks if user is the owner of Mantid
 def is_owner():
     def predicate(ctx):
-        if (ctx.author.id != 429711831695753237):
+        if ctx.author.id != 429711831695753237:
             raise commands.NotOwner()
-        
+
         return True
+
     return commands.check(predicate)
 
 
@@ -23,12 +25,15 @@ def is_admin():
             user=ctx.author,
             channel=ctx.channel,
             command_name=ctx.command.name,
-            data_manager=ctx.bot.data_manager)
+            data_manager=ctx.bot.data_manager,
+        )
         if not result:
             raise AccessError(
-                    f"You do not have access to use the **{ctx.command.name}** command.",
-                    required_permission="Administrator or Bot Admin")
+                f"You do not have access to use the **{ctx.command.name}** command.",
+                required_permission="Administrator or Bot Admin",
+            )
         return result
+
     return commands.check(predicate)
 
 
@@ -39,12 +44,15 @@ def is_admin_app():
             user=interaction.user,
             channel=interaction.channel,
             command_name=interaction.command.name,
-            data_manager=interaction.client.data_manager)
+            data_manager=interaction.client.data_manager,
+        )
         if not result:
             raise AppAccessError(
-                    f"You do not have access to use the **{interaction.command.name}** command.",
-                    required_permission="Administrator or Bot Admin")
+                f"You do not have access to use the **{interaction.command.name}** command.",
+                required_permission="Administrator or Bot Admin",
+            )
         return result
+
     return app_commands.check(predicate)
 
 
@@ -52,9 +60,10 @@ async def _check_admin_logic(guild_id, user, channel, command_name, data_manager
     usrRoles = getattr(user, "roles", [])
 
     search_access = [
-        (roleID, permLevel) 
-        for gID, roleID, permLevel in data_manager.access_roles 
-        if gID == guild_id]
+        (role_id, permLevel)
+        for guild_id, role_id, permLevel in data_manager.access_roles
+        if guild_id == guild_id
+    ]
 
     if channel.permissions_for(user).administrator:
         return True
@@ -76,9 +85,12 @@ def is_user():
 
         result = await _check_access(bot, guild_id, user, channel)
         if not result:
-            raise AccessError(f"You do not have access to use the **{command_name}** command.",
-                              required_permission="Bot User")
+            raise AccessError(
+                f"You do not have access to use the **{command_name}** command.",
+                required_permission="Bot User",
+            )
         return result
+
     return commands.check(predicate)
 
 
@@ -92,9 +104,12 @@ def is_user_app():
 
         result = await _check_access(bot, guild_id, user, channel)
         if not result:
-            raise AppAccessError(f"You do not have access to use the **{command_name}** command.",
-                                 required_permission="Bot User")
+            raise AppAccessError(
+                f"You do not have access to use the **{command_name}** command.",
+                required_permission="Bot User",
+            )
         return result
+
     return app_commands.check(predicate)
 
 
@@ -102,9 +117,7 @@ async def _check_access(bot, guild_id, user, channel):
     data_manager = bot.data_manager
     user_roles = user.roles
 
-    search_access = [
-        tup[1] for tup in data_manager.access_roles
-        if tup[0] == guild_id]
+    search_access = [tup[1] for tup in data_manager.access_roles if tup[0] == guild_id]
 
     if channel.permissions_for(user).administrator:
         return True
@@ -120,11 +133,13 @@ def is_guild():
     async def predicate(ctx):
         if ctx.guild is not None:
             return True
-        raise commands.CheckFailure("To reply to a ticket, type a message in DMs here. "
-                      "Any messages sent will be forwarded to server staff. If you want to open "
-                      "a new ticket, use `/create_ticket`.\n\n**Note:** If you can't reply and are "
-                      "stuck seeing the \"Commands\" button on mobile, tap the chat icon to open the "
-                      "message box.")  
+        raise commands.CheckFailure(
+            "To reply to a ticket, type a message in DMs here. "
+            "Any messages sent will be forwarded to server staff. If you want to open "
+            "a new ticket, use `/create_ticket`.\n\n**Note:** If you can't reply and are "
+            'stuck seeing the "Commands" button on mobile, tap the chat icon to open the '
+            "message box."
+        )
 
     return commands.check(predicate)
 
@@ -133,11 +148,14 @@ def is_guild_app():
     async def predicate(interaction: Interaction):
         if interaction.guild is not None:
             return True
-        raise app_commands.CheckFailure("To reply to a ticket, type a message in DMs here. "
-                      "Any messages sent will be forwarded to server staff. If you want to open "
-                      "a new ticket, use `/create_ticket`.\n\n**Note:** If you can't reply and are "
-                      "stuck seeing the \"Commands\" button on mobile, tap the chat icon to open the "
-                      "message box.")
+        raise app_commands.CheckFailure(
+            "To reply to a ticket, type a message in DMs here. "
+            "Any messages sent will be forwarded to server staff. If you want to open "
+            "a new ticket, use `/create_ticket`.\n\n**Note:** If you can't reply and are "
+            'stuck seeing the "Commands" button on mobile, tap the chat icon to open the '
+            "message box."
+        )
+
     return app_commands.check(predicate)
 
 
