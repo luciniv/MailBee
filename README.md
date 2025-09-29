@@ -3,8 +3,10 @@
 ## What is this?
 MailBee is a Python Discord bot built using the Discord.py library. At its core, MailBee is a customer-support ticketing application, allowing members of Discord servers to communicate with server staff. Tickets are created between a member's Direct Messages and a channel within a server, ensuring complete privacy on both ends. 
 
-### Before you continue...
+## Status
 MailBee is still in development! This repository contains MailBee's public-facing code, which may be modified significantly as future updates roll out. You can expect core database, caching, and Discord gateway logic to remain consistent. (Database modifications can be viewed via `/setup/schema.sql`).
+
+Because MailBee is designed with moderation teams in mind, the system often receives updates catering to the needs of the individuals using the system. For the forseeable future, MailBee will not reach a finalized development state.
 
 ## Demos
 Users can open a ticket in their Direct Messages with MailBee. The `/create_ticket` command starts the process. 
@@ -13,9 +15,14 @@ Users can open a ticket in their Direct Messages with MailBee. The `/create_tick
 Staff are able to view the form submissions for tickets as well as any extra messages sent from the user. The `/snip` commands enable quick sending of pre-canned ticket responses, which are also searchable.
 ![Replying to a ticket](demo/images/ticket_reply.gif)
 
+## Tech stack
+- **Core bot:** Python, Discord.py library
+- **Database:** MySQL 8
+- **Caching:** Valkey (Redis)
+- **Hosting:** VPS (DigitalOcean is a great option for this scale of bot)
 
 ## Self-hosting
-**NOTE:** MailBee uses a MySQL 8 Database and a Valkey 8 cache. 
+**NOTE:** 
 - MySQL 8 requires SQL compatibility (e.g. PostgreSQL, MariaDB)
 - Valkey is largely equivalent to Redis.
 
