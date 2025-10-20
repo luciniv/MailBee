@@ -40,21 +40,25 @@ class ChannelStatus:
             logger.exception(f"Error shutting down workers: {e}")
 
     async def _collect_channel_updates(self):
-        now = int(time.time())
-        channels_to_update = []
+        try:
+            now = int(time.time())
+            channels_to_update = []
+            print("Pending updates:", self.pending_updates)
+            for channel_id, new_name in list(self.pending_updates.items()):
+                last_update_time = self.last_update_times.get(channel_id, None)
 
-        for channel_id, new_name in list(self.pending_updates.items()):
-            last_update_time = self.last_update_times.get(channel_id, None)
+                if not last_update_time:
+                    if new_name.startswith((emojis.emoji_map.get("new"))[0]):
+                        last_update_time = now - self.cooldown
+                    else:
+                        last_update_time = now
+                        self.last_update_times[channel_id] = now
 
-            if not last_update_time:
-                if new_name.startswith((emojis.emoji_map.get("new"))[0]):
-                    last_update_time = now - self.cooldown
-                else:
-                    last_update_time = now
-                    self.last_update_times[channel_id] = now
-
-            if (now - last_update_time) >= self.cooldown:
-                channels_to_update.append((channel_id, new_name))
+                if (now - last_update_time) >= self.cooldown:
+                    channels_to_update.append((channel_id, new_name))
+        except Exception as e:
+            logger.exception(f"Error collecting channel updates: {e}")
+            return []
 
     async def _apply_channel_updates(self, channels_to_update):
         for channel_id, new_name in channels_to_update:
@@ -94,11 +98,14 @@ class ChannelStatus:
     async def channel_status_worker(self):
         while True:
             try:
+                print("Channel status worker tick")
                 await asyncio.sleep(20)
 
                 channels_to_update = await self._collect_channel_updates()
+                print("Channels to update:", channels_to_update)
                 if channels_to_update:
                     await self._apply_channel_updates(channels_to_update)
+                    print("Applied channel updates")
 
             except Exception as e:
                 logger.exception(f"Channel worker sent an error: {e}")
@@ -106,12 +113,12 @@ class ChannelStatus:
     async def _collect_expired_timers(self):
         now = int(time.time())
         expired_timers = []
-
+        print("All timers:", self.timers.items())
         for channel_id, fields in self.timers.items():
             end_time, mod_id, opener_id, reason = fields
             if now >= int(end_time):
                 expired_timers.append((channel_id, mod_id, opener_id, reason))
-
+        print("Expired timers:", expired_timers)
         return expired_timers
 
     # Timer worker, handles scheduled name changes
@@ -215,7 +222,9 @@ class ChannelStatus:
                         pass
 
             # Queue the update
+            print("Queueing update:", channel.id, new_name)
             self.pending_updates[channel.id] = new_name
+            print("Pending updates now:", self.pending_updates)
             return True
 
         except Exception as e:
@@ -257,7 +266,7 @@ class ChannelStatus:
                 new_name = f"{selected_emoji}{(channel.name)[1:]}"
             else:
                 new_name = f"{selected_emoji}{channel.name}"
-
+        print("New name made is:", new_name)
         return self.queue_update(channel, new_name, manual)
 
     # Check if the input is a valid Unicode emoji

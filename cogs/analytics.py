@@ -839,23 +839,27 @@ class Analytics(commands.Cog):
             priority_values = roblox_data[2:] if roblox_data else []
 
             query = f"""
-                INSERT IGNORE INTO tickets VALUES
-                ({message.id},
-                {guild.id},
-                {this_channel_id},
-                '{format_time}',
-                NULL,
-                {open_id},
-                NULL,
-                NULL,
-                'open',
-                '{status}',
-                'false',
-                1,
-                {priority_values[0] if priority_values else -1},
-                {priority_values[1] if priority_values else -1},);
+                INSERT IGNORE INTO tickets (
+                messageID, guildID, channelID, dateOpen, openByID, status, 
+                flag, overflow, type, openerRobux, openerHours)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
-            await self.bot.data_manager.execute_query(query, False)
+
+            values = (
+                message.id,
+                guild.id,
+                this_channel_id,
+                f"{format_time}",
+                open_id,
+                "open",
+                f"{status}",
+                "false",
+                1,
+                priority_values[0] if priority_values else -1,
+                priority_values[1] if priority_values else -1,
+            )
+
+            await self.bot.data_manager.execute_query(query, False, values)
             await message.add_reaction(emojis.mantis)
 
             if status == "good":
@@ -887,8 +891,8 @@ class Analytics(commands.Cog):
                 close_id = self.bot.data_manager.mod_ids.get(closeName, None)
 
                 query = f"""
-                    SELECT message_id FROM tickets WHERE
-                    (guild_id = {guild.id}) AND
+                    SELECT messageID FROM tickets WHERE
+                    (guildID = {guild.id}) AND
                     (openByID = {open_id}) AND
                     (status = 'open')
                     ORDER BY dateOpen Asc;
@@ -943,7 +947,7 @@ class Analytics(commands.Cog):
                     dateClose = '{format_time}',
                     closeByID = {close_id},
                     closeByUN = '{closeName}',
-                    status = 'closed' WHERE (message_id = {modmail_message_id});
+                    status = 'closed' WHERE (messageID = {modmail_message_id});
                     """
                 await self.bot.data_manager.execute_query(query, False)
 

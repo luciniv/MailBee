@@ -131,14 +131,35 @@ async def export_ticket_messages(channel: discord.TextChannel):
 
 
 async def convert_mentions(bot, text: str, guild: discord.Guild):
-    async def replace_mention(match):
+    import re
+
+
+import discord
+
+
+async def convert_mentions(bot, text: str, guild: discord.Guild):
+    """
+    Converts <#channel_id> mentions into clickable Discord links for embeds
+    """
+    pattern = re.compile(r"<#(\d+)>")
+    result = ""
+    last_end = 0
+
+    for match in pattern.finditer(text):
+        result += text[last_end : match.start()]
         channel_id = int(match.group(1))
         channel = await bot.cache.get_channel(channel_id)
         if channel:
-            return f"https://discord.com/channels/{guild.id}/{channel_id}"
-        return match.group(0)
+            # Replace with link to the channel in this guild
+            result += f"https://discord.com/channels/{guild.id}/{channel_id}"
+        else:
+            # Leave it unchanged if the channel doesn't exist
+            result += match.group(0)
 
-    return re.sub(r"<#(\d+)>", replace_mention, text)
+        last_end = match.end()
+
+    result += text[last_end:]
+    return result
 
 
 async def verify_text(bot, guild: discord.Guild, text: str, limit: int = 3000):
