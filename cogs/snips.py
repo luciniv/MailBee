@@ -147,9 +147,7 @@ class Snips(commands.Cog):
             abbrev, summary, author, content, date = self._format_snip_content(
                 full_snip
             )
-            snip_embed = self._format_snip_embed(
-                self, abbrev, summary, author, content, date
-            )
+            snip_embed = self._format_snip_embed(abbrev, summary, author, content, date)
             await channel.send(embed=snip_embed)
 
         except Exception as e:
@@ -301,9 +299,7 @@ class Snips(commands.Cog):
                 return
 
             abbrev, summary, author, content, date = self._format_snip_content(entry)
-            snip_embed = self._format_snip_embed(
-                self, abbrev, summary, author, content, date
-            )
+            snip_embed = self._format_snip_embed(abbrev, summary, author, content, date)
             await interaction.followup.send(embed=snip_embed)
 
         except Exception as e:
