@@ -852,8 +852,8 @@ class Analytics(commands.Cog):
                 '{status}',
                 'false',
                 1,
-                {priority_values[0]},
-                {priority_values[1]});
+                {priority_values[0] if priority_values else -1},
+                {priority_values[1] if priority_values else -1},);
                 """
             await self.bot.data_manager.execute_query(query, False)
             await message.add_reaction(emojis.mantis)
