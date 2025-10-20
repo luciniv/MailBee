@@ -13,3 +13,6 @@ __pycache__/
 
 # Instructions
 .github/
+
+# Log files
+*.log
