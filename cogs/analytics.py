@@ -63,8 +63,12 @@ class Analytics(commands.Cog):
             # Route message to open ticket
             elif len(tickets) == 1:
                 ticket = tickets[0]
-                guild_id = ticket["guild_id"]
-                channel_id = ticket["channel_id"]
+                # Fix for old tickets format
+                guild_id = ticket.get("guildID", None)
+                channel_id = ticket.get("channelID", None)
+                if not guild_id:
+                    guild_id = ticket.get("guild_id", None)
+                    channel_id = ticket.get("channel_id", None)
                 await self.route_to_server(message, guild_id, channel_id)
 
             # Selection menu for where to route ticket message
