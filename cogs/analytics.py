@@ -859,7 +859,7 @@ class Analytics(commands.Cog):
                 priority_values[1] if priority_values else -1,
             )
 
-            await self.bot.data_manager.execute_query(query, False, values)
+            await self.bot.data_manager.execute_query(query, False, False, values)
             await message.add_reaction(emojis.mantis)
 
             if status == "good":
