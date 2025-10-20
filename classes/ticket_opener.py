@@ -9,20 +9,9 @@ import discord
 from discord import Embed
 from discord.permissions import PermissionOverwrite
 
-from roblox_data.helpers import *
+from classes.helpers import Ticket
+from roblox_data.roblox import *
 from utils.logger import *
-
-SERVER_TO_GAME = {
-    714722808009064492: ("Creatures of Sonaria", 1831550657, os.getenv("COS_KEY")),
-    346515443869286410: ("Dragon Adventures", 1235188606, os.getenv("DA_KEY")),
-    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY")),
-    549701425958223895: ("World // Zero", 0, os.getenv("WZ_KEY")),
-    1007432760027250740: ("Drive World", 0, os.getenv("DW_KEY")),
-    1301233303734718474: ("Dungeon Heroes", 0, os.getenv("DH_KEY")),
-}
-"""
-Maps server IDs to (game name, universe ID, API key env variable)
-"""
 
 
 async def get_overwrites(guild, roles) -> Dict:
@@ -60,19 +49,21 @@ class TicketOpener:
     def __init__(self, bot):
         self.bot = bot
 
-    async def open_ticket(
-        self,
-        user,
-        guild,
-        category,
-        type_id,
-        ping_roles,
-        values,
-        title,
-        time_taken,
-        NSFW,
-    ):
+    async def open_ticket(self, ticket: Ticket):
         try:
+            print(ticket)
+            user_id = ticket.user_id
+            guild_id = ticket.guild_id
+            category_id = ticket.category_id
+            dm_message_id = ticket.dm_message_id
+
+            user = await self.bot.cache.get_user(user_id)
+            guild = self.bot.get_guild(guild_id)
+            category = guild.get_channel(category_id)
+
+            type_name = ticket.type_name
+            nsfw = ticket.nsfw
+
             error_embed = discord.Embed(description="", color=discord.Color.red())
 
             # Generate ticket ID
@@ -81,8 +72,8 @@ class TicketOpener:
             if dm_channel is None:
                 return
 
-            # Get priority values
-            roblox_task = asyncio.create_task(self.get_roblox_ticket_data(guild, user))
+            # Get info message
+            info_message = await self.bot.cache.get_message(dm_channel, dm_message_id)
 
             # Create log embed
             log_channel = None
@@ -94,7 +85,7 @@ class TicketOpener:
                 log_channel = await self.bot.cache.get_channel(log_id)
 
                 log_embed = discord.Embed(
-                    title=f"{'🔞' if NSFW else ''} New \"{title}\" Ticket",
+                    title=f"{'🔞' if nsfw else ''} New \"{type_name}\" Ticket",
                     description="",
                     color=discord.Color.green(),
                 )
@@ -147,16 +138,14 @@ class TicketOpener:
                 await dm_channel.send(embed=error_embed)
                 return False
 
-            ticket_data, priority_values = await roblox_task
-
             # Create ticket channel
             channel = await self.create_ticket_channel(
-                guild, category, user, thread.id, NSFW
+                guild, category, user, thread.id, nsfw
             )
             if channel is None:
                 error_embed.description = (
                     "Thank you for reaching out to the moderation team!\n\n"
-                    f"Unfortunately, tickets of type **{category.name}** have "
+                    f"Unfortunately, tickets of type **{type_name}** have "
                     "reached maximum capacity. Please try again later for an "
                     "opening, we thank you in advance for your patience.",
                 )
@@ -164,42 +153,33 @@ class TicketOpener:
                 await thread.delete()
                 await log_message.delete()
                 return False
-            await self.bot.channel_status.set_emoji(channel, "new")
             await self.bot.cache.store_channel(channel)
 
             # Add new ticket to database + refresh tickets
             await self.bot.data_manager.create_ticket(
-                guild.id,
-                ticket_id,
-                channel.id,
-                user.id,
-                thread.id,
-                type_id,
-                time_taken,
-                priority_values[0],
-                priority_values[1],
+                ticket, channel.id, ticket_id, thread.id
             )
             await self.bot.data_manager.get_or_load_user_tickets(user.id, False)
 
             # Task for sending server info
             server = asyncio.create_task(
                 self.handle_server_embeds(
+                    ticket,
                     guild,
                     channel,
                     thread,
                     user,
-                    ping_roles,
-                    values,
-                    title,
-                    time_taken,
-                    ticket_data,
                     ticket_id,
                 )
             )
             # Task for sending dm info
             dm = asyncio.create_task(
-                self.handle_dm_embeds(guild, dm_channel, user, values, title)
+                self.handle_dm_embeds(guild, dm_channel, user, ticket.data, type_name)
             )
+
+            # Delete info message
+            if info_message:
+                await info_message.delete()
 
             # Finish log embed
             log_embed.add_field(
@@ -213,36 +193,12 @@ class TicketOpener:
         except Exception as e:
             logger.exception("ticket_opener sent an exception:", e)
 
-    async def get_roblox_ticket_data(self, guild, user):
-        username = "Username not found"
-        user_id = "ID not found"
-        robux_spent = "No data found"
-        time_played = "No data found"
-
-        game_type = SERVER_TO_GAME.get(guild.id, None)
-        roblox_data = None
-
-        if game_type:
-            roblox_data = await get_roblox_data(game_type, guild.id, user.id)
-            if roblox_data:
-                username, user_id = roblox_data[:2]
-
-                if roblox_data[2] != -1:
-                    robux_spent = roblox_data[2]
-                if roblox_data[3] != -1:
-                    time_played = roblox_data[3]
-
-        ticket_data = [username, user_id, robux_spent, time_played]
-        priority = roblox_data[2:] if roblox_data else [-1, -1]
-
-        return ticket_data, priority
-
     async def create_ticket_channel(self, guild, category, user, threadID, NSFW):
         try:
             channel_name = re.sub(r"[./]", "", user.name.lower())
             try:
                 ticket_channel = await guild.create_text_channel(
-                    name=f"{'🔞' if NSFW else ''}{channel_name}",
+                    name=f"{'🆕🔞' if NSFW else '🆕'}{channel_name}",
                     nsfw=NSFW,
                     category=category,
                     overwrites=category.overwrites,
@@ -267,18 +223,9 @@ class TicketOpener:
             return None
 
     async def handle_server_embeds(
-        self,
-        guild,
-        channel,
-        thread,
-        user,
-        ping_roles,
-        values,
-        title,
-        time_taken,
-        roblox_data,
-        ticket_id,
+        self, ticket, guild, channel, thread, user, ticket_id
     ):
+
         member = await self.bot.cache.get_guild_member(guild, user.id)
 
         if member is None:
@@ -297,7 +244,7 @@ class TicketOpener:
             count = 0
 
         ticket_embed = discord.Embed(
-            title=f'New "{title}" Ticket [ID {ticket_id}]',
+            title=f'New "{ticket.type_name}" Ticket [ID {ticket_id}]',
             description="To reply, send a message in this channel prefixed with `+`. "
             "Any other messages will send as a comment (not visible to the ticket opener). "
             "To use commands, prefix with `+` or type `/` and select from the displayed "
@@ -346,40 +293,48 @@ class TicketOpener:
                 value=f"<t:{int(user.created_at.timestamp())}:R>",
                 inline=True,
             )
+            roblox_username = (
+                ticket.roblox_username if ticket.roblox_username else "N/A"
+            )
+            roblox_id = ticket.roblox_id if ticket.roblox_id != -1 else "N/A"
+            robux_spent = ticket.robux_spent if ticket.robux_spent != -1 else "N/A"
+            hours_played = ticket.hours_played if ticket.hours_played != -1 else "N/A"
+
             ticket_embed.add_field(name="", value="", inline=False)
             ticket_embed.add_field(
-                name="Roblox Username", value=roblox_data[1], inline=True
+                name="Roblox Username", value=roblox_username, inline=True
             )
-            ticket_embed.add_field(name="Roblox ID", value=roblox_data[0], inline=True)
+            ticket_embed.add_field(name="Roblox ID", value=roblox_id, inline=True)
             ticket_embed.add_field(name="", value="", inline=False)
-            ticket_embed.add_field(
-                name="Robux Spent", value=roblox_data[2], inline=True
-            )
-            ticket_embed.add_field(
-                name="Hours Ingame", value=roblox_data[3], inline=True
-            )
+            ticket_embed.add_field(name="Robux Spent", value=robux_spent, inline=True)
+            ticket_embed.add_field(name="Hours Ingame", value=hours_played, inline=True)
+
         # Member-nonspecific info
         ticket_embed.add_field(name="", value="", inline=False)
         ticket_embed.add_field(
-            name="Time Taken on Form", value=f"`{time_taken}` seconds", inline=True
+            name="Time Taken on Form",
+            value=f"`{ticket.time_taken}` seconds",
+            inline=True,
         )
         ticket_embed.add_field(name="Prior Tickets", value=count, inline=True)
 
-        submission_embed = await self.create_submission_embed(None, user, values, title)
+        submission_embed = await self.create_submission_embed(
+            None, user, ticket.data, ticket.type_name
+        )
 
         pings = None
-        if ping_roles is not None:
-            pings = " ".join([f"<@&{role}>" for role in ping_roles])
+        if ticket.ping_roles:
+            pings = " ".join([f"<@&{role}>" for role in ticket.ping_roles])
 
         await channel.send(pings, embeds=[ticket_embed, submission_embed])
         await thread.send(embeds=[ticket_embed, submission_embed])
 
-    async def handle_dm_embeds(self, guild, dm_channel, user, values, title):
+    async def handle_dm_embeds(self, guild, dm_channel, user, values, type_name):
 
         config = await self.bot.data_manager.get_or_load_config(guild.id)
 
         dm_embed = discord.Embed(
-            title=f'New "{title}" Ticket',
+            title=f'New "{type_name}" Ticket',
             description=f"You have opened a new ticket with {guild.name}\n\n"
             f"Send a message in this DM to speak to "
             f"the server's staff team. Run `/create_ticket` "
@@ -424,7 +379,7 @@ class TicketOpener:
                 greeting_embed.set_footer(text=guild.name)
 
         submission_embed = await self.create_submission_embed(
-            guild, None, values, title
+            guild, None, values, type_name
         )
 
         info_embed = discord.Embed(
@@ -443,9 +398,9 @@ class TicketOpener:
         else:
             await dm_channel.send(embeds=[dm_embed, submission_embed, info_embed])
 
-    async def create_submission_embed(self, guild, member, values, title):
+    async def create_submission_embed(self, guild, member, values, type_name):
         submission_embed = discord.Embed(
-            title=f'"{title}" Form Submission', color=discord.Color.green()
+            title=f'"{type_name}" Form Submission', color=discord.Color.green()
         )
         submission_embed.timestamp = datetime.now(timezone.utc)
 

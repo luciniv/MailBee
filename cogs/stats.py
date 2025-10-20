@@ -6,7 +6,9 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Greedy
 
+from classes.embeds import Embeds
 from classes.error_handler import *
+from classes.helpers import *
 from classes.paginator import Paginator
 from utils import checks, csv_write, queries
 from utils.logger import *
@@ -200,9 +202,6 @@ class Stats(commands.Cog):
             await self.bot.data_manager.flush_messages()
 
             pages = []
-            count = 0
-            limit = 0
-
             type_name = type.name
             type_value = type.value
             time_name = timeframe.name
@@ -210,54 +209,42 @@ class Stats(commands.Cog):
             guild = interaction.guild
             guild_id = guild.id
 
-            statsEmbed = discord.Embed(
-                title=f"Leaderboard {time_name}",
-                description=f"{type_name}",
-                color=discord.Color.green(),
-            )
-            statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-            statsEmbed.set_footer(text="")
-
             query = queries.leaderboard_queries(type_value, guild_id, time_value)
             result = await self.bot.data_manager.execute_query(query)
 
             if result is not None:  # Go ahead to build embed
                 if len(result) == 0:
+                    statsEmbed = Embeds.success(
+                        title=f"Leaderboard {time_name}",
+                        description=f"{type_name}",
+                    )
+                    statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
                     statsEmbed.add_field(name="No data found", value="", inline=False)
                     await interaction.followup.send(embed=statsEmbed)
                     return
 
                 else:
                     final_result = result
-                    # Clean out servers this bot isn't in FIXME not a huge fan of this setup
                     if type_value in ("open", "duration", "response"):
                         final_result = []
                         for entry in result:
                             if self.bot.get_guild(entry[0]) is not None:
                                 final_result.append(entry)
 
-                    page_counts = Paginator.build_subsections(len(final_result))
-                    for page_count in page_counts:
-                        limit += page_count
-                        if count != 0:
-                            statsEmbed = discord.Embed(
-                                title=f"Leaderboard {time_name}",
-                                description=f"{type_name}",
-                                color=discord.Color.green(),
-                            )
-                            statsEmbed.set_author(
-                                name=guild.name, icon_url=guild.icon.url
-                            )
-                            statsEmbed.set_footer(text="")
+                    for i in range(0, len(final_result), 10):
+                        chunk = final_result[i : i + 10]
+                        statsEmbed = Embeds.success(
+                            title=f"Leaderboard {time_name}",
+                            description=f"{type_name}",
+                        )
+                        statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
 
-                        while count < limit:
-                            row = final_result[count]
-
+                        for index, row in enumerate(chunk, start=i + 1):
                             if type_value == "open":
                                 if not (self.bot.get_guild(row[0]) is None):
                                     statsEmbed.add_field(
                                         name="",
-                                        value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+                                        value=f"{index}) **{(self.bot.get_guild(row[0])).name}**"
                                         f" - **{row[1]}** ticket(s)",
                                         inline=False,
                                     )
@@ -266,7 +253,7 @@ class Stats(commands.Cog):
                                 if not (self.bot.get_guild(row[0]) is None):
                                     statsEmbed.add_field(
                                         name="",
-                                        value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+                                        value=f"{index}) **{(self.bot.get_guild(row[0])).name}**"
                                         f" - **{queries.format_time(row[1])}**",
                                         inline=False,
                                     )
@@ -275,7 +262,7 @@ class Stats(commands.Cog):
                                 if not (self.bot.get_guild(row[0]) is None):
                                     statsEmbed.add_field(
                                         name="",
-                                        value=f"{count + 1}) **{(self.bot.get_guild(row[0])).name}**"
+                                        value=f"{index}) **{(self.bot.get_guild(row[0])).name}**"
                                         f" - **{queries.format_time(row[1])}**",
                                         inline=False,
                                     )
@@ -283,25 +270,19 @@ class Stats(commands.Cog):
                             elif type_value == "closed":
                                 statsEmbed.add_field(
                                     name="",
-                                    value=f"{count + 1}) <@{row[0]}> - **{row[1]}** ticket(s)",
+                                    value=f"{index}) <@{row[0]}> - **{row[1]}** ticket(s)",
                                     inline=False,
                                 )
 
                             elif type_value == "sent":
                                 statsEmbed.add_field(
                                     name="",
-                                    value=f"{count + 1}) <@{row[0]}> - **{row[1]}** message(s)",
+                                    value=f"{index}) <@{row[0]}> - **{row[1]}** message(s)",
                                     inline=False,
                                 )
-                            count += 1
                         pages.append(statsEmbed)
 
-            for page in range(len(pages)):
-                pages[page].set_footer(
-                    text=f"Use the buttons below to navigate (Page {page + 1}/{len(pages)})"
-                )
-
-            # Create an instance of the pagination view
+            pages = add_footers(pages)
             view = Paginator(pages)
             view.message = await interaction.followup.send(embed=pages[0], view=view)
 

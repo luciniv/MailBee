@@ -30,11 +30,11 @@ class ChannelStatus:
         except Exception as e:
             logger.error(f"Error starting workers: {e}")
 
-    async def shutdown(self):
+    async def stop_worker(self):
         try:
             self.channel_status_worker_task.cancel()
             self.timer_worker_task.cancel()
-            logger.success("Workers shut down")
+            logger.success("Channel workers shut down")
 
         except Exception as e:
             logger.exception(f"Error shutting down workers: {e}")
@@ -228,31 +228,20 @@ class ChannelStatus:
         channel: discord.TextChannel,
         emoji_str: str,
         manual: bool = False,
-        nsfw: bool = None,
+        make_nsfw: bool = None,
     ) -> bool:
         new_name = ""
-        if nsfw is not None:
+        if make_nsfw is not None:
             current_name = self.pending_updates.get(channel.id, channel.name)
 
-            # nsfw is True, make name nsfw
-            if nsfw:
-                if any(
-                    (current_name).startswith(emoji)
-                    for emoji, permanent in emojis.emoji_map.values()
-                ):
-                    new_name = (
-                        f"{(current_name)[0]}"
-                        f"{(emojis.emoji_map.get('nsfw'))[0]}"
-                        f"{(current_name)[1:]}"
-                    )
-
-            # nsfw is false, make name non-nsfw
-            elif not nsfw:
-                if any(
-                    (current_name).startswith(emoji)
-                    for emoji, permanent in emojis.emoji_map.values()
-                ):
-                    new_name = f"{(current_name)[0]}{(current_name)[2:]}"
+            if make_nsfw:
+                new_name = (
+                    f"{(current_name)[0]}"
+                    f"{(emojis.emoji_map.get('nsfw'))[0]}"
+                    f"{(current_name)[1:]}"
+                )
+            elif not make_nsfw:
+                new_name = f"{(current_name)[0]}{(current_name)[2:]}"
 
         else:
             if emoji_str is None:
@@ -265,17 +254,9 @@ class ChannelStatus:
             if (channel.name)[0] in emoji.EMOJI_DATA and (
                 not channel.name.startswith((emojis.emoji_map.get("nsfw"))[0])
             ):
-                new_name = (
-                    f"{selected_emoji}{(channel.name)[1:]}"
-                    if selected_emoji
-                    else f"{emoji_str}{(channel.name)[1:]}"
-                )
+                new_name = f"{selected_emoji}{(channel.name)[1:]}"
             else:
-                new_name = (
-                    f"{selected_emoji}{channel.name}"
-                    if selected_emoji
-                    else f"{emoji_str}{channel.name}"
-                )
+                new_name = f"{selected_emoji}{channel.name}"
 
         return self.queue_update(channel, new_name, manual)
 

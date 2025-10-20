@@ -20,7 +20,7 @@ def is_owner():
 # Checks if user has Admin permissions for that channel or their ID is set as bot admin in Mantid's permissions cache
 def is_admin():
     async def predicate(ctx):
-        result = await _check_admin_logic(
+        result = await _check_is_admin(
             guild_id=ctx.guild.id,
             user=ctx.author,
             channel=ctx.channel,
@@ -39,7 +39,7 @@ def is_admin():
 
 def is_admin_app():
     async def predicate(interaction: Interaction):
-        result = await _check_admin_logic(
+        result = await _check_is_admin(
             guild_id=interaction.guild.id,
             user=interaction.user,
             channel=interaction.channel,
@@ -56,7 +56,7 @@ def is_admin_app():
     return app_commands.check(predicate)
 
 
-async def _check_admin_logic(guild_id, user, channel, command_name, data_manager):
+async def _check_is_admin(guild_id, user, channel, command_name, data_manager):
     usrRoles = getattr(user, "roles", [])
 
     search_access = [
@@ -83,7 +83,7 @@ def is_user():
         channel = ctx.channel
         command_name = ctx.command.name
 
-        result = await _check_access(bot, guild_id, user, channel)
+        result = await _check_is_user(bot, guild_id, user, channel)
         if not result:
             raise AccessError(
                 f"You do not have access to use the **{command_name}** command.",
@@ -102,7 +102,7 @@ def is_user_app():
         channel = interaction.channel
         command_name = interaction.command.name
 
-        result = await _check_access(bot, guild_id, user, channel)
+        result = await _check_is_user(bot, guild_id, user, channel)
         if not result:
             raise AppAccessError(
                 f"You do not have access to use the **{command_name}** command.",
@@ -113,7 +113,7 @@ def is_user_app():
     return app_commands.check(predicate)
 
 
-async def _check_access(bot, guild_id, user, channel):
+async def _check_is_user(bot, guild_id, user, channel):
     data_manager = bot.data_manager
     user_roles = user.roles
 
@@ -126,6 +126,37 @@ async def _check_access(bot, guild_id, user, channel):
         if role.id in search_access:
             return True
 
+    return False
+
+
+def is_ticket():
+    async def predicate(ctx):
+        channel = ctx.channel
+
+        result = await _check_is_ticket(channel)
+        if not result:
+            raise commands.CheckFailure("This command must be run in a ticket channel.")
+        return result
+
+    return commands.check(predicate)
+
+
+def is_ticket_app():
+    async def predicate(interaction: Interaction):
+        channel = interaction.channel
+
+        result = await _check_is_ticket(channel)
+        if not result:
+            raise commands.CheckFailure("This command must be run in a ticket channel.")
+        return result
+
+    return app_commands.check(predicate)
+
+
+async def _check_is_ticket(channel):
+    if channel and channel.topic:
+        if "Ticket channel" in channel.topic:
+            return True
     return False
 
 

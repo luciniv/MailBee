@@ -15,6 +15,7 @@ class Cache:
         self.user_cache = {}
         self.member_cache = {}
         self.channel_cache = {}
+        self.message_cache = {}
 
     async def store_user(self, user: discord.User):
         epoch_time = int(time.time())
@@ -107,3 +108,25 @@ class Cache:
 
         except Exception as e:
             logger.exception(f"get_channel sent an error: {e}")
+
+    async def store_message(self, message: discord.Message):
+        self.message_cache[message.id] = message
+
+    async def get_message(self, channel: discord.TextChannel, message_id: int):
+        try:
+            message = self.message_cache.get(message_id, None)
+            if message:
+                return message
+
+            try:
+                message = await asyncio.wait_for(
+                    channel.fetch_message(message_id), timeout=2
+                )
+            except Exception as e:
+                logger.error(f"Failed to fetch message using id {message_id}: {e}")
+                return None
+            self.message_cache[message.id] = message
+            return message
+
+        except Exception as e:
+            logger.exception(f"get_message sent an error: {e}")

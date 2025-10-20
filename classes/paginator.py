@@ -11,19 +11,6 @@ class Paginator(View):
         self.current_page = 0
         self.message = None
 
-    # Subsects a number into a list of numbers that cap at max_size (for pagination)
-    def build_subsections(size: int, max_size=10) -> List[int]:
-        if size <= max_size:
-            return [size]
-
-        subsections = [max_size] * (size // max_size)
-
-        remainder = size % max_size
-        if remainder > 0:
-            subsections.append(remainder)
-
-        return subsections
-
     # Logic for the previous button, takes the view back a page
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.success)
     async def prev_page(self, interaction: discord.Interaction, button: Button):

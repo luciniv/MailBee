@@ -8,6 +8,8 @@ from discord.app_commands import Range
 from discord.ext import commands
 
 from classes.error_handler import *
+from classes.embeds import Embeds
+from classes.helpers import *
 from classes.paginator import *
 from utils import checks
 from utils.logger import *
@@ -17,160 +19,104 @@ class Snips(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def _send_snip(self, ctx, snip: str, anon: bool = None):
+        guild = ctx.guild
+        channel = ctx.channel
+        author = ctx.author
+        thread_id, user_id = get_ticket_channel_info(channel)
+
+        content = None
+        snips = await self.bot.data_manager.get_or_load_snips(guild.id)
+
+        for entry in snips:
+            if snip.casefold() == entry["abbrev"]:
+                content = entry["content"]
+
+        if not content:
+            return Embeds.error(f"❌ Snip **`{snip.casefold()}`** not found.")
+
+        analytics = self.bot.get_cog("Analytics")
+        if analytics:
+            await ctx.message.delete()
+            task = asyncio.create_task(
+                analytics.route_to_dm(
+                    content, channel, author, thread_id, user_id, anon
+                )
+            )
+            result = await task
+        return None
+
+    def _format_snip_content(self, full_snip):
+        return (
+            full_snip["abbrev"],
+            full_snip["summary"],
+            full_snip["author_id"],
+            full_snip["content"],
+            full_snip["date"],
+        )
+
+    async def _load_snip_choices(
+        self, guild: discord.Guild
+    ) -> List[app_commands.Choice[str]]:
+        if not guild:
+            return []
+
+        snips_raw = await self.bot.data_manager.get_or_load_snips(guild.id)
+
+        snips = [f"{snip['abbrev']}: {snip['summary']}" for snip in snips_raw]
+        choices = [app_commands.Choice(name=snip, value=snip) for snip in snips]
+
+        return choices
+
+    def _format_snip_embed(self, abbrev, summary, author_id, content, date):
+        snip_embed = Embeds.success(title=f"Snip: {abbrev}", description=content)
+        snip_embed.add_field(name="Summary", value=summary, inline=False)
+        snip_embed.add_field(name="Author", value=f"<@{author_id}>", inline=False)
+        snip_embed.add_field(
+            name="Date", value=f"<t:{date}:D> (<t:{date}:R>)", inline=False
+        )
+        return snip_embed
+
     @commands.command(name="snip", aliases=["s"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def snip(self, ctx, *, snip: str):
         try:
-            channel = ctx.channel
-            author = ctx.author
-
-            errorEmbed = discord.Embed(
-                description=f"❌ Snip **`{snip.casefold()}`** not found",
-                color=discord.Color.red(),
-            )
-
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
-
-                    content = None
-                    guild = ctx.guild
-                    snips = await self.bot.data_manager.get_or_load_snips(guild.id)
-
-                    for entry in snips:
-                        if snip.casefold() == entry["abbrev"]:
-                            content = entry["content"]
-
-                    if content is None:
-                        await channel.send(embed=errorEmbed)
-                        return
-
-                    analytics = self.bot.get_cog("Analytics")
-                    if analytics is not None:
-                        await ctx.message.delete()
-                        task = asyncio.create_task(
-                            analytics.route_to_dm(
-                                content, channel, author, thread_id, user_id, None, True
-                            )
-                        )
-                        result = await task
-                    return
-
-            errorEmbed.description = (
-                "❌ This command can only be used in ticket channels."
-            )
-            await channel.send(embed=errorEmbed)
+            embed = await self._send_snip(ctx, snip, None)
+            if embed:
+                await ctx.channel.send(embed=embed)
+                return
 
         except Exception as e:
             logger.exception(e)
             raise BotError(f"+snip sent an error: {e}")
 
     @commands.command(name="asnip", aliases=["as"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def asnip(self, ctx, *, snip: str):
         try:
-            channel = ctx.channel
-            author = ctx.author
-
-            errorEmbed = discord.Embed(
-                description=f"❌ Snip **`{snip.casefold()}`** not found",
-                color=discord.Color.red(),
-            )
-
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
-
-                    content = None
-                    guild = ctx.guild
-                    snips = await self.bot.data_manager.get_or_load_snips(guild.id)
-
-                    for entry in snips:
-                        if snip.casefold() == entry["abbrev"]:
-                            content = entry["content"]
-
-                    if content is None:
-                        await channel.send(embed=errorEmbed)
-                        return
-
-                    analytics = self.bot.get_cog("Analytics")
-                    if analytics is not None:
-                        await ctx.message.delete()
-                        task = asyncio.create_task(
-                            analytics.route_to_dm(
-                                content, channel, author, thread_id, user_id, True, True
-                            )
-                        )
-                        result = await task
-                    return
-
-            errorEmbed.description = (
-                "❌ This command can only be used in ticket channels."
-            )
-            await channel.send(embed=errorEmbed)
+            embed = await self._send_snip(ctx, snip, True)
+            if embed:
+                await ctx.channel.send(embed=embed)
+                return
 
         except Exception as e:
             logger.exception(e)
             raise BotError(f"+asnip sent an error: {e}")
 
     @commands.command(name="nonasnip", aliases=["nas"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def nonasnip(self, ctx, *, snip: str):
         try:
-            channel = ctx.channel
-            author = ctx.author
-
-            errorEmbed = discord.Embed(
-                description=f"❌ Snip **`{snip.casefold()}`** not found",
-                color=discord.Color.red(),
-            )
-
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
-
-                    content = None
-                    guild = ctx.guild
-                    snips = await self.bot.data_manager.get_or_load_snips(guild.id)
-
-                    for entry in snips:
-                        if snip.casefold() == entry["abbrev"]:
-                            content = entry["content"]
-
-                    if content is None:
-                        await channel.send(embed=errorEmbed)
-                        return
-
-                    analytics = self.bot.get_cog("Analytics")
-                    if analytics is not None:
-                        await ctx.message.delete()
-                        task = asyncio.create_task(
-                            analytics.route_to_dm(
-                                content,
-                                channel,
-                                author,
-                                thread_id,
-                                user_id,
-                                False,
-                                True,
-                            )
-                        )
-                        result = await task
-                    return
-
-            errorEmbed.description = (
-                "❌ This command can only be used in ticket channels."
-            )
-            await channel.send(embed=errorEmbed)
+            embed = await self._send_snip(ctx, snip, False)
+            if embed:
+                await ctx.channel.send(embed=embed)
+                return
 
         except Exception as e:
             logger.exception(e)
@@ -193,30 +139,18 @@ class Snips(commands.Cog):
                     full_snip = entry
 
             if full_snip is None:
-                errorEmbed = discord.Embed(
-                    description=f"❌ Snip **`{abbrev}`** not found",
-                    color=discord.Color.red(),
+                await channel.send(
+                    embed=Embeds.error(f"❌ Snip **`{abbrev}`** not found")
                 )
-                await channel.send(embed=errorEmbed)
                 return
 
-            summary = full_snip["summary"]
-            author = full_snip["author_id"]
-            content = full_snip["content"]
-            date = full_snip["date"]
-
-            snipEmbed = discord.Embed(
-                title=f"Snip: {abbrev}",
-                description=content,
-                color=discord.Color.green(),
+            abbrev, summary, author, content, date = self._format_snip_content(
+                full_snip
             )
-            snipEmbed.add_field(name="Summary", value=summary, inline=False)
-            snipEmbed.add_field(name="Author", value=f"<@{author}>", inline=False)
-            snipEmbed.add_field(
-                name="Date", value=f"<t:{date}:D> (<t:{date}:R>)", inline=False
+            snip_embed = self._format_snip_embed(
+                self, abbrev, summary, author, content, date
             )
-
-            await channel.send(embed=snipEmbed)
+            await channel.send(embed=snip_embed)
 
         except Exception as e:
             logger.exception(e)
@@ -228,65 +162,46 @@ class Snips(commands.Cog):
     async def sniplist(self, ctx):
         try:
             pages = []
-            count = 0
-            limit = 0
             guild = ctx.guild
 
-            snipEmbed = discord.Embed(
-                title=f"Snip List",
-                description="No snips found",
-                color=discord.Color.green(),
-            )
             url = None
             if guild.icon:
                 url = guild.icon.url
-            snipEmbed.set_author(name=guild.name, icon_url=url)
 
             snips = await self.bot.data_manager.get_or_load_snips(guild.id)
-            if snips is not None:
+            if snips:
                 if len(snips) == 0:
-                    await ctx.send(embed=snipEmbed)
+                    await ctx.send(
+                        embed=Embeds.success(
+                            title=f"Snip List", description="No snips found"
+                        )
+                    )
                     return
                 else:
-                    page_counts = Paginator.build_subsections(len(snips), 6)
-                    for page_count in page_counts:
-                        limit += page_count
-                        snipEmbed = discord.Embed(
-                            title=f"Snip List",
-                            description="",
-                            color=discord.Color.green(),
-                        )
-                        snipEmbed.set_author(name=guild.name, icon_url=url)
+                    for i in range(0, len(snips), 6):
+                        chunk = snips[i : i + 6]
+                        snip_embed = Embeds.success(title=f"Snip List")
+                        snip_embed.set_author(name=guild.name, icon_url=url)
 
-                        while count < limit:
-                            entry = snips[count]
-
-                            abbrev = entry["abbrev"]
-                            summary = entry["summary"]
-                            author_id = entry["author_id"]
-                            content = entry["content"]
-                            date = entry["date"]
+                        for index, entry in enumerate(chunk, start=i + 1):
+                            abbrev, summary, author, content, date = (
+                                self._format_snip_content(entry)
+                            )
 
                             if len(content) > 200:
                                 content = content[:197] + "..."
 
-                            snipEmbed.add_field(
+                            snip_embed.add_field(
                                 name=f"**Name:** {abbrev}",
                                 value=f"**Summary:** {summary}\n"
                                 f"**Content:** {content}\n"
-                                f"**Author:** <@{author_id}>\n"
+                                f"**Author:** <@{author}>\n"
                                 f"**Date:** <t:{date}:D> (<t:{date}:R>)\n{'⎯' * 20}",
                                 inline=False,
                             )
-                            count += 1
-                        pages.append(snipEmbed)
+                        pages.append(snip_embed)
 
-            for page in range(len(pages)):
-                pages[page].set_footer(
-                    text=f"Use the buttons below to navigate (Page {page + 1}/{len(pages)})"
-                )
-
-            # Create an instance of the pagination view
+            pages = add_footers(pages)
             view = Paginator(pages)
             view.message = await ctx.send(embed=pages[0], view=view)
 
@@ -298,6 +213,7 @@ class Snips(commands.Cog):
 
     # Send a snip from the database
     @snip_group.command(name="send", description="Send a snip in a ticket")
+    @checks.is_ticket_app()
     @checks.is_user_app()
     @checks.is_guild_app()
     @app_commands.describe(snip="Select a snip, or search by keyword")
@@ -312,42 +228,34 @@ class Snips(commands.Cog):
 
             channel = interaction.channel
             author = interaction.user
+            thread_id, user_id = get_ticket_channel_info(channel)
 
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
+            content = ""
+            guild = interaction.guild
+            snips = await self.bot.data_manager.get_or_load_snips(guild.id)
+            abbrev = snip[: (snip.index(":"))]
 
-                    content = ""
-                    guild = interaction.guild
-                    snips = await self.bot.data_manager.get_or_load_snips(guild.id)
+            for entry in snips:
+                if abbrev.casefold() == entry["abbrev"]:
+                    content = entry["content"]
 
-                    abbrev = snip[: (snip.index(":"))]
+            if not content:
+                await interaction.followup.send(
+                    embed=Embeds.error(f"❌ Snip **`{abbrev}`** not found"),
+                    ephemeral=True,
+                )
+                return
 
-                    for entry in snips:
-                        if abbrev.casefold() == entry["abbrev"]:
-                            content = entry["content"]
-
-                    analytics = self.bot.get_cog("Analytics")
-                    if analytics is not None:
-                        task = asyncio.create_task(
-                            analytics.route_to_dm(
-                                content, channel, author, thread_id, user_id, anon, True
-                            )
-                        )
-                        result = await task
-                        sentEmbed = discord.Embed(
-                            description="✅ Snip sent", color=discord.Color.green()
-                        )
-                        await interaction.followup.send(embed=sentEmbed, ephemeral=True)
-                    return
-
-            errorEmbed = discord.Embed(
-                description="❌ This command can only be used in ticket channels.",
-                color=discord.Color.red(),
-            )
-            await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+            analytics = self.bot.get_cog("Analytics")
+            if analytics:
+                task = asyncio.create_task(
+                    analytics.route_to_dm(
+                        content, channel, author, thread_id, user_id, anon
+                    )
+                )
+                result = await task
+                sentEmbed = Embeds.success(description="✅ Snip sent")
+                await interaction.followup.send(embed=sentEmbed, ephemeral=True)
 
         except Exception as e:
             logger.exception(e)
@@ -358,19 +266,13 @@ class Snips(commands.Cog):
         self, interaction: discord.Interaction, current: str
     ) -> List[app_commands.Choice[str]]:
         guild = interaction.guild
-        if not guild:
-            return []
+        choices = await self._load_snip_choices(guild)
 
-        # Get snips for the specific guild
-        snips_raw = await self.bot.data_manager.get_or_load_snips(guild.id)
+        matches = []
 
-        snips = [f"{snip['abbrev']}: {snip['summary']}" for snip in snips_raw]
-
-        matches = [
-            app_commands.Choice(name=snip, value=snip)
-            for snip in snips
-            if current.casefold() in snip.casefold()
-        ]
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
         return matches[:25]
 
@@ -392,23 +294,17 @@ class Snips(commands.Cog):
                 if abbrev.casefold() == entry["abbrev"]:
                     full_snip = entry
 
-            summary = full_snip["summary"]
-            author = full_snip["author_id"]
-            content = full_snip["content"]
-            date = full_snip["date"]
+            if not full_snip:
+                await interaction.followup.send(
+                    embed=Embeds.error(f"❌ Snip **`{abbrev}`** not found")
+                )
+                return
 
-            snipEmbed = discord.Embed(
-                title=f"Snip: {abbrev}",
-                description=content,
-                color=discord.Color.green(),
+            abbrev, summary, author, content, date = self._format_snip_content(entry)
+            snip_embed = self._format_snip_embed(
+                self, abbrev, summary, author, content, date
             )
-            snipEmbed.add_field(name="Summary", value=summary, inline=False)
-            snipEmbed.add_field(name="Author", value=f"<@{author}>", inline=False)
-            snipEmbed.add_field(
-                name="Date", value=f"<t:{date}:D> (<t:{date}:R>)", inline=False
-            )
-
-            await interaction.followup.send(embed=snipEmbed)
+            await interaction.followup.send(embed=snip_embed)
 
         except Exception as e:
             logger.exception(e)
@@ -419,19 +315,13 @@ class Snips(commands.Cog):
         self, interaction: discord.Interaction, current: str
     ) -> List[app_commands.Choice[str]]:
         guild = interaction.guild
-        if not guild:
-            return []
+        choices = await self._load_snip_choices(guild)
 
-        # Get snips for the specific guild
-        snips_raw = await self.bot.data_manager.get_or_load_snips(guild.id)
+        matches = []
 
-        snips = [f"{snip['abbrev']}: {snip['summary']}" for snip in snips_raw]
-
-        matches = [
-            app_commands.Choice(name=snip, value=snip)
-            for snip in snips
-            if current.casefold() in snip.casefold()
-        ]
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
         return matches[:25]
 
@@ -441,16 +331,10 @@ class Snips(commands.Cog):
     )
     @checks.is_user_app()
     @checks.is_guild_app()
-    @app_commands.describe(
-        abbreviation="Short-form name for the snip (alphanumeric only)"
-    )
+    @app_commands.describe(abbreviation="Short-form name (alphanumeric only)")
     @app_commands.describe(summary="Summary of the snip's purpose")
-    @app_commands.describe(
-        content="Text content of the snip (LEAVE BLANK IF USING A MESSAGE ID)"
-    )
-    @app_commands.describe(
-        message_id="ID of the message to use as the snip (4000 char max)"
-    )
+    @app_commands.describe(content="Text content of the snip (4000 char max)")
+    @app_commands.describe(message_id="ID of content message (4000 char max)")
     async def add(
         self,
         interaction: discord.Interaction,
@@ -461,89 +345,83 @@ class Snips(commands.Cog):
     ):
         try:
             await interaction.response.defer()
+
             message = None
             guild = interaction.guild
             snips = await self.bot.data_manager.get_or_load_snips(guild.id)
             abbrev = abbreviation.casefold()
             text = None
 
-            errorEmbed = discord.Embed(
-                description="❌ You must provide either the content or message_id fields",
-                color=discord.Color.red(),
-            )
-
             if content is None and message_id is None:
-                await interaction.followup.send(embed=errorEmbed)
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ You must provide either the content or message_id fields"
+                    )
+                )
                 return
 
             if not bool(re.fullmatch(r"[A-Za-z0-9 ]+", abbrev.casefold())):
-                errorEmbed.description = (
-                    "❌ Snip abbreviations must be alphanumeric only"
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Snip abbreviations must be alphanumeric only"
+                    )
                 )
-                await interaction.followup.send(embed=errorEmbed)
                 return
 
             for snip in snips:
                 if abbrev == snip["abbrev"]:
-                    errorEmbed.description = (
-                        f"❌ **`{abbrev}`** already exists, remove this snip first"
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description=f"❌ **`{abbrev}`** already exists, remove this snip first"
+                        )
                     )
-                    await interaction.followup.send(embed=errorEmbed)
                     return
 
             if content is None:
                 try:
                     message = await interaction.channel.fetch_message(int(message_id))
                 except discord.NotFound:
-                    errorEmbed.description = (
-                        "❌ Message ID must be from a valid message in the current channel",
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Message ID must be from a valid message in the current channel"
+                        )
                     )
-                    await interaction.followup.send(embed=errorEmbed)
                     return
-
-                except discord.HTTPException:
-                    errorEmbed.description = (
-                        "❌ Message not found, try re-entering the ID"
-                    )
-                    await interaction.followup.send(embed=errorEmbed)
-                    return
+                except Exception:
+                    pass
 
                 if message is None:
-                    errorEmbed.description = (
-                        "❌ Message not found, try re-entering the ID"
+                    await interaction.followup.send(
+                        Embeds.error(
+                            description="❌ Message not found, try re-entering the ID"
+                        )
                     )
-                    await interaction.followup.send(embed=errorEmbed)
                     return
 
                 if len(message.content) < 1:
-                    errorEmbed.description = "❌ Message is too short"
-                    await interaction.followup.send(embed=errorEmbed)
+                    await interaction.followup.send(
+                        embed=Embeds.error(description="❌ Message is too short")
+                    )
                     return
 
                 text = message.content
             else:
                 text = content
 
-            text = await self.bot.helper.convert_mentions(text, guild)
-
-            if len(text) > 4000:
-                errorEmbed.description = (
-                    "❌ Your snip message is too many characters long (max is 4000). "
-                    "Note that channel links add around 70 characters."
-                )
-                await interaction.followup.send(embed=errorEmbed)
+            state, content = await verify_text(self.bot, guild, text, 4000)
+            if not state:
+                await interaction.followup.send(embed=Embeds.error(description=content))
                 return
-
-            snipEmbed = discord.Embed(
-                description=f"✅ Added snip **`{abbrev}`**\n**Content:**\n{text}",
-                color=discord.Color.green(),
-            )
 
             await self.bot.data_manager.add_snip(
                 guild.id, interaction.user.id, abbrev.casefold(), text, summary
             )
             await self.bot.data_manager.get_or_load_snips(guild.id, False)
-            await interaction.followup.send(embed=snipEmbed)
+            await interaction.followup.send(
+                embed=Embeds.success(
+                    description=f"✅ Added snip **`{abbrev}`**\n**Content:**\n{text}"
+                )
+            )
 
         except Exception as e:
             logger.exception(e)
@@ -561,14 +439,11 @@ class Snips(commands.Cog):
 
             abbrev = snip[: (snip.index(":"))]
 
-            snipEmbed = discord.Embed(
-                description=f"✅ Removed snip **`{abbrev}`**",
-                color=discord.Color.green(),
-            )
-
             await self.bot.data_manager.remove_snip(guild.id, abbrev)
             await self.bot.data_manager.get_or_load_snips(guild.id, False)
-            await interaction.followup.send(embed=snipEmbed)
+            await interaction.followup.send(
+                embed=Embeds.success(description=f"✅ Removed snip **`{abbrev}`**")
+            )
 
         except Exception as e:
             logger.exception(e)
@@ -579,21 +454,91 @@ class Snips(commands.Cog):
         self, interaction: discord.Interaction, current: str
     ) -> List[app_commands.Choice[str]]:
         guild = interaction.guild
-        if not guild:
-            return []
+        choices = await self._load_snip_choices(guild)
 
-        # Get snips for the specific guild
-        snips_raw = await self.bot.data_manager.get_or_load_snips(guild.id)
+        matches = []
 
-        snips = [f"{snip['abbrev']}: {snip['summary']}" for snip in snips_raw]
-
-        matches = [
-            app_commands.Choice(name=snip, value=snip)
-            for snip in snips
-            if current.casefold() in snip.casefold()
-        ]
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
         return matches[:25]
+
+
+@commands.command(name="export_snips", description="Export all snips to a CSV file")
+@checks.is_user()
+@checks.is_guild()
+async def export_snips(self, ctx):
+    try:
+        guild = ctx.guild
+        snips = await self.bot.data_manager.get_or_load_snips(guild.id)
+        csv_data = "Abbreviation,Summary,Content\n"
+
+        for snip in snips:
+            csv_data += f"{snip['abbrev']},{snip['summary']},{snip['content']}\n"
+
+        with open(f"{guild.id}_snips.csv", "w") as file:
+            file.write(csv_data)
+
+        await ctx.send(file=discord.File(f"{guild.id}_snips.csv"))
+
+    except Exception as e:
+        logger.exception(e)
+        raise BotError(f"+export_snips sent an error: {e}")
+
+
+@commands.command(name="import_snips", description="Import snips from a CSV file")
+@checks.is_user()
+@checks.is_guild()
+async def import_snips(self, ctx, file: discord.Attachment):
+    try:
+        if not file.filename.endswith(".csv"):
+            await ctx.send(embed=Embeds.error("❌ Please upload a CSV file"))
+            return
+
+        csv_content = await file.read()
+        lines = csv_content.decode().splitlines()
+        guild = ctx.guild
+        count = 0
+
+        for line in lines[1:]:
+            parts = line.split(",", 2)
+            if len(parts) != 3:
+                continue
+
+            abbrev, summary, content = parts
+            abbrev = abbrev.strip().casefold()
+            summary = summary.strip()
+            content = content.strip()
+
+            if not bool(re.fullmatch(r"[A-Za-z0-9 ]+", abbrev)):
+                continue
+
+            if len(abbrev) < 1 or len(abbrev) > 20:
+                continue
+
+            if len(summary) < 1 or len(summary) > 80:
+                continue
+
+            if len(content) < 1 or len(content) > 4000:
+                continue
+
+            snips = await self.bot.data_manager.get_or_load_snips(guild.id)
+            exists = any(snip["abbrev"] == abbrev for snip in snips)
+            if exists:
+                continue
+
+            await self.bot.data_manager.add_snip(
+                guild.id, ctx.author.id, abbrev, content, summary
+            )
+            count += 1
+
+        await self.bot.data_manager.get_or_load_snips(guild.id, False)
+        await ctx.send(embed=Embeds.success(f"✅ Imported {count} snips"))
+
+    except Exception as e:
+        logger.exception(e)
+        raise BotError(f"+import_snips sent an error: {e}")
 
 
 async def setup(bot):

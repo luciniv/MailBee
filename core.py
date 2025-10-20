@@ -1,14 +1,15 @@
 import os
 
 import discord
+from discord.ext import commands, tasks
+
 from classes.cache import Cache
 from classes.channel_status import ChannelStatus
 from classes.data_manager import DataManager
-from classes.helpers import Helper
 from classes.rate_limiter import Queue
 from classes.ticket_opener import TicketOpener
+from classes.ticket_processor import TicketQueue
 from classes.ticket_submitter import DMCategoryButtonView, TicketRatingView
-from discord.ext import commands, tasks
 from utils.logger import *
 
 
@@ -57,10 +58,10 @@ class MailBee(commands.Bot):
         )
         self.data_manager = DataManager(self)
         self.channel_status = ChannelStatus(self)
-        self.helper = Helper(self)
         self.cache = Cache(self)
         self.opener = TicketOpener(self)
         self.queue = Queue()
+        self.ticket_queue = TicketQueue(self)
 
         self.heartbeat = tasks.loop(minutes=10)(self._heartbeat)
 
@@ -179,8 +180,8 @@ class MailBee(commands.Bot):
         self.add_view(TicketRatingView(self))
 
         logger.log("SYSTEM", "------- STARTUP COMPLETE -----------------")
-        activity_type = discord.ActivityType.watching
-        activity_str = "for tickets!"
+        activity_type = discord.ActivityType.playing
+        activity_str = "DM me for support!"
         await self.change_presence(
             activity=discord.Activity(type=activity_type, name=activity_str)
         )

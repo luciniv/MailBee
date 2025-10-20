@@ -9,16 +9,11 @@ import discord
 from discord.ext import commands
 
 from classes.error_handler import *
+from classes.helpers import *
 from classes.ticket_submitter import TicketSelectView
-from roblox_data.helpers import *
+from roblox_data.roblox import *
 from utils import emojis
 from utils.logger import *
-
-SERVER_TO_GAME = {
-    714722808009064492: ("Creatures of Sonaria", 1831550657, os.getenv("COS_KEY")),
-    346515443869286410: ("Dragon Adventures", 1235188606, os.getenv("DA_KEY")),
-    1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY")),
-}
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 20MB in bytes
 
@@ -165,7 +160,7 @@ class Analytics(commands.Cog):
                 await message.channel.send(embed=error_embed)
                 return
 
-            text = await self.bot.helper.convert_mentions(content, guild)
+            text = await convert_mentions(self.bot, content, guild)
 
             # Check if over 4000 characters
             if len(text) > 4000:
@@ -323,14 +318,7 @@ class Analytics(commands.Cog):
             logger.exception(f"route_to_server sent an error: {e}")
 
     async def route_to_dm(
-        self,
-        message,
-        channel,
-        author,
-        thread_id: int,
-        user_id: int,
-        anon: bool = None,
-        snippet: bool = None,
+        self, message, channel, author, thread_id: int, user_id: int, anon: bool = None
     ):
         try:
             member = None
@@ -390,7 +378,7 @@ class Analytics(commands.Cog):
                 content,
                 flags=re.IGNORECASE,
             )
-            content = await self.bot.helper.convert_mentions(content, guild)
+            content = await convert_mentions(self.bot, content, guild)
 
             # Check if over 4000 characters
             if len(content) > 4000:
@@ -1010,13 +998,7 @@ class Analytics(commands.Cog):
                     if message.content.startswith("+"):
                         asyncio.create_task(
                             self.route_to_dm(
-                                message,
-                                this_channel,
-                                author,
-                                thread_id,
-                                user_id,
-                                None,
-                                False,
+                                message, this_channel, author, thread_id, user_id, None
                             )
                         )
                         return

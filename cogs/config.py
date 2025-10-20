@@ -7,122 +7,26 @@ from discord import app_commands
 from discord.app_commands import Range
 from discord.ext import commands
 
+from ai_integration.prompt import build_server_context
+from classes.embeds import Embeds
 from classes.error_handler import *
+from classes.helpers import *
 from classes.paginator import *
 from classes.ticket_opener import get_overwrites
 from utils import checks, emojis
 from utils.logger import *
 
 
-def compress_text(text: str) -> str:
-    if text == " ":
-        return
-    # Remove excess whitespace and newlines from user input
-    return re.sub(r"\s+", " ", text.strip())
-
-
-def validate_and_clean_form_template(template: dict) -> dict:
-    """Validate and clean the form template."""
-    if not isinstance(template, dict):
-        raise BotError("Form template must be a JSON object.")
-
-    title = template.get("title")
-    if not isinstance(title, str):
-        raise BotError("`title` must be a string.")
-
-    fields = template.get("fields")
-    if not isinstance(fields, list) or not fields:
-        raise BotError("`fields` must be a non-empty list.")
-
-    cleaned_fields = []
-    for i, field in enumerate(fields):
-        if not isinstance(field, dict):
-            raise BotError(f"Field #{i + 1} must be a JSON object.")
-
-        label = field.get("label")
-        placeholder = field.get("placeholder", " ")
-        style = field.get("style", "short")
-        max_length = field.get("max_length", 256)
-        required = field.get("required", True)
-
-        if not isinstance(label, str):
-            raise BotError(f"Field #{i + 1} must have a `label` of type string.")
-
-        if style not in ("short", "paragraph"):
-            raise BotError(
-                f"Field #{i + 1} has invalid style `{style}`. Use `short` or `paragraph`."
-            )
-
-        if not isinstance(max_length, int) or not (1 <= max_length <= 4000):
-            raise BotError(
-                f"Field #{i + 1} must have a `max_length` between 1 and 4000."
-            )
-
-        if not isinstance(required, bool):
-            raise BotError(
-                f"Field #{i + 1} has an invalid `required` value. Must be `true` or `false`."
-            )
-
-        cleaned_fields.append(
-            {
-                "label": compress_text(label),
-                "placeholder": compress_text(placeholder),
-                "style": style,
-                "max_length": max_length,
-                "required": required,
-            }
-        )
-
-    return {"title": compress_text(title), "fields": cleaned_fields}
-
-
-# Parses a JSON form template and sends a preview embed showing what the modal will look like
-async def preview_form_template(ctx, form_template_str: str):
-    try:
-        form_template = json.loads(form_template_str)
-    except json.JSONDecodeError as e:
-        raise BotError(f"❌ Invalid JSON. Error: `{e}`")
-
-    try:
-        cleaned = validate_and_clean_form_template(form_template)
-    except BotError as e:
-        raise BotError(f"❌ Invalid form structure.\n{e}")
-
-    embed = discord.Embed(
-        title=f"📝 Form Preview: {cleaned['title']}", color=discord.Color.green()
-    )
-
-    for idx, field in enumerate(cleaned["fields"], start=1):
-        label = field["label"]
-        placeholder = field["placeholder"]
-        style = field["style"]
-        max_len = field["max_length"]
-        required = field["required"]
-
-        field_text = (
-            f"**Label:** {label}\n"
-            f"**Placeholder:** {placeholder}\n"
-            f"**Style:** {'Paragraph' if style == 'paragraph' else 'Short'}\n"
-            f"**Max Length:** {max_len}\n"
-            f"**Required:** {'✅ Yes' if required else '❌ No'}"
-        )
-
-        embed.add_field(name=f"Field #{idx}", value=field_text, inline=False)
-
-    await ctx.send(embed=embed)
-
-
 class Config(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="setup_mailbee")
+    @commands.command(name="setup")
     @checks.is_admin()
     @checks.is_guild()
-    async def setup_mailbee(self, ctx):
+    async def setup(self, ctx):
         try:
             guild = ctx.guild
-            guild_id = guild.id
             bot_member = ctx.guild.me
             inbox_category = None
             log_channel = None
@@ -132,21 +36,20 @@ class Config(commands.Cog):
 
             # Check for any permitted roles (user or admin)
             roles = []
-            permissions = await self.bot.data_manager.get_or_load_permissions(guild_id)
+            permissions = await self.bot.data_manager.get_or_load_permissions(guild.id)
             for role_id in permissions.keys():
                 role = guild.get_role(role_id)
                 roles.append(role)
 
             overwrites = await get_overwrites(guild, roles)
 
-            setup_embed = discord.Embed(
+            setup_embed = Embeds.success(
                 title="Bot Setup",
                 description="Run this command to setup the bot. Setup includes creating "
                 "the ticketing category, tickets log channel, and responses channel. If "
                 "any of these categories or channels do not exist, the bot will create new "
                 "ones. To re-create setup items, first delete the channel or category, then "
                 "run this command.",
-                color=discord.Color.green(),
             )
             setup_embed.add_field(name="Setup Results", value="", inline=False)
 
@@ -160,7 +63,7 @@ class Config(commands.Cog):
                 await ctx.send(embed=setup_embed)
                 return
 
-            config = await self.bot.data_manager.get_or_load_config(guild_id)
+            config = await self.bot.data_manager.get_or_load_config(guild.id)
             if config is not None:
                 pass
                 # inbox_id = config["inbox_id"]
@@ -274,7 +177,7 @@ class Config(commands.Cog):
                         )
 
             await self.bot.data_manager.add_config_to_db(
-                guild_id,
+                guild.id,
                 log_channel.id,
                 inbox_category.id,
                 responses_channel.id,
@@ -284,7 +187,7 @@ class Config(commands.Cog):
             await ctx.send(embed=setup_embed)
 
         except Exception as e:
-            raise BotError(f"/setup2 sent an error: {e}")
+            raise BotError(f"/setup sent an error: {e}")
 
     type_group = app_commands.Group(name="type", description="Manage ticket types")
 
@@ -300,74 +203,90 @@ class Config(commands.Cog):
         interaction: discord.Interaction,
         name: Range[str, 1, 45],
         description: Range[str, 1, 100],
-        nsfw: bool,
         emoji: str = None,
+        nsfw: discord.CategoryChannel = None,
+        parent: discord.CategoryChannel = None,
+        redirect: str = None,
     ):
         try:
             await interaction.response.defer()
 
             guild = interaction.guild
-            response = discord.Embed(
-                description=f"Added ticket type **{name}** and created a "
-                "corresponding category. \n\nRun `/set_form` to modify "
-                "the questions users are presented with when opening a "
-                "ticket for this type. The current form is viewable by "
-                "running `/preview_form`.",
-                color=discord.Color.green(),
-            )
-
-            # Config must exist due to checks passing
             config = await self.bot.data_manager.get_or_load_config(guild.id)
 
+            if nsfw and redirect:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Redirect types do not need NSFW categories."
+                    )
+                )
+                return
+
+            if parent:
+                types = await self.bot.data_manager.get_or_load_guild_types(guild.id)
+                for type in types:
+                    if type["category_id"] == parent.id:
+                        if type["redirectText"]:
+                            await interaction.followup.send(
+                                embed=Embeds.error(
+                                    description="❌ Cannot use a redirect category as a parent."
+                                )
+                            )
+                            return
+                        elif type["sub_type"] != -1:
+                            await interaction.followup.send(
+                                embed=Embeds.error(
+                                    description="❌ Cannot use a sub-type category as a parent."
+                                )
+                            )
+                            return
+
             inbox_category = guild.get_channel(config["inbox_id"])
-
             if inbox_category:
-                if isinstance(inbox_category, discord.CategoryChannel):
-                    # Define permission overwrites
-                    # Check for any permitted roles (user or admin)
-                    roles = []
-                    permissions = await self.bot.data_manager.get_or_load_permissions(
-                        guild.id
+                roles = []
+                permissions = await self.bot.data_manager.get_or_load_permissions(
+                    guild.id
+                )
+                for role_id in permissions.keys():
+                    role = guild.get_role(role_id)
+                    roles.append(role)
+
+                overwrites = await get_overwrites(guild, roles)
+
+                # Create the new category
+                new_category = await guild.create_category(
+                    name=name,
+                    overwrites=overwrites,
+                    position=(inbox_category.position + 1),
+                )
+
+                if new_category:
+                    await self.bot.data_manager.add_type_to_db(
+                        guild.id,
+                        new_category.id,
+                        name,
+                        description,
+                        emoji,
+                        parent,
+                        redirect,
+                        nsfw,
                     )
-                    for role_id in permissions.keys():
-                        role = guild.get_role(role_id)
-                        roles.append(role)
+                    await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
 
-                    overwrites = await get_overwrites(guild, roles)
-
-                    # Create the new category
-                    new_category = await guild.create_category(
-                        name=name,
-                        overwrites=overwrites,
-                        position=(inbox_category.position + 1),
-                    )
-
-                    if new_category:
-                        await self.bot.data_manager.add_type_to_db(
-                            guild.id, new_category.id, name, description, emoji
-                        )
-                        await self.bot.data_manager.get_or_load_guild_types(
-                            guild.id, False
-                        )
-
-                    else:
-                        response.description = (
-                            "❌ Failed to create new category. Please ensure "
+                else:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Failed to create new category. Please ensure "
                             "bot has **administrator permissions** and this server "
                             "is not at the maximum channel limit."
                         )
-                        response.color = discord.Color.red()
-
-                else:
-                    pass
+                    )
             else:
-                response.description = (
-                    "❌ Could not find valid inbox category. Please "
-                    "run `/setup` to create a new inbox category."
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Inbox category not found, please run `/setup` first."
+                    )
                 )
-                response.color = discord.Color.red()
-
-            await interaction.followup.send(embed=response)
 
         except Exception as e:
             logger.exception(f"add_type error: {e}")
@@ -419,7 +338,7 @@ class Config(commands.Cog):
     @form_group.command(name="set", description="Change the form used by a ticket type")
     @checks.is_admin()
     @checks.is_guild()
-    @app_commands.describe(category="Tickets category to edit the form for")
+    @app_commands.describe(category="Ticket category ID to edit the form for")
     @app_commands.describe(
         form_template="Template for the form, use /form_template to view a pre-made template"
     )
@@ -472,6 +391,7 @@ class Config(commands.Cog):
         try:
             guild = ctx.guild
             config = await self.bot.data_manager.get_or_load_config(guild.id)
+            ai_context = await self.bot.data_manager.get_ai_context(guild.id)
 
             config_embed = discord.Embed(
                 title="Server Config", color=discord.Color.green()
@@ -531,6 +451,18 @@ class Config(commands.Cog):
             )
             config_embed.add_field(name="Greeting", value=greeting, inline=False)
             config_embed.add_field(name="Closing", value=closing, inline=False)
+
+            if ai_context:
+                config_embed.add_field(
+                    name="AI Context",
+                    value=f"Name: {ai_context['name']}\n"
+                    f"Description: {ai_context['description']}\n"
+                    f"Tone: {ai_context['tone']}\n"
+                    f"Reply Guidelines: {ai_context['guidelines']}",
+                    inline=False,
+                )
+            else:
+                config_embed.add_field(name="AI Context", value="Not set", inline=False)
             await ctx.send(embed=config_embed)
 
         except Exception as e:
@@ -545,7 +477,7 @@ class Config(commands.Cog):
             guild = ctx.guild
             moderation = self.bot.get_cog("Moderation")
             if moderation is not None:
-                greeting = await self.bot.helper.convert_mentions(greeting, guild)
+                greeting = await convert_mentions(self.bot, greeting, guild)
 
             if len(greeting) > 1000:
                 error_embed = discord.Embed(
@@ -576,7 +508,7 @@ class Config(commands.Cog):
             guild = ctx.guild
             moderation = self.bot.get_cog("Moderation")
             if moderation is not None:
-                closing = await self.bot.helper.convert_mentions(closing, guild)
+                closing = await convert_mentions(self.bot, closing, guild)
 
             if len(closing) > 1000:
                 error_embed = discord.Embed(
@@ -616,7 +548,7 @@ class Config(commands.Cog):
             guild = ctx.guild
             moderation = self.bot.get_cog("Moderation")
             if moderation is not None:
-                accepting = await self.bot.helper.convert_mentions(accepting, guild)
+                accepting = await convert_mentions(self.bot, accepting, guild)
 
             if len(accepting) > 2000:
                 error_embed = discord.Embed(
@@ -720,6 +652,63 @@ class Config(commands.Cog):
         except Exception as e:
             logger.exception(f"/pingrole error: {e}")
             raise BotError(f"/pingrole sent an error: {e}")
+
+    ai_group = app_commands.Group(name="ai_context", description="Manage ai context")
+
+    @ai_group.command(name="set", description="Set the AI response context")
+    @checks.is_admin_app()
+    @checks.is_guild_app()
+    @app_commands.describe(name="Name of this server or organization")
+    @app_commands.describe(description="Description of your server or organization")
+    @app_commands.describe(tone="Tone to use in AI responses")
+    @app_commands.describe(guidelines="Guidelines for the AI to follow in responses")
+    async def ai_context(
+        self,
+        interaction: discord.Interaction,
+        name: Range[str, 1, 100],
+        description: Range[str, 1, 300],
+        tone: Range[str, 1, 100],
+        guidelines: Range[str, 1, 500],
+    ):
+        try:
+            await interaction.response.defer()
+            guild = interaction.guild
+
+            context = {
+                "name": name,
+                "description": description,
+                "tone": tone,
+                "guidelines": guidelines,
+            }
+
+            await self.bot.data_manager.set_ai_context(guild.id, context)
+
+            response = Embeds.success(
+                description=f"✅ Updated AI context settings:"
+                f"\n{build_server_context(context)}"
+            )
+            await interaction.followup.send(embed=response)
+
+        except Exception as e:
+            logger.exception(f"/ai_context error: {e}")
+            raise BotError(f"/ai_context sent an error: {e}")
+
+    @ai_group.command(name="remove", description="Remove the AI response context")
+    @checks.is_admin_app()
+    @checks.is_guild_app()
+    async def ai_context_remove(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer()
+            guild = interaction.guild
+
+            await self.bot.data_manager.remove_ai_context(guild.id)
+
+            response = Embeds.success(description="✅ Cleared AI context settings.")
+            await interaction.followup.send(embed=response)
+
+        except Exception as e:
+            logger.exception(f"/ai_context_remove error: {e}")
+            raise BotError(f"/ai_context_remove sent an error: {e}")
 
     # Show roles with the 'Bot Admin' permission or all monitored channels / categories
     @commands.hybrid_command(

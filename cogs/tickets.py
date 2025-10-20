@@ -1,4 +1,5 @@
 import asyncio
+import io
 import re
 import time
 from copy import deepcopy
@@ -9,7 +10,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from ai_integration.prompt import *
+from classes.embeds import Embeds
 from classes.error_handler import *
+from classes.helpers import *
 from classes.ticket_submitter import DMCategoryButtonView, TicketRatingView
 from utils import checks, emojis, queries
 from utils.logger import *
@@ -232,86 +236,13 @@ async def send_closing(
     view.message = message
 
 
-# async def export_ticket(channel: discord.TextChannel):
-#     try:
-#         transcript = []
-
-#         async for message in channel.history(oldest_first=True, limit=100):
-#             # Skip other bot messages
-#             if message.author.bot and message.author.id != 1333954467519004673:
-#                 continue
-
-#             title = "USER"
-#             content = None
-
-#             if message.embeds:
-#                 embed = message.embeds[0]
-#                 # Embedded staff message
-#                 if "[STAFF]" in embed.title:
-#                     title = "STAFF"
-#                     if embed.description:
-#                         content = embed.description
-#                     else:
-#                         continue
-
-#                 # Embedded user message
-#                 elif "Received" in embed.title:
-#                     if embed.description:
-#                         content = embed.description
-#                     break
-
-#             # Ignore all other Mailbee embeds
-#             # Staff comments
-#             elif message.author.id != 1333954467519004673:
-#                 content = message.content
-#                 if len(content) == 0:
-#                     continue
-
-#             transcript.append(f"\n({role_label}): {content}")
-
-#         joined_history = "\n".join(history)
-
-#     except Exception as e:
-#         print(f"export_ticket sent an error: {e}")
-#         logger.exception(e)
-
-
 class GenerateReplyView(discord.ui.View):
     def __init__(self, reply_text, author, target_channel):
-        super().__init__(timeout=60)
+        super().__init__(timeout=120)
         self.reply_text = reply_text
         self.author = author
         self.target_channel = target_channel
         self.message = None
-
-    @discord.ui.select(
-        placeholder="Choose a response type...",
-        min_values=1,
-        max_values=1,
-        options=[
-            discord.SelectOption(
-                label="Normal Reply", description="Send the reply as-is"
-            ),
-            discord.SelectOption(
-                label="Important Reply", description="Mark as important"
-            ),
-            discord.SelectOption(
-                label="Private Reply", description="Send only to staff"
-            ),
-        ],
-    )
-    async def select_callback(
-        self, interaction: discord.Interaction, select: discord.ui.Select
-    ):
-        if interaction.user != self.author:
-            return await interaction.response.send_message(
-                "You can't use this dropdown", ephemeral=True
-            )
-
-        self.chosen_option = select.values[0]
-        await interaction.response.send_message(
-            f"✅ You selected: **{self.chosen_option}**", ephemeral=True
-        )
 
     @discord.ui.button(label="Send", style=discord.ButtonStyle.success)
     async def send_button(
@@ -319,11 +250,13 @@ class GenerateReplyView(discord.ui.View):
     ):
         if interaction.user != self.author:
             return await interaction.response.send_message(
-                "You can't use this button", ephemeral=True
+                embed=Embeds.error(
+                    description="You can't use this button", ephemeral=True
+                )
             )
-
+        # TODO this becomes analytics call (anon is None)
+        await self.message.delete()
         await self.target_channel.send(self.reply_text)
-        await interaction.response.edit_message(content="✅ Reply sent", view=None)
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
@@ -332,11 +265,23 @@ class GenerateReplyView(discord.ui.View):
     ):
         if interaction.user != self.author:
             return await interaction.response.send_message(
-                "You can't use this button", ephemeral=True
+                embed=Embeds.error(
+                    description="You can't use this button", ephemeral=True
+                )
             )
-
-        await interaction.response.edit_message(content="❌ Cancelled reply", view=None)
+        await self.message.delete()
         self.stop()
+
+    # Disables buttons after view times out
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except Exception:
+                pass
 
 
 class Tickets(commands.Cog):
@@ -344,156 +289,120 @@ class Tickets(commands.Cog):
         self.bot = bot
 
     @commands.command(name="reply", aliases=["r"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def reply(self, ctx, *, message):
         try:
             channel = ctx.channel
             author = ctx.author
+            thread_id, user_id = get_ticket_channel_info(channel)
 
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
-                    full_message = ctx.message if hasattr(ctx, "message") else message
+            full_message = ctx.message if hasattr(ctx, "message") else message
 
-                    analytics = self.bot.get_cog("Analytics")
-                    if analytics is not None:
-                        asyncio.create_task(
-                            analytics.route_to_dm(
-                                full_message,
-                                channel,
-                                author,
-                                thread_id,
-                                user_id,
-                                None,
-                                False,
-                            )
-                        )
-                    return
-
-            errorEmbed = discord.Embed(
-                description="❌ This command can only be used in ticket channels",
-                color=discord.Color.red(),
-            )
-            await channel.send(embed=errorEmbed)
+            analytics = self.bot.get_cog("Analytics")
+            if analytics is not None:
+                asyncio.create_task(
+                    analytics.route_to_dm(
+                        full_message, channel, author, thread_id, user_id, None
+                    )
+                )
+            return
 
         except Exception as e:
             logger.exception(e)
             raise BotError(f"+reply sent an error: {e}")
 
     @commands.command(name="areply", aliases=["ar"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def areply(self, ctx, *, message):
         try:
             channel = ctx.channel
             author = ctx.author
+            thread_id, user_id = get_ticket_channel_info(channel)
 
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
-                    full_message = ctx.message if hasattr(ctx, "message") else message
+            full_message = ctx.message if hasattr(ctx, "message") else message
 
-                    analytics = self.bot.get_cog("Analytics")
-                    if analytics is not None:
-                        asyncio.create_task(
-                            analytics.route_to_dm(
-                                full_message,
-                                channel,
-                                author,
-                                thread_id,
-                                user_id,
-                                True,
-                                False,
-                            )
-                        )
-                    return
-
-            errorEmbed = discord.Embed(
-                description="❌ This command can only be used in ticket channels",
-                color=discord.Color.red(),
-            )
-            await channel.send(embed=errorEmbed)
+            analytics = self.bot.get_cog("Analytics")
+            if analytics is not None:
+                asyncio.create_task(
+                    analytics.route_to_dm(
+                        full_message, channel, author, thread_id, user_id, True
+                    )
+                )
+            return
 
         except Exception as e:
             logger.exception(e)
             raise BotError(f"+areply sent an error: {e}")
 
     @commands.command(name="nonareply", aliases=["nar"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def nonareply(self, ctx, *, message):
         try:
             channel = ctx.channel
             author = ctx.author
+            thread_id, user_id = get_ticket_channel_info(channel)
 
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
-                    full_message = ctx.message if hasattr(ctx, "message") else message
+            full_message = ctx.message if hasattr(ctx, "message") else message
 
-                    analytics = self.bot.get_cog("Analytics")
-                    if analytics is not None:
-                        asyncio.create_task(
-                            analytics.route_to_dm(
-                                full_message,
-                                channel,
-                                author,
-                                thread_id,
-                                user_id,
-                                False,
-                                False,
-                            )
-                        )
-                    return
-
-            errorEmbed = discord.Embed(
-                description="❌ This command can only be used in ticket channels",
-                color=discord.Color.red(),
-            )
-            await channel.send(embed=errorEmbed)
+            analytics = self.bot.get_cog("Analytics")
+            if analytics is not None:
+                asyncio.create_task(
+                    analytics.route_to_dm(
+                        full_message, channel, author, thread_id, user_id, False
+                    )
+                )
+            return
 
         except Exception as e:
             logger.exception(e)
             raise BotError(f"+nonareply sent an error: {e}")
 
     @commands.command(name="ai_reply", aliases=["air", "ai"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
-    async def ai_reply(self, ctx):
+    async def ai_reply(self, ctx, *, extra_context: str = ""):
         await ctx.defer()
 
-        # Fetch message history
-        history = await ctx.channel.history(limit=100, oldest_first=True).flatten()
-        transcript = ""
-        for msg in history:
-            transcript += f"{msg.author.name}: {msg.content}\n"
+        channel = ctx.channel
+        author = ctx.author
+        transcript = await export_ticket_messages(channel)
+        context = await self.bot.data_manager.get_ai_context(channel.guild.id)
 
-        print(transcript)  # For debugging purposes
+        server_context = None
+        if context:
+            server_context = build_server_context(context)
 
-        # Step 3: Generate AI reply (replace this with actual logic)
-        await ctx.send("Generating reply from AI...")
-        ai_reply = await self.generate_ai_reply(transcript)
-
-        # Step 4: Show user the reply and ask for confirmation
-        view = GenerateReplyView(ai_reply, ctx.author, ctx.channel)
-        view.message = await ctx.send(
-            content=f"🧠 AI-generated reply:\n```{ai_reply}```\nWould you like to send this?",
-            view=view,
+        message = await ctx.send("Generating potential reply...")
+        ai_reply = await generate_ticket_reply(
+            transcript, server_context, extra_context
         )
+        if ai_reply:
+            ai_embed = Embeds.success(
+                title="AI Generated Reply", description=f"{ai_reply}"
+            )
+            ai_embed.set_footer(text="Would you like to send this?")
+            view = GenerateReplyView(ai_reply, author, channel)
+            await message.delete()
+            ai_message = await ctx.send(embed=ai_embed, view=view)
+            view.message = ai_message
 
-    async def generate_ai_reply(self, transcript: str) -> str:
-        # 🧠 Replace this with your AI call
-        # e.g., OpenAI, Claude, local model, etc.
-        return f"This is a placeholder reply based on the transcript of {len(transcript.splitlines())} lines"
+        else:
+            await message.delete()
+            await ctx.send(
+                embed=Embeds.error(
+                    description="❌ Failed to generate AI reply, please try again later."
+                )
+            )
 
     @commands.command(name="reply_edit", aliases=["edit"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def reply_edit(self, ctx, reply_id: str, *, new_content: str):
@@ -504,179 +413,169 @@ class Tickets(commands.Cog):
             user_id = None
             user = None
             old_content = None
-            new_content = await self.bot.helper.convert_mentions(new_content, guild)
+            new_content = await convert_mentions(self.bot, new_content, guild)
 
             errorEmbed = discord.Embed(
                 description="❌ This command can only be used in ticket channels",
                 color=discord.Color.red(),
             )
 
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
-                    startEmbed = discord.Embed(
-                        description="Started editing process...",
-                        color=discord.Color.blue(),
+            thread_id, user_id = get_ticket_channel_info(channel)
+
+            startEmbed = discord.Embed(
+                description="Started editing process...",
+                color=discord.Color.blue(),
+            )
+            startMessage = await ctx.send(embed=startEmbed)
+
+            try:
+                message = await channel.fetch_message(reply_id)
+            except Exception:
+                errorEmbed.description = (
+                    "❌ An error occurred fetching the message. Please try again"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if message is None:
+                errorEmbed.description = (
+                    "❌ Could not find a message in this channel with that ID"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if message.author.id not in (
+                1304609006379073628,
+                1333954467519004673,
+            ):
+                errorEmbed.description = (
+                    "❌ The message you selected is not from MailBee"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if (
+                (not message.embeds)
+                or (not message.embeds[0].title)
+                or (not "Sent" in message.embeds[0].title)
+            ):
+                errorEmbed.description = (
+                    "❌ The message you selected is not a ticket reply"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if (message.embeds[0].author.name).split()[2] != str(author.id):
+                if channel.permissions_for(author).administrator:
+                    pass
+                else:
+                    errorEmbed.description = (
+                        "❌ You do not have permission to alter that message"
                     )
-                    startMessage = await ctx.send(embed=startEmbed)
-
-                    try:
-                        message = await channel.fetch_message(reply_id)
-                    except Exception:
-                        errorEmbed.description = "❌ An error occurred fetching the message. Please try again"
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if message is None:
-                        errorEmbed.description = (
-                            "❌ Could not find a message in this channel with that ID"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if message.author.id not in (
-                        1304609006379073628,
-                        1333954467519004673,
-                    ):
-                        errorEmbed.description = (
-                            "❌ The message you selected is not from MailBee"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if (
-                        (not message.embeds)
-                        or (not message.embeds[0].title)
-                        or (not "Sent" in message.embeds[0].title)
-                    ):
-                        errorEmbed.description = (
-                            "❌ The message you selected is not a ticket reply"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if (message.embeds[0].author.name).split()[2] != str(author.id):
-                        if channel.permissions_for(author).administrator:
-                            pass
-                        else:
-                            errorEmbed.description = (
-                                "❌ You do not have permission to alter that message"
-                            )
-                            await ctx.send(embed=errorEmbed)
-                            return
-
-                    if len(new_content) > 4000:
-                        errorEmbed.description = (
-                            "❌ Content must be at most 4000 characters. Note that "
-                            "channel links add ~70 additional characters each"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    member = await self.bot.cache.get_guild_member(guild, user_id)
-                    if member is None:
-                        errorEmbed.description = (
-                            "❌ User not found, if this command fails again the user "
-                            "does not exist (or Discord's API is down)"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    dm_message_id, thread_message_id = (
-                        await self.bot.data_manager.get_linked_messages(
-                            channel.id, reply_id
-                        )
-                    )
-                    dm_channel = member.dm_channel or await member.create_dm()
-
-                    if dm_channel:
-                        try:
-                            dm_message = await dm_channel.fetch_message(dm_message_id)
-                        except Exception:
-                            errorEmbed.description = (
-                                "❌ Could not find respective message in DMs"
-                            )
-                            await ctx.send(embed=errorEmbed)
-                            return
-                    else:
-                        errorEmbed.description = (
-                            "❌ Could not open DM channel with the user"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if dm_message:
-                        newEmbed = deepcopy(dm_message.embeds[0])
-                        newEmbed.description = new_content
-                        try:
-                            await dm_message.edit(embed=newEmbed)
-                        except Exception:
-                            errorEmbed.description = (
-                                "❌ Failed to edit DM message, user does not share "
-                                "a server with me or has blocked me"
-                            )
-                            await ctx.send(embed=errorEmbed)
-                            return
-                    else:
-                        errorEmbed.description = (
-                            "❌ Could not find respective message in DMs"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    newSentEmbed = None
-                    thread = await self.bot.cache.get_channel(thread_id)
-                    thread_flag = False
-                    if thread:
-                        try:
-                            thread_message = await thread.fetch_message(
-                                thread_message_id
-                            )
-                        except Exception as e:
-                            thread_flag = True
-
-                        if thread_message:
-                            newSentEmbed = deepcopy(thread_message.embeds[0])
-                            newSentEmbed.title = f"{newSentEmbed.title} [EDITED]"
-                            newSentEmbed.description = new_content
-                            newSentEmbed.color = discord.Color.yellow()
-                            try:
-                                await thread_message.reply(embed=newSentEmbed)
-                            except Exception:
-                                thread_flag = True
-                        else:
-                            thread_flag = True
-                    else:
-                        thread_flag = True
-
-                    if thread_flag:
-                        errorEmbed.description = "❌ Failed to edit thread log message"
-                        await ctx.send(embed=errorEmbed)
-
-                    try:
-                        await message.edit(embed=newSentEmbed)
-                    except Exception:
-                        errorEmbed.description = "❌ Failed to edit message in this channel, DM message has been edited"
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    await startMessage.delete()
-                    successEmbed = discord.Embed(
-                        description=f"✅ Updated ticket reply to **{member.name}**",
-                        color=discord.Color.green(),
-                    )
-                    await ctx.send(embed=successEmbed)
+                    await ctx.send(embed=errorEmbed)
                     return
 
-            await ctx.send(embed=errorEmbed)
+            if len(new_content) > 4000:
+                errorEmbed.description = (
+                    "❌ Content must be at most 4000 characters. Note that "
+                    "channel links add ~70 additional characters each"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            member = await self.bot.cache.get_guild_member(guild, user_id)
+            if member is None:
+                errorEmbed.description = (
+                    "❌ User not found, if this command fails again the user "
+                    "does not exist (or Discord's API is down)"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            dm_message_id, thread_message_id = (
+                await self.bot.data_manager.get_linked_messages(channel.id, reply_id)
+            )
+            dm_channel = member.dm_channel or await member.create_dm()
+
+            if dm_channel:
+                try:
+                    dm_message = await dm_channel.fetch_message(dm_message_id)
+                except Exception:
+                    errorEmbed.description = (
+                        "❌ Could not find respective message in DMs"
+                    )
+                    await ctx.send(embed=errorEmbed)
+                    return
+            else:
+                errorEmbed.description = "❌ Could not open DM channel with the user"
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if dm_message:
+                newEmbed = deepcopy(dm_message.embeds[0])
+                newEmbed.description = new_content
+                try:
+                    await dm_message.edit(embed=newEmbed)
+                except Exception:
+                    errorEmbed.description = (
+                        "❌ Failed to edit DM message, user does not share "
+                        "a server with me or has blocked me"
+                    )
+                    await ctx.send(embed=errorEmbed)
+                    return
+            else:
+                errorEmbed.description = "❌ Could not find respective message in DMs"
+                await ctx.send(embed=errorEmbed)
+                return
+
+            newSentEmbed = None
+            thread = await self.bot.cache.get_channel(thread_id)
+            thread_flag = False
+            if thread:
+                try:
+                    thread_message = await thread.fetch_message(thread_message_id)
+                except Exception as e:
+                    thread_flag = True
+
+                if thread_message:
+                    newSentEmbed = deepcopy(thread_message.embeds[0])
+                    newSentEmbed.title = f"{newSentEmbed.title} [EDITED]"
+                    newSentEmbed.description = new_content
+                    newSentEmbed.color = discord.Color.yellow()
+                    try:
+                        await thread_message.reply(embed=newSentEmbed)
+                    except Exception:
+                        thread_flag = True
+                else:
+                    thread_flag = True
+            else:
+                thread_flag = True
+
+            if thread_flag:
+                errorEmbed.description = "❌ Failed to edit thread log message"
+                await ctx.send(embed=errorEmbed)
+
+            try:
+                await message.edit(embed=newSentEmbed)
+            except Exception:
+                errorEmbed.description = "❌ Failed to edit message in this channel, DM message has been edited"
+                await ctx.send(embed=errorEmbed)
+                return
+
+            await startMessage.delete()
+            successEmbed = discord.Embed(
+                description=f"✅ Updated ticket reply to **{member.name}**",
+                color=discord.Color.green(),
+            )
+            await ctx.send(embed=successEmbed)
+            return
 
         except Exception as e:
             logger.exception(f"reply_edit error: {e}")
             raise BotError(f"/reply_edit sent an error: {e}")
 
     @commands.command(name="reply_delete", aliases=["delete"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def reply_delete(self, ctx, reply_id: str):
@@ -692,169 +591,158 @@ class Tickets(commands.Cog):
                 color=discord.Color.red(),
             )
 
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
+            thread_id, user_id = get_ticket_channel_info(channel)
 
-                    startEmbed = discord.Embed(
-                        description="Started deleting process...",
-                        color=discord.Color.blue(),
+            startEmbed = discord.Embed(
+                description="Started deleting process...",
+                color=discord.Color.blue(),
+            )
+            startMessage = await ctx.send(embed=startEmbed)
+
+            try:
+                message = await channel.fetch_message(reply_id)
+            except Exception:
+                errorEmbed.description = (
+                    "❌ An error occurred fetching the message. Please try again"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if message is None:
+                errorEmbed.description = (
+                    "❌ Could not find a message in this channel with that ID"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if message.author.id not in (
+                1304609006379073628,
+                1333954467519004673,
+            ):
+                errorEmbed.description = (
+                    "❌ The message you selected is not from MailBee"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if (
+                (not message.embeds)
+                or (not message.embeds[0].title)
+                or (not "Sent" in message.embeds[0].title)
+            ):
+                errorEmbed.description = (
+                    "❌ The message you selected is not a ticket reply"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if (message.embeds[0].author.name).split()[2] != str(author.id):
+                if channel.permissions_for(author).administrator:
+                    pass
+                else:
+                    errorEmbed.description = (
+                        "❌ You do not have permission to alter that message"
                     )
-                    startMessage = await ctx.send(embed=startEmbed)
-
-                    try:
-                        message = await channel.fetch_message(reply_id)
-                    except Exception:
-                        errorEmbed.description = "❌ An error occurred fetching the message. Please try again"
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if message is None:
-                        errorEmbed.description = (
-                            "❌ Could not find a message in this channel with that ID"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if message.author.id not in (
-                        1304609006379073628,
-                        1333954467519004673,
-                    ):
-                        errorEmbed.description = (
-                            "❌ The message you selected is not from MailBee"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if (
-                        (not message.embeds)
-                        or (not message.embeds[0].title)
-                        or (not "Sent" in message.embeds[0].title)
-                    ):
-                        errorEmbed.description = (
-                            "❌ The message you selected is not a ticket reply"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if (message.embeds[0].author.name).split()[2] != str(author.id):
-                        if channel.permissions_for(author).administrator:
-                            pass
-                        else:
-                            errorEmbed.description = (
-                                "❌ You do not have permission to alter that message"
-                            )
-                            await ctx.send(embed=errorEmbed)
-                            return
-
-                    member = await self.bot.cache.get_guild_member(guild, user_id)
-                    if member is None:
-                        errorEmbed.description = (
-                            "❌ User not found, if this command fails again the user "
-                            "does not exist (or Discord's API is down)"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    dm_message_id, thread_message_id = (
-                        await self.bot.data_manager.get_linked_messages(
-                            channel.id, reply_id
-                        )
-                    )
-                    dm_channel = member.dm_channel or await member.create_dm()
-
-                    if dm_channel:
-                        try:
-                            dm_message = await dm_channel.fetch_message(dm_message_id)
-                        except Exception:
-                            errorEmbed.description = (
-                                "❌ Could not find respective message in DMs"
-                            )
-                            await ctx.send(embed=errorEmbed)
-                            return
-                    else:
-                        errorEmbed.description = (
-                            "❌ Could not open DM channel with the user"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    if dm_message:
-                        try:
-                            await dm_message.delete()
-                        except Exception:
-                            errorEmbed.description = (
-                                "❌ Failed to delete DM message, user does not share "
-                                "a server with me or has blocked me"
-                            )
-                            await ctx.send(embed=errorEmbed)
-                            return
-                    else:
-                        errorEmbed.description = (
-                            "❌ Could not find respective message in DMs"
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    thread = await self.bot.cache.get_channel(thread_id)
-                    thread_flag = False
-                    if thread:
-                        try:
-                            thread_message = await thread.fetch_message(
-                                thread_message_id
-                            )
-                        except Exception as e:
-                            thread_flag = True
-
-                        if thread_message:
-                            newEmbed = deepcopy(thread_message.embeds[0])
-                            newEmbed.title = f"{newEmbed.title} [DELETED]"
-                            newEmbed.color = discord.Color.red()
-                            try:
-                                await thread_message.edit(embed=newEmbed)
-                            except Exception:
-                                thread_flag = True
-                        else:
-                            thread_flag = True
-                    else:
-                        thread_flag = True
-
-                    if thread_flag:
-                        errorEmbed.description = (
-                            "❌ Failed to mark thread log message as deleted"
-                        )
-                        await ctx.send(embed=errorEmbed)
-
-                    try:
-                        await message.delete()
-                    except Exception:
-                        errorEmbed.description = "❌ Failed to delete message in this channel, DM message has been deleted"
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    await startMessage.delete()
-                    successEmbed = discord.Embed(
-                        description=f"✅ Deleted ticket reply to **{member.name}**",
-                        color=discord.Color.green(),
-                    )
-                    await ctx.send(embed=successEmbed)
+                    await ctx.send(embed=errorEmbed)
                     return
 
-            await ctx.send(embed=errorEmbed)
+            member = await self.bot.cache.get_guild_member(guild, user_id)
+            if member is None:
+                errorEmbed.description = (
+                    "❌ User not found, if this command fails again the user "
+                    "does not exist (or Discord's API is down)"
+                )
+                await ctx.send(embed=errorEmbed)
+                return
+
+            dm_message_id, thread_message_id = (
+                await self.bot.data_manager.get_linked_messages(channel.id, reply_id)
+            )
+            dm_channel = member.dm_channel or await member.create_dm()
+
+            if dm_channel:
+                try:
+                    dm_message = await dm_channel.fetch_message(dm_message_id)
+                except Exception:
+                    errorEmbed.description = (
+                        "❌ Could not find respective message in DMs"
+                    )
+                    await ctx.send(embed=errorEmbed)
+                    return
+            else:
+                errorEmbed.description = "❌ Could not open DM channel with the user"
+                await ctx.send(embed=errorEmbed)
+                return
+
+            if dm_message:
+                try:
+                    await dm_message.delete()
+                except Exception:
+                    errorEmbed.description = (
+                        "❌ Failed to delete DM message, user does not share "
+                        "a server with me or has blocked me"
+                    )
+                    await ctx.send(embed=errorEmbed)
+                    return
+            else:
+                errorEmbed.description = "❌ Could not find respective message in DMs"
+                await ctx.send(embed=errorEmbed)
+                return
+
+            thread = await self.bot.cache.get_channel(thread_id)
+            thread_flag = False
+            if thread:
+                try:
+                    thread_message = await thread.fetch_message(thread_message_id)
+                except Exception as e:
+                    thread_flag = True
+
+                if thread_message:
+                    newEmbed = deepcopy(thread_message.embeds[0])
+                    newEmbed.title = f"{newEmbed.title} [DELETED]"
+                    newEmbed.color = discord.Color.red()
+                    try:
+                        await thread_message.edit(embed=newEmbed)
+                    except Exception:
+                        thread_flag = True
+                else:
+                    thread_flag = True
+            else:
+                thread_flag = True
+
+            if thread_flag:
+                errorEmbed.description = (
+                    "❌ Failed to mark thread log message as deleted"
+                )
+                await ctx.send(embed=errorEmbed)
+
+            try:
+                await message.delete()
+            except Exception:
+                errorEmbed.description = "❌ Failed to delete message in this channel, DM message has been deleted"
+                await ctx.send(embed=errorEmbed)
+                return
+
+            await startMessage.delete()
+            successEmbed = discord.Embed(
+                description=f"✅ Deleted ticket reply to **{member.name}**",
+                color=discord.Color.green(),
+            )
+            await ctx.send(embed=successEmbed)
+            return
 
         except Exception as e:
             logger.exception(f"reply_delete error: {e}")
             raise BotError(f"/reply_delete sent an error: {e}")
 
     @commands.command(name="close", aliases=["c"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def close(self, ctx, *, reason: str = "No reason provided"):
         try:
-            ticket_channel = ctx.channel
-            guild = ticket_channel.guild
+            channel = ctx.channel
+            guild = channel.guild
             closer = ctx.author
             state = None
 
@@ -866,46 +754,38 @@ class Tickets(commands.Cog):
                 color=discord.Color.red(),
             )
 
-            if ticket_channel.topic:
-                if "Ticket channel" in ticket_channel.topic:
-                    text = await self.bot.helper.convert_mentions(reason, guild)
-                    if len(text) > 3000:
-                        errorEmbed.description = (
-                            "❌ Reason must be at most 3000 characters. Note that "
-                            "channel links add ~70 additional characters each."
-                        )
-                        await ticket_channel.send(embed=errorEmbed)
-                        return
+            thread_id, user_id = get_ticket_channel_info(channel)
+            text = await convert_mentions(self.bot, reason, guild)
+            if len(text) > 3000:
+                errorEmbed.description = (
+                    "❌ Reason must be at most 3000 characters. Note that "
+                    "channel links add ~70 additional characters each."
+                )
+                await channel.send(embed=errorEmbed)
+                return
 
-                    id_list = (ticket_channel.topic).split()
-                    user_id = id_list[-2]
-
-                    await self.bot.channel_status.remove_timer(ticket_channel.id)
-                    state = await close_ticket(
-                        self.bot, ticket_channel, closer, user_id, guild.id, text, None
-                    )
-
-                    if not state:
-                        await ticket_channel.send(embed=errorEmbed)
-
-                    return
-
-            errorEmbed.description = (
-                "❌ This command can only be used in ticket channels"
+            await self.bot.channel_status.remove_timer(channel.id)
+            state = await close_ticket(
+                self.bot, channel, closer, user_id, guild.id, text, None
             )
-            await ticket_channel.send(embed=errorEmbed)
+
+            if not state:
+                await channel.send(embed=errorEmbed)
+
+            return
 
         except Exception as e:
             logger.exception(e)
             raise BotError(f"/close sent an error: {e}")
 
     @commands.command(name="aclose", aliases=["ac"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def aclose(self, ctx, *, reason: str = "No reason provided"):
         try:
-            ticket_channel = ctx.channel
-            guild = ticket_channel.guild
+            channel = ctx.channel
+            guild = channel.guild
             closer = ctx.author
             state = None
 
@@ -917,45 +797,38 @@ class Tickets(commands.Cog):
                 color=discord.Color.red(),
             )
 
-            if ticket_channel.topic:
-                if "Ticket channel" in ticket_channel.topic:
-                    text = await self.bot.helper.convert_mentions(reason, guild)
-                    if len(text) > 3000:
-                        errorEmbed.description = (
-                            "❌ Reason must be at most 3000 characters. Note that "
-                            "channel links add ~70 additional characters each."
-                        )
-                        await ticket_channel.send(embed=errorEmbed)
-                        return
-                    id_list = (ticket_channel.topic).split()
-                    user_id = id_list[-2]
+            thread_id, user_id = get_ticket_channel_info(channel)
+            text = await convert_mentions(self.bot, reason, guild)
+            if len(text) > 3000:
+                errorEmbed.description = (
+                    "❌ Reason must be at most 3000 characters. Note that "
+                    "channel links add ~70 additional characters each."
+                )
+                await channel.send(embed=errorEmbed)
+                return
 
-                    await self.bot.channel_status.remove_timer(ticket_channel.id)
-                    state = await close_ticket(
-                        self.bot, ticket_channel, closer, user_id, guild.id, text, True
-                    )
-
-                    if not state:
-                        await ticket_channel.send(embed=errorEmbed)
-
-                    return
-
-            errorEmbed.description = (
-                "❌ This command can only be used in ticket channels"
+            await self.bot.channel_status.remove_timer(channel.id)
+            state = await close_ticket(
+                self.bot, channel, closer, user_id, guild.id, text, True
             )
-            await ticket_channel.send(embed=errorEmbed)
+
+            if not state:
+                await channel.send(embed=errorEmbed)
+
+            return
 
         except Exception as e:
             logger.exception(e)
             raise BotError(f"/aclose sent an error: {e}")
 
     @commands.command(name="nonaclose", aliases=["nac"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def nonaclose(self, ctx, *, reason: str = "No reason provided"):
         try:
-            ticket_channel = ctx.channel
-            guild = ticket_channel.guild
+            channel = ctx.channel
+            guild = channel.guild
             closer = ctx.author
             state = None
 
@@ -967,33 +840,25 @@ class Tickets(commands.Cog):
                 color=discord.Color.red(),
             )
 
-            if ticket_channel.topic:
-                if "Ticket channel" in ticket_channel.topic:
-                    text = await self.bot.helper.convert_mentions(reason, guild)
-                    if len(text) > 3000:
-                        errorEmbed.description = (
-                            "❌ Reason must be at most 3000 characters. Note that "
-                            "channel links add ~70 additional characters each."
-                        )
-                        await ticket_channel.send(embed=errorEmbed)
-                        return
-                    id_list = (ticket_channel.topic).split()
-                    user_id = id_list[-2]
+            thread_id, user_id = get_ticket_channel_info(channel)
+            text = await convert_mentions(self.bot, reason, guild)
+            if len(text) > 3000:
+                errorEmbed.description = (
+                    "❌ Reason must be at most 3000 characters. Note that "
+                    "channel links add ~70 additional characters each."
+                )
+                await channel.send(embed=errorEmbed)
+                return
 
-                    await self.bot.channel_status.remove_timer(ticket_channel.id)
-                    state = await close_ticket(
-                        self.bot, ticket_channel, closer, user_id, guild.id, text, False
-                    )
-
-                    if not state:
-                        await ticket_channel.send(embed=errorEmbed)
-
-                    return
-
-            errorEmbed.description = (
-                "❌ This command can only be used in ticket channels"
+            await self.bot.channel_status.remove_timer(channel.id)
+            state = await close_ticket(
+                self.bot, channel, closer, user_id, guild.id, text, False
             )
-            await ticket_channel.send(embed=errorEmbed)
+
+            if not state:
+                await channel.send(embed=errorEmbed)
+
+            return
 
         except Exception as e:
             logger.exception(e)
@@ -1002,6 +867,7 @@ class Tickets(commands.Cog):
     # Set a ticket as inactive for a period of time, then mark to close
     # Remove inactive / close marker if the user responds
     @commands.command(name="inactive", aliases=["inact"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def inactive(
@@ -1019,76 +885,61 @@ class Tickets(commands.Cog):
                 color=discord.Color.red(),
             )
 
-            if isinstance(channel, discord.TextChannel):
-                if channel.topic:
-                    if "Ticket channel" in channel.topic:
+            thread_id, user_id = get_ticket_channel_info(channel)
+            hours_match = re.fullmatch(r"(\d+)h?", hours)
+            if hours_match:
+                hours = int(hours_match.group(1))
+            else:
+                await channel.send(embed=errorEmbed)
+                return
 
-                        hours_match = re.fullmatch(r"(\d+)h?", hours)
-                        if hours_match:
-                            hours = int(hours_match.group(1))
-                        else:
-                            await channel.send(embed=errorEmbed)
-                            return
+            if (hours < 1) or (hours > 72):
+                errorEmbed.description = "❌ Hours must be between 1 to 72 (inclusive)"
+                await channel.send(embed=errorEmbed)
+                return
+            else:
+                text = await convert_mentions(self.bot, reason, guild)
+                if len(text) > 3000:
+                    errorEmbed.description = (
+                        "❌ Reason must be at most 3000 characters. Note that "
+                        "channel links add ~70 additional characters each."
+                    )
+                    await channel.send(embed=errorEmbed)
+                    return
+                end_time = now + (hours * 3600)
+                timer = self.bot.channel_status.get_timer(channel_id)
+                statusEmbed = discord.Embed(
+                    title="",
+                    description=f"Status set to **inactive** 🕓 for {hours} hour(s).\n"
+                    f"This ticket will **close** <t:{int(end_time)}:R> "
+                    "(allowing up to 1 minute of potential delay)\n\n"
+                    f"**Reason:** {text}",
+                    color=discord.Color.green(),
+                )
 
-                        if (hours < 1) or (hours > 72):
-                            errorEmbed.description = (
-                                "❌ Hours must be between 1 to 72 (inclusive)"
-                            )
-                            await channel.send(embed=errorEmbed)
-                            return
-                        else:
-                            text = await self.bot.helper.convert_mentions(reason, guild)
-                            if len(text) > 3000:
-                                errorEmbed.description = (
-                                    "❌ Reason must be at most 3000 characters. Note that "
-                                    "channel links add ~70 additional characters each."
-                                )
-                                await channel.send(embed=errorEmbed)
-                                return
-                            end_time = now + (hours * 3600)
-                            timer = self.bot.channel_status.get_timer(channel_id)
-                            statusEmbed = discord.Embed(
-                                title="",
-                                description=f"Status set to **inactive** 🕓 for {hours} hour(s).\n"
-                                f"This ticket will **close** <t:{int(end_time)}:R> "
-                                "(allowing up to 1 minute of potential delay)\n\n"
-                                f"**Reason:** {text}",
-                                color=discord.Color.green(),
-                            )
+                if timer is not None:
+                    statusEmbed.description = (
+                        f"Failed to change status to **inactive** 🕓, "
+                        "use `+active` to remove current inactive state"
+                    )
+                    statusEmbed.color = discord.Color.red()
+                    await channel.send(embed=statusEmbed)
+                    return
 
-                            if timer is not None:
-                                statusEmbed.description = (
-                                    f"Failed to change status to **inactive** 🕓, "
-                                    "use `+active` to remove current inactive state"
-                                )
-                                statusEmbed.color = discord.Color.red()
-                                await channel.send(embed=statusEmbed)
-                                return
+                await self.bot.cache.store_guild_member(guild.id, author)
+                await self.bot.cache.store_user(author)
 
-                            await self.bot.cache.store_guild_member(guild.id, author)
-                            await self.bot.cache.store_user(author)
+                id_list = (channel.topic).split()
+                user_id = id_list[-2]
 
-                            id_list = (channel.topic).split()
-                            user_id = id_list[-2]
+                await self.bot.channel_status.set_emoji(channel, "inactive", True)
+                await self.bot.channel_status.add_timer(
+                    channel_id, end_time, author.id, user_id, reason
+                )
+                await self.bot.data_manager.save_timers_to_redis()
 
-                            await self.bot.channel_status.set_emoji(
-                                channel, "inactive", True
-                            )
-                            await self.bot.channel_status.add_timer(
-                                channel_id, end_time, author.id, user_id, reason
-                            )
-                            await self.bot.data_manager.save_timers_to_redis()
-
-                            await channel.send(embed=statusEmbed)
-                            return
-
-            errorEmbed = discord.Embed(
-                title="",
-                description="❌ Channel is not a ticket",
-                color=discord.Color.red(),
-            )
-            await channel.send(embed=errorEmbed)
-            return
+                await channel.send(embed=statusEmbed)
+                return
 
         except Exception as e:
             logger.exception(e)
@@ -1097,57 +948,68 @@ class Tickets(commands.Cog):
     # Set a ticket as inactive for a period of time, then mark to close
     # Remove inactive / close marker if the user responds
     @commands.command(name="active", aliases=["act"])
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def active(self, ctx):
         try:
             channel = ctx.channel
             channel_id = channel.id
-            now = time.time()
+            state = await self.bot.channel_status.remove_timer(channel_id)
 
-            if isinstance(channel, discord.TextChannel):
-                if channel.topic:
-                    if "Ticket channel" in channel.topic:
-
-                        state = await self.bot.channel_status.remove_timer(channel_id)
-
-                        if not state:
-                            errorEmbed = discord.Embed(
-                                title="",
-                                description="❌ Ticket was not inactive",
-                                color=discord.Color.red(),
-                            )
-                            await channel.send(embed=errorEmbed)
-                            return
-                        else:
-                            await self.bot.data_manager.save_timers_to_redis()
-                            successEmbed = discord.Embed(
-                                title="",
-                                description=f"Removed **inactive** timer, status set to **waiting**",
-                                color=discord.Color.green(),
-                            )
-                            await self.bot.channel_status.set_emoji(
-                                channel, "wait", True
-                            )
-                            await channel.send(embed=successEmbed)
-                            return
-
-            errorEmbed = discord.Embed(
-                title="",
-                description="❌ Channel is not a ticket",
-                color=discord.Color.red(),
-            )
-            await channel.send(embed=errorEmbed)
-            return
+            if not state:
+                errorEmbed = discord.Embed(
+                    title="",
+                    description="❌ Ticket was not inactive",
+                    color=discord.Color.red(),
+                )
+                await channel.send(embed=errorEmbed)
+                return
+            else:
+                await self.bot.data_manager.save_timers_to_redis()
+                successEmbed = discord.Embed(
+                    title="",
+                    description=f"Removed **inactive** timer, status set to **waiting**",
+                    color=discord.Color.green(),
+                )
+                await self.bot.channel_status.set_emoji(channel, "wait", True)
+                await channel.send(embed=successEmbed)
+                return
 
         except Exception as e:
             logger.exception(e)
             raise BotError(f"/active sent an error: {e}")
 
+    @commands.command(name="transcript")
+    @checks.is_ticket()
+    @checks.is_user()
+    @checks.is_guild()
+    async def transcript(self, ctx):
+        try:
+            channel = ctx.channel
+            message = await ctx.send("Generating transcript... This may take a moment.")
+            transcript = await export_ticket_messages(channel)
+            if transcript is None or transcript == "":
+                await message.delete()
+                await ctx.send(embed=Embeds.error(description="❌ No messages found"))
+            else:
+                transcript_file = discord.File(
+                    io.StringIO(transcript), filename="transcript.txt"
+                )
+                await message.delete()
+                await ctx.send(
+                    embed=Embeds.success(description="Transcript generated"),
+                    file=transcript_file,
+                )
+        except Exception as e:
+            logger.exception(f"/transcript error: {e}")
+            raise BotError(f"/transcript sent an error: {e}")
+
     # Move a ticket channel
     @app_commands.command(
         name="move", description="Move a ticket to a different category"
     )
+    @checks.is_ticket_app()
     @checks.is_user_app()
     @checks.is_guild_app()
     @app_commands.describe(
@@ -1174,136 +1036,117 @@ class Tickets(commands.Cog):
                 color=discord.Color.red(),
             )
 
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
-                    if category is None and anywhere is None:
-                        errorEmbed = discord.Embed(
-                            description="❌ You must specify some category or location.",
-                            color=discord.Color.red(),
+            if category is None and anywhere is None:
+                errorEmbed = discord.Embed(
+                    description="❌ You must specify some category or location.",
+                    color=discord.Color.red(),
+                )
+                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                return
+            if category is not None:
+                category_id, flag = category.split()
+                category = await self.bot.cache.get_channel(category_id)
+
+                if category is None:
+                    errorEmbed = discord.Embed(
+                        description="❌ Category doesn't exist.",
+                        color=discord.Color.red(),
+                    )
+                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                    return
+
+                if category.id == channel.category.id:
+                    errorEmbed = discord.Embed(
+                        description="❌ Cannot move channel to the category it's already in.",
+                        color=discord.Color.red(),
+                    )
+                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                    return
+
+                if len(category.channels) == 50:
+                    errorEmbed = discord.Embed(
+                        description="❌ Cannot move channel to a full category.",
+                        color=discord.Color.red(),
+                    )
+                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                    return
+
+                ticket_is_nsfw = False
+                types_raw = await self.bot.data_manager.get_or_load_guild_types(
+                    guild.id
+                )
+                for type in types_raw:
+                    if int(type["nsfw_category_id"]) == channel.category.id:
+                        ticket_is_nsfw = True
+                        break
+
+                try:
+                    if flag == "True" and not ticket_is_nsfw:
+                        await channel.edit(
+                            nsfw=True,
+                            overwrites=category.overwrites,
+                            category=category,
                         )
-                        await interaction.followup.send(
-                            embed=errorEmbed, ephemeral=True
+                        await self.bot.channel_status.set_emoji(
+                            channel, None, True, True
                         )
-                        return
-                    if category is not None:
-                        category_id, flag = category.split()
-                        category = await self.bot.cache.get_channel(category_id)
 
-                        if category is None:
-                            errorEmbed = discord.Embed(
-                                description="❌ Category doesn't exist.",
-                                color=discord.Color.red(),
-                            )
-                            await interaction.followup.send(
-                                embed=errorEmbed, ephemeral=True
-                            )
-                            return
-
-                        if category.id == channel.category.id:
-                            errorEmbed = discord.Embed(
-                                description="❌ Cannot move channel to the category it's already in.",
-                                color=discord.Color.red(),
-                            )
-                            await interaction.followup.send(
-                                embed=errorEmbed, ephemeral=True
-                            )
-                            return
-
-                        if len(category.channels) == 50:
-                            errorEmbed = discord.Embed(
-                                description="❌ Cannot move channel to a full category.",
-                                color=discord.Color.red(),
-                            )
-                            await interaction.followup.send(
-                                embed=errorEmbed, ephemeral=True
-                            )
-                            return
-
-                        ticket_is_nsfw = False
-                        types_raw = await self.bot.data_manager.get_or_load_guild_types(
-                            guild.id
+                    elif flag == "False" and ticket_is_nsfw:
+                        await channel.edit(
+                            nsfw=False,
+                            overwrites=category.overwrites,
+                            category=category,
                         )
-                        for type in types_raw:
-                            if int(type["nsfw_category_id"]) == channel.category.id:
-                                ticket_is_nsfw = True
-                                break
-
-                        try:
-                            if flag == "True" and not ticket_is_nsfw:
-                                await channel.edit(
-                                    nsfw=True,
-                                    overwrites=category.overwrites,
-                                    category=category,
-                                )
-                                await self.bot.channel_status.set_emoji(
-                                    channel, None, True, True
-                                )
-
-                            elif flag == "False" and ticket_is_nsfw:
-                                await channel.edit(
-                                    nsfw=False,
-                                    overwrites=category.overwrites,
-                                    category=category,
-                                )
-                                await self.bot.channel_status.set_emoji(
-                                    channel, None, True, False
-                                )
-
-                            else:
-                                await channel.edit(
-                                    overwrites=category.overwrites, category=category
-                                )
-
-                        except Exception:
-                            errorEmbed.description = (
-                                "❌ Failed to edit channel. Please try again later."
-                            )
-                            await interaction.followup.send(
-                                embed=errorEmbed, ephemeral=True
-                            )
-                            return
-
-                        successEmbed = discord.Embed(
-                            description=f"✅ Moved this channel to **{category.name}**\n"
-                            "**NOTE:** This channel's emoji status may take up to "
-                            "5 minutes to update",
-                            color=discord.Color.green(),
+                        await self.bot.channel_status.set_emoji(
+                            channel, None, True, False
                         )
-                        await interaction.followup.send(embed=successEmbed)
-                        return
+
                     else:
-                        if anywhere.id == channel.category.id:
-                            errorEmbed = discord.Embed(
-                                description="❌ Cannot move channel to the category it's already in.",
-                                color=discord.Color.red(),
-                            )
-                            await interaction.followup.send(
-                                embed=errorEmbed, ephemeral=True
-                            )
-                            return
-                        try:
-                            await channel.edit(category=anywhere)
-
-                        except Exception:
-                            errorEmbed.description = (
-                                "❌ Failed to edit channel. Please try again later."
-                            )
-                            await interaction.followup.send(
-                                embed=errorEmbed, ephemeral=True
-                            )
-                            return
-
-                        successEmbed = discord.Embed(
-                            description=f"✅ Moved this channel to **{anywhere.name}**\n"
-                            "**NOTE:** Using `/move` with **anywhere** will not "
-                            "sync channel permissions or stauses.",
-                            color=discord.Color.green(),
+                        await channel.edit(
+                            overwrites=category.overwrites, category=category
                         )
-                        await interaction.followup.send(embed=successEmbed)
-                        return
+
+                except Exception:
+                    errorEmbed.description = (
+                        "❌ Failed to edit channel. Please try again later."
+                    )
+                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                    return
+
+                successEmbed = discord.Embed(
+                    description=f"✅ Moved this channel to **{category.name}**\n"
+                    "**NOTE:** This channel's emoji status may take up to "
+                    "5 minutes to update",
+                    color=discord.Color.green(),
+                )
+                await interaction.followup.send(embed=successEmbed)
+                return
+            else:
+                if anywhere.id == channel.category.id:
+                    errorEmbed = discord.Embed(
+                        description="❌ Cannot move channel to the category it's already in.",
+                        color=discord.Color.red(),
+                    )
+                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                    return
+                try:
+                    await channel.edit(category=anywhere)
+
+                except Exception:
+                    errorEmbed.description = (
+                        "❌ Failed to edit channel. Please try again later."
+                    )
+                    await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                    return
+
+                successEmbed = discord.Embed(
+                    description=f"✅ Moved this channel to **{anywhere.name}**\n"
+                    "**NOTE:** Using `/move` with **anywhere** will not "
+                    "sync channel permissions or stauses.",
+                    color=discord.Color.green(),
+                )
+                await interaction.followup.send(embed=successEmbed)
+                return
 
             await interaction.followup.send(embed=errorEmbed, ephemeral=True)
 
@@ -1339,7 +1182,7 @@ class Tickets(commands.Cog):
             if cat.id in id_flags
         ]
 
-        # FIXME Add a database thing for this
+        # TODO Add a database table for this
         extra_categories = {"346515443869286410": ("1273714180037283890")}
 
         category_list = extra_categories.get(str(guild.id), None)
@@ -1358,6 +1201,7 @@ class Tickets(commands.Cog):
 
     # Move a ticket channel
     @commands.command(name="nsfw")
+    @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
     async def nsfw(self, ctx):
@@ -1371,84 +1215,72 @@ class Tickets(commands.Cog):
                 color=discord.Color.red(),
             )
 
-            if channel.topic:
-                if "Ticket channel" in channel.topic:
-                    id_list = (channel.topic).split()
-                    thread_id = id_list[-1]
-                    user_id = id_list[-2]
+            ticket_is_nsfw = False
+            types_raw = await self.bot.data_manager.get_or_load_guild_types(guild.id)
+            for type in types_raw:
+                if int(type["nsfw_category_id"]) == channel.category.id:
+                    ticket_is_nsfw = True
+                    break
 
-                    ticket_is_nsfw = False
-                    types_raw = await self.bot.data_manager.get_or_load_guild_types(
-                        guild.id
-                    )
-                    for type in types_raw:
-                        if int(type["nsfw_category_id"]) == channel.category.id:
-                            ticket_is_nsfw = True
-                            break
+            if ticket_is_nsfw:
+                errorEmbed.description = (
+                    "❌ This ticket is already in a NSFW category.\n"
+                    "Use `/move` to move it manually elsewhere."
+                )
+                await ctx.send(embed=errorEmbed)
+                return
 
-                    if ticket_is_nsfw:
-                        errorEmbed.description = (
-                            "❌ This ticket is already in a NSFW category.\n"
-                            "Use `/move` to move it manually elsewhere."
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
+            nsfw_id = -1
+            for type in types_raw:
+                if int(type["category_id"]) == channel.category.id:
+                    nsfw_id = int(type["nsfw_category_id"])
 
-                    nsfw_id = -1
-                    for type in types_raw:
-                        if int(type["category_id"]) == channel.category.id:
-                            nsfw_id = int(type["nsfw_category_id"])
+            if nsfw_id in (0, -1):
+                errorEmbed.description = (
+                    "❌ This ticket's type does not have a NSFW category set.\n"
+                    "Use `/move` to move it manually."
+                )
+                await ctx.send(embed=errorEmbed)
+                return
 
-                    if nsfw_id in (0, -1):
-                        errorEmbed.description = (
-                            "❌ This ticket's type does not have a NSFW category set.\n"
-                            "Use `/move` to move it manually."
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
+            category = await self.bot.cache.get_channel(nsfw_id)
 
-                    category = await self.bot.cache.get_channel(nsfw_id)
+            if category is None:
+                errorEmbed = discord.Embed(
+                    description="❌ NSFW category for this ticket's type doesn't exist.",
+                    color=discord.Color.red(),
+                )
+                await ctx.send(embed=errorEmbed)
+                return
 
-                    if category is None:
-                        errorEmbed = discord.Embed(
-                            description="❌ NSFW category for this ticket's type doesn't exist.",
-                            color=discord.Color.red(),
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
+            if category.id == channel.category.id:
+                errorEmbed = discord.Embed(
+                    description="❌ Cannot move channel to the category it's already in.",
+                    color=discord.Color.red(),
+                )
+                await ctx.send(embed=errorEmbed)
+                return
 
-                    if category.id == channel.category.id:
-                        errorEmbed = discord.Embed(
-                            description="❌ Cannot move channel to the category it's already in.",
-                            color=discord.Color.red(),
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
+            try:
+                await channel.edit(
+                    nsfw=True, overwrites=category.overwrites, category=category
+                )
+                await self.bot.channel_status.set_emoji(channel, None, False, True)
+            except Exception:
+                errorEmbed.description = (
+                    "❌ Failed to edit channel. Please try again later."
+                )
+                await ctx.send(embed=errorEmbed)
+                return
 
-                    try:
-                        await channel.edit(
-                            nsfw=True, overwrites=category.overwrites, category=category
-                        )
-                        await self.bot.channel_status.set_emoji(
-                            channel, None, False, True
-                        )
-                    except Exception:
-                        errorEmbed.description = (
-                            "❌ Failed to edit channel. Please try again later."
-                        )
-                        await ctx.send(embed=errorEmbed)
-                        return
-
-                    successEmbed = discord.Embed(
-                        description=f"✅ Moved this channel to **{category.name}**\n"
-                        "**NOTE:** This channel's emoji status may take up to "
-                        "5 minutes to update",
-                        color=discord.Color.green(),
-                    )
-                    await ctx.send(embed=successEmbed)
-                    return
-
-            await ctx.send(embed=errorEmbed)
+            successEmbed = discord.Embed(
+                description=f"✅ Moved this channel to **{category.name}**\n"
+                "**NOTE:** This channel's emoji status may take up to "
+                "5 minutes to update",
+                color=discord.Color.green(),
+            )
+            await ctx.send(embed=successEmbed)
+            return
 
         except Exception as e:
             logger.exception(e)
@@ -1458,6 +1290,7 @@ class Tickets(commands.Cog):
     @app_commands.command(
         name="status", description="Change the emoji status of a ticket"
     )
+    @checks.is_ticket_app()
     @checks.is_user_app()
     @checks.is_guild_app()
     @app_commands.describe(status="Select an emoji from the provided list")
@@ -1559,6 +1392,10 @@ class Tickets(commands.Cog):
             title="Need Support?", description=content, color=discord.Color.yellow()
         )
         await ctx.channel.send(embed=ticketEmbed, view=view)
+
+    # Remove someone's ticket from the queue
+
+    # Move someone's ticket to the front of the queue
 
 
 async def setup(bot):

@@ -5,6 +5,7 @@ import tempfile
 
 from .compression.DA import DAConversionTable
 from .compression.HL import HLConversionTable
+from roblox_data.luau_decoder import JSON
 
 
 def prettify_json(data):
@@ -40,6 +41,8 @@ def call_luau_script(input_string):
 
 
 def da_decoder(player_data):
+    from compression.DA import DAConversionTable
+
     if not isinstance(player_data, str):
         player_data = json.dumps(player_data)
 
@@ -50,16 +53,10 @@ def da_decoder(player_data):
 
 
 def sonaria_decoder(player_data):
-    return call_luau_script(player_data)
+    return prettify_json(json.dumps(JSON.decode(player_data)))
 
 
 def horse_life_decoder(player_data):
-    decoded_data = player_data.replace('\\\\\\"', '\\\\"')
-    decoded_data = decoded_data.replace('\\"', '"')
-
-    if decoded_data.startswith('"') and decoded_data.endswith('"'):
-        decoded_data = decoded_data[1:-1]
-
     def simplify_data(data):
         def process_node(node):
             simplified_node = {}
@@ -72,23 +69,7 @@ def horse_life_decoder(player_data):
 
         return process_node(data["SerializedData"])
 
-    new_data = simplify_data(json.loads(decoded_data))
-
-    if len(new_data) < 20:
-
-        def simplify_data_v2(data):
-            def process_node(node):
-                simplified_node = {}
-                for child in node.get("CH", []):
-                    if not child.get("CH"):
-                        simplified_node[child["N"]] = child.get("V")
-                    else:
-                        simplified_node[child["N"]] = process_node(child)
-                return simplified_node
-
-            return process_node(data["SerializedData"])
-
-        new_data = simplify_data_v2(json.loads(decoded_data))
+    new_data = simplify_data(json.loads(player_data))
 
     return prettify_json(json.dumps(new_data))
 
@@ -99,7 +80,7 @@ CONFIG = {
         "data_prefix": "data/live",
         "json_decoder": da_decoder,
         "robux_parser": lambda player_data: format(
-            player_data["Monetization"]["RobuxSpent"], ","
+            round(player_data["Monetization"]["RobuxSpent"]), ","
         ),
         "time_parser": lambda player_data: round(
             player_data["Stats"]["TimePlayed"] / 3600, 1
@@ -110,7 +91,7 @@ CONFIG = {
         "data_prefix": "data/live",
         "json_decoder": sonaria_decoder,
         "robux_parser": lambda player_data: format(
-            player_data["Monetization"]["RobuxSpent"], ","
+            round(player_data["Monetization"]["RobuxSpent"]), ","
         ),
         "time_parser": lambda player_data: round(
             player_data["Stats"]["TimePlayed"] / 3600, 1
