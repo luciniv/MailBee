@@ -69,7 +69,7 @@ async def get_roblox_user_data(
         )
         headers = {"Authorization": api_key}
 
-        response = api_call(bloxlink_url, headers=headers)
+        response = await api_call(bloxlink_url, headers=headers)
         if response:
             roblox_id = response.get("robloxID")
             if not roblox_id:
@@ -85,7 +85,7 @@ async def get_roblox_user_data(
             # Fallback: fetch Roblox username from Roblox API
             roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
 
-            response = api_call(roblox_url)
+            response = await api_call(roblox_url)
             if response:
                 username = response.get("name")
             else:
