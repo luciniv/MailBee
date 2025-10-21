@@ -71,6 +71,7 @@ async def get_roblox_user_data(
 
         response = await api_call(bloxlink_url, headers=headers)
         if response:
+            print(response)
             roblox_id = response.get("robloxID")
             if not roblox_id:
                 return None
@@ -87,6 +88,7 @@ async def get_roblox_user_data(
 
             response = await api_call(roblox_url)
             if response:
+                print(response)
                 username = response.get("name")
             else:
                 return None
@@ -161,6 +163,7 @@ async def get_game_data(game_type, game_id, user_id):
             store_name if store_name else user_key,
             user_key if store_name else time_key,
         )
+        print(player_data)
         return player_data
 
     except Exception as e:
@@ -197,6 +200,7 @@ async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
             result = player_data
 
         result_dict = json.loads(result)
+        print(result_dict)
         values = []
         try:
             robux_spent = game_config["robux_parser"](result_dict)
@@ -216,11 +220,14 @@ async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
 
 async def get_roblox_data(game_type: tuple, guild_id: int, user_id: int) -> list | None:
     try:
+        print(game_type, guild_id, user_id)
         user_info = await get_roblox_user_data(guild_id, user_id, game_type[2])
+        print(user_info)
         if user_info:
             values = await get_roblox_game_data(
                 game_type[0], game_type[1], user_info[1]
             )
+            print(values)
             return user_info.extend(values)
         else:
             return None
