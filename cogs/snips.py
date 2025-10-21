@@ -285,9 +285,7 @@ class Snips(commands.Cog):
             await interaction.response.defer()
             guild = interaction.guild
             snips = await self.bot.data_manager.get_or_load_snips(guild.id)
-            print(snips)
             full_snip = None
-            print(snip)
             abbrev = snip[: (snip.index(":"))]
 
             for entry in snips:
