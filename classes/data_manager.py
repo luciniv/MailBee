@@ -243,20 +243,20 @@ class DataManager:
         # Pull DB data, send to redis
         # FIXME change these to expire after 5 min
         # Pull redis data to local variables
-        # await self.load_status_dicts_from_redis() # keep local
-        # await self.load_timers_from_redis() # keep local
+        await self.load_status_dicts_from_redis()  # keep local
+        await self.load_timers_from_redis()  # keep local
 
         # # NOTE this one stays, for mantid
-        # await self.load_mods_from_redis()
+        await self.load_mods_from_redis()
         await self.bot.ticket_queue.start_worker()
         await self.bot.channel_status.start_worker()
 
     async def data_shutdown(self):
         await self.bot.ticket_queue.stop_worker()
         await self.bot.channel_status.stop_worker()
-        # await self.save_status_dicts_to_redis()
-        # await self.save_timers_to_redis()
-        # await self.save_mods_to_redis()
+        await self.save_status_dicts_to_redis()
+        await self.save_timers_to_redis()
+        await self.save_mods_to_redis()
         await self.close_db()
         await self.close_redis()
 
@@ -388,7 +388,7 @@ class DataManager:
     async def get_queue(self, guild_id: int) -> list[Ticket]:
         """Get all tickets in this guild’s queue."""
         key = f"ticket_queue:{guild_id}"
-        items = await self.redis.lrange(self._key(guild_id), 0, -1)
+        items = await self.redis.lrange(key, 0, -1)
         return [Ticket(**json.loads(item)) for item in items]
 
     async def get_all_queues(self) -> dict[int, list[Ticket]]:
@@ -521,6 +521,13 @@ class DataManager:
             """
         open_tickets = await self.execute_query(query)
         return open_tickets
+
+    async def has_current_ticket(self, guild_id, user_id):
+        tickets = await self.bot.data_manager.get_or_load_user_tickets(user_id)
+        for ticket in tickets:
+            if ticket["guild_id"] == guild_id:
+                return True
+        return False
 
     async def get_guild_and_log(self, channel_id):
         query = f"""
@@ -1169,7 +1176,7 @@ class DataManager:
 
         db_tickets = await self.load_tickets_from_db(userID)
         if not db_tickets:
-            return None
+            return []
 
         for guild_id, channel_id in db_tickets:
             ticket_data = {"guild_id": guild_id, "channel_id": channel_id}

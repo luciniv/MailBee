@@ -36,10 +36,9 @@ class Analytics(commands.Cog):
         self.processing_queue = asyncio.Queue()
 
     async def cog_load(self):
-        pass
-        # logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        # await self.catch_modmail_backlog()
-        # await self.process_queue()
+        logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
+        await self.catch_modmail_backlog()
+        await self.process_queue()
 
     async def bot_dm(self, message: discord.Message):
         try:

@@ -51,7 +51,6 @@ class TicketOpener:
 
     async def open_ticket(self, ticket: Ticket):
         try:
-            print(ticket)
             user_id = ticket.user_id
             guild_id = ticket.guild_id
             category_id = ticket.category_id

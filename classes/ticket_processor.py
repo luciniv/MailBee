@@ -33,6 +33,13 @@ class TicketQueue:
         except Exception as e:
             logger.error(f"Failed to stop queue worker: {e}")
 
+    async def has_pending_ticket(self, guild_id: int, user_id: int) -> bool:
+        queue = await self.bot.data_manager.get_queue(guild_id)
+        for ticket in queue:
+            if ticket.user_id == user_id:
+                return True
+        return False
+
     async def _add_ticket(self, ticket: Ticket, info_message: discord.Message):
         ticket.dm_message_id = info_message.id
         await self.bot.cache.store_message(info_message)
@@ -79,8 +86,7 @@ class TicketQueue:
         """Attempts to open tickets if there's space."""
         full_categories = []
         queues = await self.bot.data_manager.get_all_queues()
-        if queues:
-            print(queues)
+
         for guild_id, queue in queues.items():
             for ticket in queue:
                 category_id = ticket.category_id

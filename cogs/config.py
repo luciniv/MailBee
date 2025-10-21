@@ -189,7 +189,7 @@ class Config(commands.Cog):
         except Exception as e:
             raise BotError(f"/setup sent an error: {e}")
 
-    type_group = app_commands.Group(name="type", description="Manage ticket types")
+    type_group = app_commands.Group(name="type", description="Add a ticket type")
 
     @type_group.command(name="add", description="Add a new ticket type")
     @checks.is_user_app()
@@ -202,7 +202,7 @@ class Config(commands.Cog):
         self,
         interaction: discord.Interaction,
         name: Range[str, 1, 45],
-        description: Range[str, 1, 100],
+        description: Range[str, 1, 200],
         emoji: str = None,
         nsfw: discord.CategoryChannel = None,
         parent: discord.CategoryChannel = None,
@@ -278,13 +278,13 @@ class Config(commands.Cog):
                         embed=Embeds.error(
                             description="❌ Failed to create new category. Please ensure "
                             "bot has **administrator permissions** and this server "
-                            "is not at the maximum channel limit."
+                            "is not at the maximum category / channel limit."
                         )
                     )
             else:
                 await interaction.followup.send(
                     embed=Embeds.error(
-                        description="❌ Inbox category not found, please run `/setup` first."
+                        description="❌ Ticket inbox category not found, please run `/setup` first."
                     )
                 )
 
@@ -318,7 +318,7 @@ class Config(commands.Cog):
     )
     @checks.is_admin()
     @checks.is_guild()
-    async def remove(self, ctx, category: discord.CategoryChannel):
+    async def update(self, ctx, category: discord.CategoryChannel):
         try:
             name = category.name
             await self.bot.data_manager.delete_guild_type(ctx.guild.id, category.id)

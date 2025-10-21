@@ -137,6 +137,20 @@ class ServerSelect(discord.ui.Select):
         self.bot = bot
         self.dm_channel_id = dm_channel_id
 
+    async def error_out(
+        self, interaction: discord.Interaction, title: str, description: str
+    ):
+        error_embed = Embeds.error(title=title, description=description)
+        await interaction.channel.send(embed=error_embed)
+
+        try:
+            await interaction.message.delete()
+        except discord.errors.HTTPException:
+            pass
+
+        if self.view:
+            self.view.stop()
+
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
 
@@ -146,20 +160,12 @@ class ServerSelect(discord.ui.Select):
         user = interaction.user
 
         blacklisted = await self.bot.data_manager.get_blacklist_entry(guild.id, user.id)
-        if blacklisted is not None:
-            error_embed = discord.Embed(
-                description=f"❌ You are blacklisted from opening tickets with this server.",
-                color=discord.Color.red(),
+        if blacklisted:
+            await self.error_out(
+                interaction,
+                "",
+                "❌ You are blacklisted from opening tickets with this server.",
             )
-            await interaction.channel.send(embed=error_embed)
-
-            try:
-                await interaction.message.delete()
-            except discord.errors.HTTPException:
-                pass
-
-            if self.view:
-                self.view.stop()
             return
 
         # Check if user is in this guild
@@ -171,103 +177,64 @@ class ServerSelect(discord.ui.Select):
                 )
 
             except discord.errors.NotFound:
-                error_embed = discord.Embed(
-                    description=f"❌ You are not in that server. If you would like to open a ticket there, "
-                    "please join the server first.",
-                    color=discord.Color.red(),
+                await self.error_out(
+                    interaction,
+                    "",
+                    "❌ You are not in that server. If you would like to open a "
+                    "ticket there, please join that server first.",
                 )
-                await interaction.channel.send(embed=error_embed)
-
-                try:
-                    await interaction.message.delete()
-                except discord.errors.HTTPException:
-                    pass
-
-                if self.view:
-                    self.view.stop()
                 return
 
             except Exception:
-                error_embed = discord.Embed(
-                    description=f"❌ An error occurred with Discord's API. Please try again.",
-                    color=discord.Color.red(),
+                await self.error_out(
+                    interaction,
+                    "",
+                    "❌ An error occurred while verifying your membership in "
+                    "that server. Please try again.",
                 )
-                await interaction.channel.send(embed=error_embed)
-
-                try:
-                    await interaction.message.delete()
-                except discord.errors.HTTPException:
-                    pass
-
-                if self.view:
-                    self.view.stop()
                 return
 
         await self.bot.cache.store_guild_member(guild_id, member)
 
-        # Check if user already has a ticket open with this guild
-        tickets = await self.bot.data_manager.get_or_load_user_tickets(
-            interaction.user.id
+        # Check if user has an open or pending ticket already
+        pending_ticket = await self.bot.ticket_queue.has_pending_ticket(
+            guild_id, member.id
         )
-        if (tickets is not None) and (
-            any(ticket["guild_id"] == guild_id for ticket in tickets)
-        ):
-            error_embed = discord.Embed(
-                description=f"❌ You already have a ticket open with **{guild.name}**.\n\n"
-                "Send a message in this channel to reply to your open ticket instead.",
-                color=discord.Color.red(),
+        current_ticket = await self.bot.data_manager.has_current_ticket(
+            guild_id, member.id
+        )
+        if pending_ticket or current_ticket:
+            await self.error_out(
+                interaction,
+                "",
+                "❌ You already have a ticket pending or open with this server.\n\n"
+                "Send a message in that ticket to reply to it instead.",
             )
-            await interaction.channel.send(embed=error_embed)
-
-            try:
-                await interaction.message.delete()
-            except discord.HTTPException:
-                pass
-
-            if self.view:
-                self.view.stop()
             return
 
         # Check if guild is accepting tickets
         config = await self.bot.data_manager.get_or_load_config(guild_id)
         if config is None or config["accepting"] != "true":
-            error_embed = discord.Embed(
-                title="Ticket Creation is Disabled",
-                description=(
+            await self.error_out(
+                interaction,
+                "Ticket Creation is Disabled",
+                (
                     config["accepting"]
                     if config
                     else "This server has not set up ticket creation yet."
                 ),
-                color=discord.Color.red(),
             )
-            await interaction.channel.send(embed=error_embed)
-
-            try:
-                await interaction.message.delete()
-            except discord.HTTPException:
-                pass
-
-            if self.view:
-                self.view.stop()
             return
 
         # Load available ticket types
         types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
         if not types:
-            error_embed = discord.Embed(
-                description=f"❌ **{guild.name}** has not set up any ticket types yet.\n\n"
+            await self.error_out(
+                interaction,
+                "",
+                "❌ This server has not set up any ticket types yet.\n\n"
                 "Please contact a server admin if you believe this is a mistake.",
-                color=discord.Color.red(),
             )
-            await interaction.channel.send(embed=error_embed)
-
-            try:
-                await interaction.message.delete()
-            except discord.HTTPException:
-                pass
-
-            if self.view:
-                self.view.stop()
             return
 
         loading_embed = discord.Embed(
@@ -323,7 +290,6 @@ class DMCategoryButtonView(discord.ui.View):
     ):
         try:
             await interaction.response.defer(ephemeral=True)
-            error_embed = discord.Embed(description=" ", color=discord.Color.red())
 
             user = interaction.user
             guild = interaction.guild
@@ -336,14 +302,22 @@ class DMCategoryButtonView(discord.ui.View):
                     self.bot.queue.user_action_cooldowns["open_ticket_button"][
                         "notified"
                     ][user.id] = True
-                    error_embed.description = f"❌ You're clicking a bit too quickly — please wait {retry_after:.1f} seconds."
-                    await interaction.followup.send(embed=error_embed, ephemeral=True)
-                # else: silently ignore
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ You're clicking a bit too quickly — "
+                            f"please wait {retry_after:.1f} seconds."
+                        ),
+                        ephemeral=True,
+                    )
                 return
 
             if not guild:
-                error_embed.description = "❌ This button must be used in a server."
-                await interaction.followup.send(embed=error_embed, ephemeral=True)
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ This button must be used in a server."
+                    ),
+                    ephemeral=True,
+                )
                 return
 
             guild_id = guild.id
@@ -351,38 +325,52 @@ class DMCategoryButtonView(discord.ui.View):
             blacklisted = await self.bot.data_manager.get_blacklist_entry(
                 guild_id, user.id
             )
-            if blacklisted is not None:
-                error_embed.description = (
-                    "❌ You are blacklisted from opening tickets with this server."
+            if blacklisted:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ You are blacklisted from opening tickets "
+                        "with this server."
+                    ),
+                    ephemeral=True,
                 )
-                await interaction.followup.send(embed=error_embed, ephemeral=True)
                 return
 
-            tickets = await self.bot.data_manager.get_or_load_user_tickets(user.id)
-            if tickets and any(ticket["guild_id"] == guild_id for ticket in tickets):
-                error_embed.description = (
-                    "❌ You already have a ticket open with this server. "
-                    "Direct message me to reply to that ticket instead."
+            pending_ticket = await self.bot.ticket_queue.has_pending_ticket(
+                guild_id, user.id
+            )
+            current_ticket = await self.bot.data_manager.has_current_ticket(
+                guild_id, user.id
+            )
+            if pending_ticket or current_ticket:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ You already have a ticket open with this "
+                        "server. Direct message me to reply to that ticket instead."
+                    ),
+                    ephemeral=True,
                 )
-                await interaction.followup.send(embed=error_embed, ephemeral=True)
                 return
 
             config = await self.bot.data_manager.get_or_load_config(guild_id)
             if config["accepting"] != "true":
-                error_embed.title = "Ticket Creation is Disabled"
-                error_embed.description = config["accepting"]
-                await interaction.followup.send(embed=error_embed, ephemeral=True)
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        title="Ticket Creation is Disabled",
+                        description=config["accepting"],
+                    ),
+                    ephemeral=True,
+                )
                 return
 
             try:
                 dm_channel = user.dm_channel or await user.create_dm()
                 types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
 
-                embed = discord.Embed(
+                embed = Embeds.info(
                     title="Select Ticket Type",
-                    description="Please select a type for your ticket with the drop-down menu below.\n\n"
-                    "If you're unsure what to choose, or your topic isn't listed, select \"Other.\"",
-                    color=discord.Color.blue(),
+                    description="Please select a type for your ticket with the "
+                    "drop-down menu below.\n\nIf you're unsure what to choose, or "
+                    'your topic isn\'t listed, select "Other."',
                 )
                 if guild.icon:
                     embed.set_author(name=guild.name, icon_url=guild.icon.url)
@@ -395,8 +383,13 @@ class DMCategoryButtonView(discord.ui.View):
 
                 sent_msg = await dm_channel.send(embed=embed, view=view)
                 if sent_msg is None:
-                    error_embed.description = "❌ I couldn’t message you! Please enable direct messages and try again."
-                    await interaction.followup.send(embed=error_embed, ephemeral=True)
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ I couldn’t message you! Please enable "
+                            "direct messages and try again."
+                        ),
+                        ephemeral=True,
+                    )
                     return
 
                 view.message = sent_msg
@@ -420,13 +413,21 @@ class DMCategoryButtonView(discord.ui.View):
                 )
 
             except discord.Forbidden:
-                error_embed.description = "❌ I couldn’t message you! Please enable direct messages and try again."
-                await interaction.followup.send(embed=error_embed, ephemeral=True)
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ I couldn’t message you! Please enable "
+                        "direct messages and try again."
+                    ),
+                    ephemeral=True,
+                )
+
         except Exception as e:
-            error_embed.description = (
-                "❌ An error occurred. Please wait a bit and try again."
+            await interaction.followup.send(
+                embed=Embeds.error(
+                    description="❌ An error occurred. Please wait a bit and try again."
+                ),
+                ephemeral=True,
             )
-            await interaction.followup.send(embed=error_embed, ephemeral=True)
 
 
 class CategorySelect(discord.ui.Select):

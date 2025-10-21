@@ -236,6 +236,7 @@ class Snips(commands.Cog):
             for entry in snips:
                 if abbrev.casefold() == entry["abbrev"]:
                     content = entry["content"]
+                    break
 
             if not content:
                 await interaction.followup.send(
@@ -284,13 +285,15 @@ class Snips(commands.Cog):
             await interaction.response.defer()
             guild = interaction.guild
             snips = await self.bot.data_manager.get_or_load_snips(guild.id)
+            print(snips)
             full_snip = None
-
+            print(snip)
             abbrev = snip[: (snip.index(":"))]
 
             for entry in snips:
                 if abbrev.casefold() == entry["abbrev"]:
                     full_snip = entry
+                    break
 
             if not full_snip:
                 await interaction.followup.send(
@@ -298,7 +301,9 @@ class Snips(commands.Cog):
                 )
                 return
 
-            abbrev, summary, author, content, date = self._format_snip_content(entry)
+            abbrev, summary, author, content, date = self._format_snip_content(
+                full_snip
+            )
             snip_embed = self._format_snip_embed(abbrev, summary, author, content, date)
             await interaction.followup.send(embed=snip_embed)
 
@@ -460,81 +465,79 @@ class Snips(commands.Cog):
 
         return matches[:25]
 
-
-@commands.command(name="export_snips", description="Export all snips to a CSV file")
-@checks.is_user()
-@checks.is_guild()
-async def export_snips(self, ctx):
-    try:
-        guild = ctx.guild
-        snips = await self.bot.data_manager.get_or_load_snips(guild.id)
-        csv_data = "Abbreviation,Summary,Content\n"
-
-        for snip in snips:
-            csv_data += f"{snip['abbrev']},{snip['summary']},{snip['content']}\n"
-
-        with open(f"{guild.id}_snips.csv", "w") as file:
-            file.write(csv_data)
-
-        await ctx.send(file=discord.File(f"{guild.id}_snips.csv"))
-
-    except Exception as e:
-        logger.exception(e)
-        raise BotError(f"+export_snips sent an error: {e}")
-
-
-@commands.command(name="import_snips", description="Import snips from a CSV file")
-@checks.is_user()
-@checks.is_guild()
-async def import_snips(self, ctx, file: discord.Attachment):
-    try:
-        if not file.filename.endswith(".csv"):
-            await ctx.send(embed=Embeds.error("❌ Please upload a CSV file"))
-            return
-
-        csv_content = await file.read()
-        lines = csv_content.decode().splitlines()
-        guild = ctx.guild
-        count = 0
-
-        for line in lines[1:]:
-            parts = line.split(",", 2)
-            if len(parts) != 3:
-                continue
-
-            abbrev, summary, content = parts
-            abbrev = abbrev.strip().casefold()
-            summary = summary.strip()
-            content = content.strip()
-
-            if not bool(re.fullmatch(r"[A-Za-z0-9 ]+", abbrev)):
-                continue
-
-            if len(abbrev) < 1 or len(abbrev) > 20:
-                continue
-
-            if len(summary) < 1 or len(summary) > 80:
-                continue
-
-            if len(content) < 1 or len(content) > 4000:
-                continue
-
+    @commands.command(name="snips_export", description="Export all snips to a CSV file")
+    @checks.is_user()
+    @checks.is_guild()
+    async def export_snips(self, ctx):
+        try:
+            guild = ctx.guild
             snips = await self.bot.data_manager.get_or_load_snips(guild.id)
-            exists = any(snip["abbrev"] == abbrev for snip in snips)
-            if exists:
-                continue
+            csv_data = "Abbreviation,Summary,Content\n"
 
-            await self.bot.data_manager.add_snip(
-                guild.id, ctx.author.id, abbrev, content, summary
-            )
-            count += 1
+            for snip in snips:
+                csv_data += f"{snip['abbrev']},{snip['summary']},{snip['content']}\n"
 
-        await self.bot.data_manager.get_or_load_snips(guild.id, False)
-        await ctx.send(embed=Embeds.success(f"✅ Imported {count} snips"))
+            with open(f"{guild.id}_snips.csv", "w") as file:
+                file.write(csv_data)
 
-    except Exception as e:
-        logger.exception(e)
-        raise BotError(f"+import_snips sent an error: {e}")
+            await ctx.send(file=discord.File(f"{guild.id}_snips.csv"))
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"+snips_export sent an error: {e}")
+
+    @commands.command(name="snips_import", description="Import snips from a CSV file")
+    @checks.is_user()
+    @checks.is_guild()
+    async def import_snips(self, ctx, file: discord.Attachment):
+        try:
+            if not file.filename.endswith(".csv"):
+                await ctx.send(embed=Embeds.error("❌ Please upload a CSV file"))
+                return
+
+            csv_content = await file.read()
+            lines = csv_content.decode().splitlines()
+            guild = ctx.guild
+            count = 0
+
+            for line in lines[1:]:
+                parts = line.split(",", 2)
+                if len(parts) != 3:
+                    continue
+
+                abbrev, summary, content = parts
+                abbrev = abbrev.strip().casefold()
+                summary = summary.strip()
+                content = content.strip()
+
+                if not bool(re.fullmatch(r"[A-Za-z0-9 ]+", abbrev)):
+                    continue
+
+                if len(abbrev) < 1 or len(abbrev) > 20:
+                    continue
+
+                if len(summary) < 1 or len(summary) > 80:
+                    continue
+
+                if len(content) < 1 or len(content) > 4000:
+                    continue
+
+                snips = await self.bot.data_manager.get_or_load_snips(guild.id)
+                exists = any(snip["abbrev"] == abbrev for snip in snips)
+                if exists:
+                    continue
+
+                await self.bot.data_manager.add_snip(
+                    guild.id, ctx.author.id, abbrev, content, summary
+                )
+                count += 1
+
+            await self.bot.data_manager.get_or_load_snips(guild.id, False)
+            await ctx.send(embed=Embeds.success(f"✅ Imported {count} snips"))
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"+snips_import sent an error: {e}")
 
 
 async def setup(bot):

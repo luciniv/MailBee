@@ -43,19 +43,17 @@ class ChannelStatus:
         try:
             now = int(time.time())
             channels_to_update = []
-            print("Pending updates:", self.pending_updates)
             for channel_id, new_name in list(self.pending_updates.items()):
                 last_update_time = self.last_update_times.get(channel_id, None)
 
                 if not last_update_time:
-                    if new_name.startswith((emojis.emoji_map.get("new"))[0]):
-                        last_update_time = now - self.cooldown
-                    else:
-                        last_update_time = now
-                        self.last_update_times[channel_id] = now
+                    last_update_time = now
+                    self.last_update_times[channel_id] = now
 
                 if (now - last_update_time) >= self.cooldown:
                     channels_to_update.append((channel_id, new_name))
+
+            return channels_to_update
         except Exception as e:
             logger.exception(f"Error collecting channel updates: {e}")
             return []
@@ -63,7 +61,7 @@ class ChannelStatus:
     async def _apply_channel_updates(self, channels_to_update):
         for channel_id, new_name in channels_to_update:
             channel = await self.bot.cache.get_channel(channel_id)
-            pop_flag = False
+            pop_flag = True
             try:
                 if channel:
                     try:
@@ -73,17 +71,18 @@ class ChannelStatus:
                             f"Status update timed out for channel "
                             f"{channel.name} ({channel_id})"
                         )
+                        pop_flag = False
                     except discord.NotFound:
                         logger.error(
                             f"Channel not found for update "
                             f"{channel.name} ({channel_id})"
                         )
-                        pop_flag = True
                     except Exception as e:
                         logger.error(
                             f"Status update errored for channel "
                             f"{channel.name} ({channel_id}): {e}"
                         )
+                        pop_flag = False
                 self.last_update_times[channel_id] = int(time.time())
 
             except Exception as e:
@@ -98,14 +97,11 @@ class ChannelStatus:
     async def channel_status_worker(self):
         while True:
             try:
-                print("Channel status worker tick")
                 await asyncio.sleep(20)
-
                 channels_to_update = await self._collect_channel_updates()
-                print("Channels to update:", channels_to_update)
+
                 if channels_to_update:
                     await self._apply_channel_updates(channels_to_update)
-                    print("Applied channel updates")
 
             except Exception as e:
                 logger.exception(f"Channel worker sent an error: {e}")
@@ -113,12 +109,12 @@ class ChannelStatus:
     async def _collect_expired_timers(self):
         now = int(time.time())
         expired_timers = []
-        print("All timers:", self.timers.items())
+
         for channel_id, fields in self.timers.items():
             end_time, mod_id, opener_id, reason = fields
             if now >= int(end_time):
                 expired_timers.append((channel_id, mod_id, opener_id, reason))
-        print("Expired timers:", expired_timers)
+
         return expired_timers
 
     # Timer worker, handles scheduled name changes
@@ -176,55 +172,50 @@ class ChannelStatus:
         self, channel: discord.TextChannel, new_name: str, manual: bool
     ) -> bool:
         try:
+            # Pop updates for closing channels
             if new_name is None:
                 self.pending_updates.pop(channel.id, None)
                 return False
 
-            if channel.name == new_name:
+            # Returning to the current name, drop all updates
+            if new_name == channel.name:
                 self.pending_updates.pop(channel.id, None)
                 return False
 
-            current_name = self.pending_updates.get(channel.id, channel.name)
-
-            # Drop update if it's the same as the current one
-            if current_name == new_name:
+            pending_name = self.pending_updates.get(channel.id, channel.name)
+            # Same as the current pending update, drop update
+            if pending_name == new_name:
                 return False
 
             # Mapping of restricted transitions
-            restricted_updates = {
-                ("new", "alert"): "update denied, tried to set new to alert",
-                ("inactive", "wait"): "update denied, tried to set inactive to wait",
-                ("close", "wait"): "update denied, tried to set close to wait",
-            }
+            restricted_updates = [("new", "alert"), ("inactive", "wait")]
 
             # Check for restricted automatic updates
             if not manual:
-                for old_status, log_msg in restricted_updates.items():
-                    if current_name.startswith(
-                        (emojis.emoji_map.get(old_status[0])[0])
+                for restriction in restricted_updates:
+                    if pending_name.startswith(
+                        (emojis.emoji_map.get(restriction[0])[0])
                     ) and new_name.startswith(
-                        (emojis.emoji_map.get(old_status[1], ""))[0]
+                        (emojis.emoji_map.get(restriction[1])[0])
                     ):
                         return False
 
                 for emoji, permanent in emojis.emoji_map.values():
-                    if current_name.startswith(emoji) and permanent:
+                    if pending_name.startswith(emoji) and permanent:
                         return False
 
                 # Handle special case: deleting timer if switching from inactive/close to alert
-                if current_name.startswith(
+                if pending_name.startswith(
                     (
-                        (emojis.emoji_map.get("inactive"))[0],
-                        (emojis.emoji_map.get("close"))[0],
+                        emojis.emoji_map.get("inactive")[0],
+                        emojis.emoji_map.get("close")[0],
                     )
                 ) and new_name.startswith((emojis.emoji_map.get("alert", ""))[0]):
                     if self.timers.pop(channel.id, None):
                         pass
 
             # Queue the update
-            print("Queueing update:", channel.id, new_name)
             self.pending_updates[channel.id] = new_name
-            print("Pending updates now:", self.pending_updates)
             return True
 
         except Exception as e:
@@ -266,7 +257,6 @@ class ChannelStatus:
                 new_name = f"{selected_emoji}{(channel.name)[1:]}"
             else:
                 new_name = f"{selected_emoji}{channel.name}"
-        print("New name made is:", new_name)
         return self.queue_update(channel, new_name, manual)
 
     # Check if the input is a valid Unicode emoji

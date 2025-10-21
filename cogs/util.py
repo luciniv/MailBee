@@ -184,7 +184,7 @@ class Util(commands.Cog):
     # Ping for latency
     @commands.command()
     async def ping(self, ctx):
-        await ctx.send(f"{emojis.mantis} pong! {round(self.bot.latency * 1000,2)} ms")
+        await ctx.send(f"🐝 pong! {round(self.bot.latency * 1000,2)} ms")
 
 
 async def setup(bot):
