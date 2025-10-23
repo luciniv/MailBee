@@ -47,7 +47,7 @@ class Analytics(commands.Cog):
             tickets = await self.bot.data_manager.get_or_load_user_tickets(author_id)
 
             # Prompt to open a ticket
-            if tickets is None:
+            if not tickets:
                 start_embed = discord.Embed(
                     title="Open a Ticket",
                     description='Click the **"Open a Ticket"** button in a server '
@@ -107,7 +107,7 @@ class Analytics(commands.Cog):
                 return
 
             guild = self.bot.get_guild(guild_id)
-            if guild is None:
+            if not guild is None:
                 error_embed.description = (
                     "❌ I could not find the server you are trying to contact. "
                     "Please try again later. If this error persists, then I am "
@@ -180,7 +180,7 @@ class Analytics(commands.Cog):
             final_attachments = []
             raw_files = []  # <-- store raw data
             files = []
-            fileMessage = None
+            file_message = None
             file_embed = discord.Embed(
                 title="",
                 description="**Processing files...**\n"
@@ -197,7 +197,7 @@ class Analytics(commands.Cog):
                     attachments = message.attachments
 
                 if len(attachments) > 0:
-                    fileMessage = await message.channel.send(embed=file_embed)
+                    file_message = await message.channel.send(embed=file_embed)
 
                 total_size = 0
                 for file in attachments:
@@ -260,8 +260,8 @@ class Analytics(commands.Cog):
                 )
                 await message.channel.send(embed=skip_embed)
 
-            if fileMessage is not None:
-                await fileMessage.delete()
+            if file_message is not None:
+                await file_message.delete()
 
             send_embed = discord.Embed(
                 title="Message Received", description=text, color=discord.Color.green()
@@ -436,7 +436,7 @@ class Analytics(commands.Cog):
             attachments = []
             final_attachments = []
             raw_files = []
-            fileMessage = None
+            file_message = None
             file_embed = discord.Embed(
                 title="",
                 description="**Processing files...**\n"
@@ -450,7 +450,7 @@ class Analytics(commands.Cog):
                 attachments = message.attachments
 
                 if len(attachments) > 0:
-                    fileMessage = await channel.send(embed=file_embed)
+                    file_message = await channel.send(embed=file_embed)
 
                 total_size = 0
                 for file in attachments:
@@ -527,8 +527,8 @@ class Analytics(commands.Cog):
                 )
                 await channel.send(embed=skip_embed)
 
-            if fileMessage is not None:
-                await fileMessage.delete()
+            if file_message is not None:
+                await file_message.delete()
 
             send_embed = discord.Embed(
                 title=f"Message Received",

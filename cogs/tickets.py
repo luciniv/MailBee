@@ -99,7 +99,9 @@ async def close_ticket(
                 else:
                     response = queries.format_time(data[1])
 
-            closeLogEmbed.add_field(name="Logs", value=f"<#{thread.id}>", inline=False)
+            closeLogEmbed.add_field(
+                name="Logs", value=f"<#{thread.id if thread else 'N/A'}>", inline=False
+            )
             closeLogEmbed.add_field(name="Ticket Duration", value=duration, inline=True)
             closeLogEmbed.add_field(
                 name="First Response Time", value=response, inline=True
@@ -153,10 +155,13 @@ async def close_ticket(
                 closeLogEmbed.set_footer(text=f"Member not found | {user_id}")
             try:
                 await thread.send(embed=closeLogEmbed)
+                await thread.edit(archived=True, locked=True)
             except Exception:
                 pass
-            await log_channel.send(embed=closeLogEmbed)
-            await thread.edit(archived=True, locked=True)
+            try:
+                await log_channel.send(embed=closeLogEmbed)
+            except Exception:
+                pass
             return True
 
         else:
@@ -426,6 +431,7 @@ class Tickets(commands.Cog):
                 description="Started editing process...",
                 color=discord.Color.blue(),
             )
+            await ctx.message.delete()
             startMessage = await ctx.send(embed=startEmbed)
 
             try:
@@ -567,7 +573,7 @@ class Tickets(commands.Cog):
                 description=f"✅ Updated ticket reply to **{member.name}**",
                 color=discord.Color.green(),
             )
-            await ctx.send(embed=successEmbed)
+            await ctx.send(embed=successEmbed, delete_after=10)
             return
 
         except Exception as e:
@@ -597,6 +603,7 @@ class Tickets(commands.Cog):
                 description="Started deleting process...",
                 color=discord.Color.blue(),
             )
+            await ctx.message.delete()
             startMessage = await ctx.send(embed=startEmbed)
 
             try:
@@ -728,7 +735,7 @@ class Tickets(commands.Cog):
                 description=f"✅ Deleted ticket reply to **{member.name}**",
                 color=discord.Color.green(),
             )
-            await ctx.send(embed=successEmbed)
+            await ctx.send(embed=successEmbed, delete_after=10)
             return
 
         except Exception as e:
@@ -1025,7 +1032,7 @@ class Tickets(commands.Cog):
         anywhere: discord.CategoryChannel = None,
     ):
         try:
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
 
             guild = interaction.guild
             channel = interaction.channel
@@ -1113,11 +1120,10 @@ class Tickets(commands.Cog):
                     await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                     return
 
-                successEmbed = discord.Embed(
+                successEmbed = Embeds.success(
                     description=f"✅ Moved this channel to **{category.name}**\n"
                     "**NOTE:** This channel's emoji status may take up to "
                     "5 minutes to update",
-                    color=discord.Color.green(),
                 )
                 await interaction.followup.send(embed=successEmbed)
                 return
@@ -1182,7 +1188,7 @@ class Tickets(commands.Cog):
             if cat.id in id_flags
         ]
 
-        # TODO Add a database table for this
+        # TODO Make database tool
         extra_categories = {"346515443869286410": ("1273714180037283890")}
 
         category_list = extra_categories.get(str(guild.id), None)
@@ -1273,13 +1279,12 @@ class Tickets(commands.Cog):
                 await ctx.send(embed=errorEmbed)
                 return
 
-            successEmbed = discord.Embed(
+            successEmbed = Embeds.success(
                 description=f"✅ Moved this channel to **{category.name}**\n"
                 "**NOTE:** This channel's emoji status may take up to "
                 "5 minutes to update",
-                color=discord.Color.green(),
             )
-            await ctx.send(embed=successEmbed)
+            await ctx.send(embed=successEmbed, delete_after=10)
             return
 
         except Exception as e:
@@ -1296,7 +1301,7 @@ class Tickets(commands.Cog):
     @app_commands.describe(status="Select an emoji from the provided list")
     async def status(self, interaction, status: str):
         try:
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
             channel = interaction.channel
             emoji_name = status[(status.index(":") + 1) :]
             emoji_str = status[: status.index(":")]
@@ -1314,10 +1319,9 @@ class Tickets(commands.Cog):
 
             result = await self.bot.channel_status.set_emoji(channel, emoji_str, True)
 
-            statusEmbed = discord.Embed(
+            statusEmbed = Embeds.success(
                 description=f"✅ Channel status set to **{emoji_name}**"
                 "\n(*Please wait up to 5 minutes for edits to appear*)",
-                color=discord.Color.green(),
             )
             if not result:
                 statusEmbed.description = (

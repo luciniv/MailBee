@@ -21,7 +21,7 @@ class Cache:
         epoch_time = int(time.time())
         self.user_cache[user.id] = (user, epoch_time)
 
-    async def get_user(self, user_id: int):
+    async def get_user(self, user_id: int, timeout=10):
         try:
             user = None
             epoch = None
@@ -36,7 +36,7 @@ class Cache:
                 epoch_time = int(time.time())
                 try:
                     user = await asyncio.wait_for(
-                        self.bot.fetch_user(user_id), timeout=10
+                        self.bot.fetch_user(user_id), timeout=timeout
                     )
                 except Exception:
                     return None
@@ -50,7 +50,7 @@ class Cache:
         epoch_time = int(time.time())
         self.member_cache[(member.id, guild_id)] = (member, epoch_time)
 
-    async def get_guild_member(self, guild: discord.Guild, member_id: int):
+    async def get_guild_member(self, guild: discord.Guild, member_id: int, timeout=10):
         try:
             member = None
             epoch = None
@@ -64,7 +64,7 @@ class Cache:
             epoch_time = int(time.time())
             try:
                 member = await asyncio.wait_for(
-                    guild.fetch_member(member_id), timeout=10
+                    guild.fetch_member(member_id), timeout=timeout
                 )
             except Exception as e:
                 logger.error(f"Failed to fetch guild member using id {member_id}: {e}")
@@ -79,7 +79,7 @@ class Cache:
         epoch_time = int(time.time())
         self.channel_cache[channel.id] = (channel, epoch_time)
 
-    async def get_channel(self, channel_id: int):
+    async def get_channel(self, channel_id: int, timeout=10):
         try:
             channel = None
             epoch = None
@@ -99,7 +99,7 @@ class Cache:
             else:
                 try:
                     channel = await asyncio.wait_for(
-                        self.bot.fetch_channel(channel_id), timeout=10
+                        self.bot.fetch_channel(channel_id), timeout=timeout
                     )
                 except Exception as e:
                     return None
@@ -112,7 +112,9 @@ class Cache:
     async def store_message(self, message: discord.Message):
         self.message_cache[message.id] = message
 
-    async def get_message(self, channel: discord.TextChannel, message_id: int):
+    async def get_message(
+        self, channel: discord.TextChannel, message_id: int, timeout=10
+    ):
         try:
             message = self.message_cache.get(message_id, None)
             if message:
@@ -120,7 +122,7 @@ class Cache:
 
             try:
                 message = await asyncio.wait_for(
-                    channel.fetch_message(message_id), timeout=10
+                    channel.fetch_message(message_id), timeout=timeout
                 )
             except Exception as e:
                 logger.error(f"Failed to fetch message using id {message_id}: {e}")

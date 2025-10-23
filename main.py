@@ -4,10 +4,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from classes.embeds import Embeds
+from classes.error_handler import AccessError, AppAccessError, BotError
 from core import MailBee
 from utils import checks, emojis
 from utils.logger import *
-from classes.error_handler import AccessError, AppAccessError, BotError
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 

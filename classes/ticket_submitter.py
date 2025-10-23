@@ -54,10 +54,8 @@ class TimeoutSafeView(discord.ui.View):
                     pass
 
                 try:
-                    timeout_embed = discord.Embed(
-                        title="",
+                    timeout_embed = Embeds.error(
                         description="Embed has timed out. Repeat your prior command or action if you need more time.",
-                        color=discord.Color.red(),
                     )
                     await self.message.edit(embed=timeout_embed)
                 except discord.Forbidden:
@@ -103,9 +101,8 @@ class TicketSelect(discord.ui.Select):
                 self.message, int(guild_id), int(channel_id)
             )
         else:
-            error_embed = discord.Embed(
+            error_embed = Embeds.error(
                 description="❌ Internal error, please try sending your message again.",
-                color=discord.Color.red(),
             )
             await interaction.channel.send(embed=error_embed)
         self.view.stop()
@@ -237,17 +234,14 @@ class ServerSelect(discord.ui.Select):
             )
             return
 
-        loading_embed = discord.Embed(
-            description="Loading ticket types...", color=discord.Color.blue()
-        )
+        loading_embed = Embeds.info(description="Loading ticket types...")
         await interaction.message.edit(embed=loading_embed)
 
         # Build the category select embed
-        category_embed = discord.Embed(
+        category_embed = Embeds.info(
             title="Select a Ticket Type",
             description="Please select a type for your ticket with the drop-down menu below.\n\n"
             'If you are unsure what to choose, or your topic is not listed, select "Other."',
-            color=discord.Color.blue(),
         )
         if guild.icon:
             category_embed.set_author(name=guild.name, icon_url=guild.icon.url)
@@ -402,10 +396,9 @@ class DMCategoryButtonView(discord.ui.View):
                     )
                 )
 
-                start_embed = discord.Embed(
+                start_embed = Embeds.success(
                     title="Ticket Started",
                     description="A ticket has been started in your direct messages!",
-                    color=discord.Color.green(),
                 )
 
                 await interaction.followup.send(
@@ -467,16 +460,28 @@ class CategorySelect(discord.ui.Select):
         else:
             selected_category_id = self.parent_category_id
 
-        # Safely fetch the selected category
-        category = await self.bot.cache.get_channel(selected_category_id)
+        category = await self.bot.cache.get_channel(selected_category_id, timeout=2)
+        if not category:
+            error_embed = Embeds.error(
+                description="❌ Couldn't find ticket category in the destination "
+                "server. Please contact a server admin if this error persists.",
+            )
+            try:
+                await interaction.message.delete()
+            except discord.HTTPException:
+                pass
+            if self.view:
+                self.view.stop()
+            await interaction.channel.send(embed=error_embed)
+            return
 
         # Only calls for parent types WITH subtypes
         if len(subtypes) > 0:
-            subtype_embed = discord.Embed(
+            await interaction.response.defer(thinking=False)
+            subtype_embed = Embeds.success(
                 title="Select a Ticket Sub-Type",
                 description=f"You selected ticket type **{category.name}**.\n\nPlease choose "
                 "the ticket sub-type that best fits your situation below.",
-                color=discord.Color.green(),
             )
 
             if guild.icon:
@@ -494,8 +499,9 @@ class CategorySelect(discord.ui.Select):
                 parent_category_id=selected_category_id,
             )
             await newView.setup()
-            await interaction.response.edit_message(embed=subtype_embed, view=newView)
-            newView.message = interaction.message
+            await interaction.edit_original_response(embed=subtype_embed, view=newView)
+            newView.message = await interaction.original_response()
+            return
 
         # No subtypes selected, proceed past selection
         else:
@@ -511,10 +517,9 @@ class CategorySelect(discord.ui.Select):
                     None,
                 )
 
-                redirect_embed = discord.Embed(
+                redirect_embed = Embeds.info(
                     title="Auto-Response [Ticket NOT Created]",
                     description=redirect_text,
-                    color=discord.Color.blue(),
                 )
                 redirect_embed.timestamp = datetime.now(timezone.utc)
                 if guild.icon:
@@ -535,12 +540,11 @@ class CategorySelect(discord.ui.Select):
             elif len(category.channels) >= 50:
                 # TODO check if queue is enabled --> queue here
 
-                error_embed = discord.Embed(
+                error_embed = Embeds.error(
                     description="Thank you for reaching out to the moderation team!\n\n"
                     f"Unfortunately, tickets of type **{category.name}** have "
                     "reached maximum capacity. Please try again later for an "
-                    "opening, we thank you in advance for your patience.",
-                    color=discord.Color.red(),
+                    "opening, we thank you in advance for your patience."
                 )
             else:
                 # Determine if modal is valid or not
@@ -588,10 +592,9 @@ class CategorySelect(discord.ui.Select):
                     return
                 # Handle invalid modal template
                 else:
-                    error_embed = discord.Embed(
+                    error_embed = Embeds.error(
                         description="❌ The server you are trying to contact has improperly set "
-                        "up this ticket type option. Please contact a server admin.",
-                        color=discord.Color.red(),
+                        "up this ticket type option. Please contact a server admin."
                     )
 
             try:
@@ -670,11 +673,11 @@ class BackButton(discord.ui.Button):
         self.types = types
 
     async def callback(self, interaction: discord.Interaction):
-        category_embed = discord.Embed(
+        await interaction.response.defer(thinking=False)
+        category_embed = Embeds.info(
             title="Select a Ticket Type",
             description="Please select a type for your ticket with the drop-down menu below.\n\n"
             'If you are unsure what to choose, or your topic is not listed, select "Other."',
-            color=discord.Color.blue(),
         )
         if self.guild.icon:
             category_embed.set_author(
@@ -688,11 +691,9 @@ class BackButton(discord.ui.Button):
         await view.setup()
 
         try:
-            await interaction.response.defer(thinking=False)
             message = await interaction.message.edit(embed=category_embed, view=view)
             view.message = message
         except discord.HTTPException:
-            await interaction.response.defer(thinking=False)
             message = await interaction.channel.send(embed=category_embed, view=view)
             view.message = message
 
@@ -710,9 +711,8 @@ async def send_dynamic_modal(
     source_view,
 ):
     if not category:
-        error_embed = discord.Embed(
+        error_embed = Embeds.error(
             description="❌ Couldn't find ticket category in the destination server. Please contact a server admin.",
-            color=discord.Color.red(),
         )
         await interaction.channel.send(embed=error_embed)
         return
@@ -741,7 +741,7 @@ async def send_dynamic_modal(
             )
 
             if nsfw_id != -1:
-                nsfw_embed = discord.Embed(
+                nsfw_embed = Embeds.error(
                     title="Does Your Report Contain NSFW?",
                     description="Use the buttons below to select whether your ticket "
                     "contains **content that is considered Not Safe For Work (NSFW)**, "
@@ -751,7 +751,6 @@ async def send_dynamic_modal(
                     "> - Anything violating **Rule 1.** of our server's rules list\n"
                     "We ask this to ensure your report is handed to the appropriate staff "
                     "members, thank you!",
-                    color=discord.Color.red(),
                 )
 
                 # Build and send the NSFW button view
@@ -844,10 +843,9 @@ class NSFWButtonView(TimeoutSafeView):
 
         category = await self.bot.cache.get_channel(self.nsfw_id)
         if not category:
-            error_embed = discord.Embed(
+            error_embed = Embeds.error(
                 description="❌ Couldn't find NSFW ticket category in the destination server. "
                 "Please contact a server admin.",
-                color=discord.Color.red(),
             )
             await interaction.channel.send(embed=error_embed)
             return
@@ -918,18 +916,16 @@ class TicketRatingView(discord.ui.View):
     async def resolved_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
+        await interaction.response.defer()
         if not self.rating_given:
             self.rating_given = True
             self.disable_rating_buttons()
-            response_embed = discord.Embed(
+            response_embed = Embeds.success(
                 description="We're glad to hear you're satisfied with your ticket! "
                 "You can leave feedback or report an issue using the buttons "
                 "provided above.",
-                color=discord.Color.green(),
             )
-            await interaction.response.send_message(
-                embed=response_embed, ephemeral=True
-            )
+            await interaction.followup.send(embed=response_embed, ephemeral=True)
             await interaction.message.edit(view=self)
 
             message = interaction.message
@@ -949,18 +945,16 @@ class TicketRatingView(discord.ui.View):
     async def not_resolved_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
+        await interaction.response.defer()
         if not self.rating_given:
             self.rating_given = True
             self.disable_rating_buttons()
-            response_embed = discord.Embed(
+            response_embed = Embeds.success(
                 description="We're sorry to hear you're dissatisfied with your ticket. "
                 "You can leave feedback or report an issue using the buttons "
                 "provided above.",
-                color=discord.Color.green(),
             )
-            await interaction.response.send_message(
-                embed=response_embed, ephemeral=True
-            )
+            await interaction.followup.send(embed=response_embed, ephemeral=True)
             await interaction.message.edit(view=self)
 
             message = interaction.message
@@ -1008,6 +1002,7 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
         self.add_item(self.feedback)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         message = interaction.message
         user = interaction.user
         embed = message.embeds[1]
@@ -1027,10 +1022,9 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
 
         feedback_channel = await self.bot.cache.get_channel(feedback_id)
         if feedback_channel:
-            embed = discord.Embed(
+            embed = Embeds.info(
                 title="New Feedback Submitted",
                 description=self.feedback.value,
-                color=discord.Color.blue(),
             )
             embed.set_author(
                 name=f"{user.name} | {user.id}",
@@ -1038,11 +1032,10 @@ class FeedbackModal(discord.ui.Modal, title="Feedback Form"):
             )
             embed.add_field(name="Ticket Log", value=f"<#{thread_id}>")
             await feedback_channel.send(embed=embed)
-        feedback_embed = discord.Embed(
+        feedback_embed = Embeds.success(
             description="Your feedback has been recorded. Thank you!",
-            color=discord.Color.green(),
         )
-        await interaction.response.send_message(embed=feedback_embed, ephemeral=True)
+        await interaction.followup.send(embed=feedback_embed, ephemeral=True)
         self.view.feedback_sent = True
         self.view.disable_feedback_button()
         await interaction.message.edit(view=self.view)
@@ -1061,6 +1054,7 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
         self.add_item(self.issue)
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         message = interaction.message
         user = interaction.user
         embed = message.embeds[1]
@@ -1080,10 +1074,9 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
 
         report_channel = await self.bot.cache.get_channel(report_id)
         if report_channel:
-            embed = discord.Embed(
+            embed = Embeds.error(
                 title="New Issue Reported",
                 description=self.issue.value,
-                color=discord.Color.red(),
             )
 
             embed.set_author(
@@ -1093,19 +1086,10 @@ class ReportModal(discord.ui.Modal, title="Report an Issue"):
             embed.add_field(name="Ticket Log", value=f"<#{thread_id}>")
             await report_channel.send(embed=embed)
 
-        report_embed = discord.Embed(
+        report_embed = Embeds.success(
             description="Your issue has been reported. Thank you!",
-            color=discord.Color.green(),
         )
-        await interaction.response.send_message(embed=report_embed, ephemeral=True)
+        await interaction.followup.send(embed=report_embed, ephemeral=True)
         self.view.report_sent = True
         self.view.disable_report_button()
         await interaction.message.edit(view=self.view)
-
-
-# Example usage when closing a ticket:
-# thread_id = 123456789012345678
-# embed = discord.Embed(title="Ticket Closed", description="Thanks for using support! Let us know how it went.", color=discord.Color.blurple())
-# view = TicketRatingView(thread_id=thread_id)
-# message = await channel.send(embed=embed, view=view)
-# view.message = message
