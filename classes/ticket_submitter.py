@@ -14,11 +14,11 @@ from classes.embeds import Embeds
 
 
 async def processing_embed():
-    process_time = int(time.time()) + 11
+    process_time = int(time.time()) + 21
     return Embeds.info(
         title="Processing your ticket...",
         description=(
-            "This may take a moment! Please wait up to `10 seconds` "
+            "This may take a moment! Please wait up to `20 seconds` "
             f"for your ticket to be processed: <t:{process_time}:R>"
         ),
     )

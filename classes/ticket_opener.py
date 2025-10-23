@@ -55,8 +55,13 @@ class TicketOpener:
             guild_id = ticket.guild_id
             category_id = ticket.category_id
             dm_message_id = ticket.dm_message_id
-
             user = await self.bot.cache.get_user(user_id)
+            print("USER ID IS", user_id)
+            if user is None:
+                print("user was none")
+                await self.bot.ticket_queue.re_add_ticket(ticket)
+                return
+
             guild = self.bot.get_guild(guild_id)
             category = guild.get_channel(category_id)
 

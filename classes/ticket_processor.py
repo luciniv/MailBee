@@ -45,6 +45,9 @@ class TicketQueue:
         await self.bot.cache.store_message(info_message)
         await self.bot.data_manager.add_ticket_back_queue(ticket)
 
+    async def re_add_ticket(self, ticket: Ticket):
+        await self.bot.data_manager.add_ticket_back_queue(ticket)
+
     async def _get_next_ticket(self, guild_id: int) -> Ticket | None:
         return await self.bot.data_manager.pop_oldest_ticket(guild_id)
 

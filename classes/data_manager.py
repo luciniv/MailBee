@@ -1131,7 +1131,7 @@ class DataManager:
 
     async def get_or_load_config(self, guild_id: int, get=True):
         redis_key = f"config:{guild_id}"
-        if False:
+        if get:
             cached = await self.redis.get(redis_key)
 
             if cached:
@@ -1150,7 +1150,7 @@ class DataManager:
 
     async def get_or_load_ap(self, guild_id: int, userID: int, get=True):
         redis_key = f"aps:{guild_id}:{userID}"
-        if False:
+        if get:
             cached = await self.redis.get(redis_key)
 
             if cached:
@@ -1167,7 +1167,7 @@ class DataManager:
     # Combined load/get user tickets from Redis, with fallback to DB
     async def get_or_load_user_tickets(self, userID: int, get=True) -> list[dict]:
         redis_key = f"user_tickets:{userID}"
-        if False:
+        if get:
             redis_key = f"user_tickets:{userID}"
             fields = await self.redis.hgetall(redis_key)
 
@@ -1233,7 +1233,7 @@ class DataManager:
     async def get_or_load_snips(self, guild_id, get=True):
         redis_key = f"snips:{guild_id}"
 
-        if False:
+        if get:
             cached = await self.redis.get(redis_key)
             if cached:
                 return json.loads(cached)
@@ -1290,7 +1290,7 @@ class DataManager:
     async def get_or_load_guild_types(self, guild_id, get=True):
         redis_key = f"ticket_types:{guild_id}"
 
-        if False:
+        if get:
             cached = await self.redis.get(redis_key)
             if cached:
                 return json.loads(cached)
@@ -1344,7 +1344,7 @@ class DataManager:
     # Lazy get or load permissions for a guild
     async def get_or_load_permissions(self, guild_id, get=True):
         redis_key = f"permissions:{guild_id}"
-        if False:
+        if get:
             cached = await self.redis.hgetall(redis_key)
 
             if cached:
