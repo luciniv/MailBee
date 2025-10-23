@@ -36,7 +36,7 @@ class Cache:
                 epoch_time = int(time.time())
                 try:
                     user = await asyncio.wait_for(
-                        self.bot.fetch_user(user_id), timeout=7
+                        self.bot.fetch_user(user_id), timeout=10
                     )
                 except Exception:
                     return None
@@ -64,7 +64,7 @@ class Cache:
             epoch_time = int(time.time())
             try:
                 member = await asyncio.wait_for(
-                    guild.fetch_member(member_id), timeout=5
+                    guild.fetch_member(member_id), timeout=10
                 )
             except Exception as e:
                 logger.error(f"Failed to fetch guild member using id {member_id}: {e}")
@@ -99,7 +99,7 @@ class Cache:
             else:
                 try:
                     channel = await asyncio.wait_for(
-                        self.bot.fetch_channel(channel_id), timeout=5
+                        self.bot.fetch_channel(channel_id), timeout=10
                     )
                 except Exception as e:
                     return None
@@ -120,7 +120,7 @@ class Cache:
 
             try:
                 message = await asyncio.wait_for(
-                    channel.fetch_message(message_id), timeout=5
+                    channel.fetch_message(message_id), timeout=10
                 )
             except Exception as e:
                 logger.error(f"Failed to fetch message using id {message_id}: {e}")
