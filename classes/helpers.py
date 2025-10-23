@@ -131,13 +131,6 @@ async def export_ticket_messages(channel: discord.TextChannel):
 
 
 async def convert_mentions(bot, text: str, guild: discord.Guild):
-    import re
-
-
-import discord
-
-
-async def convert_mentions(bot, text: str, guild: discord.Guild):
     """
     Converts <#channel_id> mentions into clickable Discord links for embeds
     """
@@ -171,7 +164,7 @@ async def verify_text(bot, guild: discord.Guild, text: str, limit: int = 3000):
     return True, text
 
 
-def get_ticket_channel_info(channel: discord.ChannelType):
+def get_ticket_channel_info(channel: discord.TextChannel):
     id_list = (channel.topic).split()
     thread_id = id_list[-1]
     user_id = id_list[-2]

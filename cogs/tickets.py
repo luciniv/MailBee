@@ -242,8 +242,9 @@ async def send_closing(
 
 
 class GenerateReplyView(discord.ui.View):
-    def __init__(self, reply_text, author, target_channel):
+    def __init__(self, bot, reply_text, author, target_channel):
         super().__init__(timeout=120)
+        self.bot = bot
         self.reply_text = reply_text
         self.author = author
         self.target_channel = target_channel
@@ -259,9 +260,21 @@ class GenerateReplyView(discord.ui.View):
                     description="You can't use this button", ephemeral=True
                 )
             )
-        # TODO this becomes analytics call (anon is None)
+
+        thread_id, user_id = get_ticket_channel_info(self.target_channel)
+        analytics = self.bot.get_cog("Analytics")
+        if analytics is not None:
+            asyncio.create_task(
+                analytics.route_to_dm(
+                    self.reply_text,
+                    self.target_channel,
+                    self.author,
+                    thread_id,
+                    user_id,
+                    True,
+                )
+            )
         await self.message.delete()
-        await self.target_channel.send(self.reply_text)
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
@@ -384,16 +397,19 @@ class Tickets(commands.Cog):
         if context:
             server_context = build_server_context(context)
 
-        message = await ctx.send("Generating potential reply...")
+        await ctx.message.delete()
+        message = await ctx.send(
+            embed=Embeds.info(description="Generating potential reply...")
+        )
         ai_reply = await generate_ticket_reply(
             transcript, server_context, extra_context
         )
         if ai_reply:
-            ai_embed = Embeds.success(
+            ai_embed = Embeds.info(
                 title="AI Generated Reply", description=f"{ai_reply}"
             )
             ai_embed.set_footer(text="Would you like to send this?")
-            view = GenerateReplyView(ai_reply, author, channel)
+            view = GenerateReplyView(self.bot, ai_reply, author, channel)
             await message.delete()
             ai_message = await ctx.send(embed=ai_embed, view=view)
             view.message = ai_message

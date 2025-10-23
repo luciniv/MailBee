@@ -102,12 +102,12 @@ class Analytics(commands.Cog):
             # Check blacklist
             author = message.author
             entry = await self.bot.data_manager.get_blacklist_entry(guild_id, author.id)
-            if entry is not None:
+            if entry:
                 await message.channel.send(embed=error_embed)
                 return
 
             guild = self.bot.get_guild(guild_id)
-            if not guild is None:
+            if not guild:
                 error_embed.description = (
                     "❌ I could not find the server you are trying to contact. "
                     "Please try again later. If this error persists, then I am "
@@ -117,7 +117,7 @@ class Analytics(commands.Cog):
                 return
 
             member = await self.bot.cache.get_guild_member(guild, author.id)
-            if member is None:
+            if not member:
                 error_embed.description = (
                     "❌ You are not in the server you are trying to contact. Please "
                     "rejoin the server before attempting to send messages there.\n\n"
@@ -128,7 +128,7 @@ class Analytics(commands.Cog):
                 return
 
             server_channel = await self.bot.cache.get_channel(channel_id)
-            if server_channel is None:
+            if not server_channel:
                 error_embed.description = (
                     "❌ Could not find your ticket channel in this server. "
                     "Please send your message again, or contact staff another "
@@ -140,7 +140,7 @@ class Analytics(commands.Cog):
             id_list = (server_channel.topic).split()
             thread_id = id_list[-1]
             thread = await self.bot.cache.get_channel(thread_id)
-            if thread is None:
+            if not thread:
                 error_embed.description = (
                     "❌ Could not find your ticket log in this server. "
                     "Please send your message again, or contact staff another "
@@ -260,7 +260,7 @@ class Analytics(commands.Cog):
                 )
                 await message.channel.send(embed=skip_embed)
 
-            if file_message is not None:
+            if file_message:
                 await file_message.delete()
 
             send_embed = discord.Embed(
@@ -332,12 +332,12 @@ class Analytics(commands.Cog):
                 color=discord.Color.red(),
             )
             member = await self.bot.cache.get_guild_member(guild, user_id)
-            if member is None:
+            if not member:
                 try:
                     member = await asyncio.wait_for(
                         guild.fetch_member(user_id), timeout=1
                     )
-                    if member is not None:
+                    if member:
                         await self.bot.cache.store_guild_member(guild.id, member)
                 except discord.NotFound:
                     await channel.send(embed=error_embed)
@@ -353,7 +353,7 @@ class Analytics(commands.Cog):
 
             # Check if blacklisted
             entry = await self.bot.data_manager.get_blacklist_entry(guild.id, user_id)
-            if entry is not None:
+            if entry:
                 error_embed.description = (
                     "❌ Ticket opener is blacklisted. `+whitelist` them before "
                     "attempting to send a message."
@@ -362,7 +362,7 @@ class Analytics(commands.Cog):
                 return
 
             thread = await self.bot.cache.get_channel(thread_id)
-            if thread is None:
+            if not thread:
                 error_embed.description = (
                     "❌ Failed to fetch logging thread. Please re-send "
                     "your message again."
@@ -400,7 +400,7 @@ class Analytics(commands.Cog):
             if anon is not False:
                 config = await self.bot.data_manager.get_or_load_config(guild.id)
 
-            if anon is None:
+            if not anon:
                 if config["anon"] == "true":
                     anon = True
                 else:
@@ -419,12 +419,12 @@ class Analytics(commands.Cog):
                     member = await asyncio.wait_for(
                         guild.fetch_member(user_id), timeout=1
                     )
-                    if member is not None:
+                    if member:
                         await self.bot.cache.store_guild_member(guild.id, member)
                 except Exception:
                     pass
                 return
-            if dm_channel is None:
+            if not dm_channel:
                 error_embed.description = (
                     "❌ Unable to find DM channel with the ticket opener. "
                     "Please close this ticket."
@@ -494,7 +494,7 @@ class Analytics(commands.Cog):
             if anon:
                 if config["aps"] == "true":
                     ap = await self.bot.data_manager.get_or_load_ap(guild.id, author.id)
-                    if ap is not None:
+                    if ap:
                         name += " (Anonymous Profile)"
                     else:
                         name += " (Anonymous)"
@@ -527,7 +527,7 @@ class Analytics(commands.Cog):
                 )
                 await channel.send(embed=skip_embed)
 
-            if file_message is not None:
+            if file_message:
                 await file_message.delete()
 
             send_embed = discord.Embed(
@@ -553,7 +553,7 @@ class Analytics(commands.Cog):
                     icon_url=(author.avatar and author.avatar.url)
                     or author.display_avatar.url,
                 )
-            elif ap is not None:
+            elif ap:
                 if ap["adj"] == "none":
                     ap["adj"] = ""
                 send_embed.set_author(
@@ -800,13 +800,13 @@ class Analytics(commands.Cog):
             # Check if associated ticket channel exists for 2 seconds, if not assume ticket has already closed
             ticket_channel = None
             start_time = time.time()
-            while (time.time() - start_time < 2) and (ticket_channel is None):
+            while (time.time() - start_time < 2) and (not ticket_channel):
                 for channel in guild.channels:
                     if (open_name).replace("_", "").replace(".", "") in channel.name:
                         ticket_channel = channel
                 await asyncio.sleep(0.1)
 
-            if ticket_channel is not None:
+            if ticket_channel:
                 ticket_channel_id = ticket_channel.id
                 ticket_channel_timestamp = ticket_channel.created_at
 
@@ -881,7 +881,7 @@ class Analytics(commands.Cog):
             timestamp = message.created_at
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
-            if modmail_message_id is None:
+            if not modmail_message_id:
                 embed = message.embeds[0]
                 footer = embed.footer.text
                 open_id = (footer.split())[-1]
@@ -1062,7 +1062,7 @@ class Analytics(commands.Cog):
                 modmail_message_id = await self.bot.data_manager.get_ticket(
                     this_channel_id
                 )
-                if modmail_message_id is not None:
+                if modmail_message_id:
                     if this_author_id == 575252669443211264:
                         if message.embeds:
                             embed = message.embeds[0]
@@ -1091,7 +1091,7 @@ class Analytics(commands.Cog):
                                     author_username, None
                                 )
                                 # FIXME fix this soon, but not rn, issue with stored moderator IDs
-                                if author_id is not None:
+                                if author_id:
                                     await self.bot.data_manager.add_ticket_message(
                                         message_id,
                                         modmail_message_id,
