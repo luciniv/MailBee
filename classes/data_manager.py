@@ -246,7 +246,7 @@ class DataManager:
         await self.load_status_dicts_from_redis()  # keep local
         await self.load_timers_from_redis()  # keep local
 
-        # # NOTE this one stays, for mantid
+        # NOTE this one stays, for mantid
         await self.load_mods_from_redis()
         await self.bot.ticket_queue.start_worker()
         await self.bot.channel_status.start_worker()

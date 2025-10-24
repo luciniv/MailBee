@@ -396,11 +396,8 @@ class Analytics(commands.Cog):
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
             files = []
 
-            config = None
-            if anon is not False:
-                config = await self.bot.data_manager.get_or_load_config(guild.id)
-
-            if not anon:
+            config = await self.bot.data_manager.get_or_load_config(guild.id)
+            if anon is None:
                 if config["anon"] == "true":
                     anon = True
                 else:
