@@ -14,19 +14,6 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 
 
-# ticket class item is created upon form submission
-# thus, this must contain everything to open the ticket
-# cant store user, guild, or category objects due to redis storage
-# will make use of memory caches for these
-
-# create ticket object from ticket submission
-# add ticket object to queue
-# send object to opener to "open" it (open a ticket with it)
-# ticket opener will no longer handle data lookups, ticket submitter does
-
-# ticket id is only for tickets that open
-
-
 @dataclass
 class Ticket:
     user_id: int

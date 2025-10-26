@@ -33,7 +33,9 @@ class Snips(commands.Cog):
                 content = entry["content"]
 
         if not content:
-            return Embeds.error(f"❌ Snip **`{snip.casefold()}`** not found.")
+            return Embeds.error(
+                description=f"❌ Snip **`{snip.casefold()}`** not found."
+            )
 
         analytics = self.bot.get_cog("Analytics")
         if analytics:
@@ -140,7 +142,7 @@ class Snips(commands.Cog):
 
             if full_snip is None:
                 await channel.send(
-                    embed=Embeds.error(f"❌ Snip **`{abbrev}`** not found")
+                    embed=Embeds.error(description=f"❌ Snip **`{abbrev}`** not found")
                 )
                 return
 
@@ -240,7 +242,7 @@ class Snips(commands.Cog):
 
             if not content:
                 await interaction.followup.send(
-                    embed=Embeds.error(f"❌ Snip **`{abbrev}`** not found"),
+                    embed=Embeds.error(description=f"❌ Snip **`{abbrev}`** not found"),
                     ephemeral=True,
                 )
                 return
@@ -295,7 +297,7 @@ class Snips(commands.Cog):
 
             if not full_snip:
                 await interaction.followup.send(
-                    embed=Embeds.error(f"❌ Snip **`{abbrev}`** not found")
+                    embed=Embeds.error(description=f"❌ Snip **`{abbrev}`** not found")
                 )
                 return
 
@@ -490,7 +492,9 @@ class Snips(commands.Cog):
     async def import_snips(self, ctx, file: discord.Attachment):
         try:
             if not file.filename.endswith(".csv"):
-                await ctx.send(embed=Embeds.error("❌ Please upload a CSV file"))
+                await ctx.send(
+                    embed=Embeds.error(description="❌ Please upload a CSV file")
+                )
                 return
 
             csv_content = await file.read()

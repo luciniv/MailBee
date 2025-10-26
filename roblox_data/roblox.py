@@ -190,11 +190,15 @@ async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
         if not player_data:
             return invalid_data
 
+        print("player data should be valid", len(player_data))
+
         result = ""
         if "json_decoder" in game_config:
             result = game_config["json_decoder"](player_data)
+            print("result from json decoder", len(result))
         else:
             result = player_data
+            print("result is just player data")
 
         result_dict = json.loads(result)
         values = []
@@ -208,9 +212,11 @@ async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
             return values
 
         except Exception as e:
+            print("parsing error", e)
             return invalid_data
 
     except Exception as e:
+        print("general error", e)
         return invalid_data
 
 

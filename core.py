@@ -55,6 +55,7 @@ class MailBee(commands.Bot):
             description=description,
             case_insensitive=True,
             help_command=None,
+            max_messages=1000,
         )
         self.data_manager = DataManager(self)
         self.channel_status = ChannelStatus(self)
