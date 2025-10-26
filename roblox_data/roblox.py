@@ -82,18 +82,20 @@ async def get_roblox_user_data(
 
         resolved = response.get("resolved", {})
         if resolved:
-            roblox_info = resolved.get("Roblox")
-            username = roblox_info["Name"]
-        else:
-            # Fallback: fetch Roblox username from Roblox API
-            roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
+            roblox_info = resolved.get("roblox")
+            if roblox_info:
+                username = roblox_info["name"]
+                return [username, roblox_id]
 
-            response = await api_call(roblox_url)
-            print("roblox user response", response)
-            if response:
-                username = response.get("name")
-            else:
-                return None
+        # Fallback: fetch Roblox username from Roblox API
+        roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
+
+        response = await api_call(roblox_url)
+        print("roblox user response", response)
+        if response:
+            username = response.get("name")
+        else:
+            return None
 
         return [username, roblox_id]
 
