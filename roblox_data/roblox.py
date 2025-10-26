@@ -238,7 +238,8 @@ async def get_roblox_data(game_type: tuple, guild_id: int, user_id: int) -> list
                 game_type[0], game_type[1], user_info[1]
             )
             print("got game data values", values)
-            return user_info.extend(values)
+            user_info.extend(values)
+            return user_info
         else:
             print("no user info found")
             return None
