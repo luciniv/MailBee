@@ -78,13 +78,6 @@ class TicketQueue:
             logger.error(f"Error editing info message for ticket {ticket}: {e}")
             return False
 
-    # open tickets if there's space
-    # these tickets get removed from thew queue = live update
-    # for tickets that stay in the queue, the queue needs updated with their status?
-    # or, we find a way to avoid needing this update, and pass the fetched queue onwards for further processing
-    # New tickets then are only considered after the full processing loop (should be a couple seconds at most?)
-    # Actual ticket opening can take longer of course
-
     async def _try_open_tickets(self):
         """Attempts to open tickets if there's space."""
         full_categories = []

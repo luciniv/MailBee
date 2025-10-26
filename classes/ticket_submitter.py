@@ -25,10 +25,14 @@ async def processing_embed():
 
 
 async def roblox_data_fetch(ticket, guild_id, user_id):
+    print("Fetching Roblox data function...")
     game_type = SERVER_TO_GAME.get(guild_id, None)
+    print("game type is", game_type)
     roblox_data = None
     if game_type:
+        print("attempting to get roblox data")
         roblox_data = await get_roblox_data(game_type, guild_id, user_id)
+        print("roblox data is", roblox_data)
         if roblox_data:
             ticket.roblox_username = roblox_data[0]
             ticket.roblox_id = roblox_data[1]
