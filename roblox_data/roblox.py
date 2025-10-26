@@ -176,9 +176,11 @@ async def get_game_data(game_type, game_id, user_id):
 
 async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
     try:
-        game_config = CONFIG[game_name]
         retries = 0
         invalid_data = [-1, -1]
+        game_config = CONFIG.get(game_name, None)
+        if not game_config:
+            return invalid_data
 
         while retries < MAX_RETRIES:
             player_data = await get_game_data(game_name, game_id, user_id)
@@ -219,11 +221,11 @@ async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
             return values
 
         except Exception as e:
-            print("parsing error", e)
+            logger.exception(f"get_roblox_game_data PARSING sent an error: {e}")
             return invalid_data
 
     except Exception as e:
-        print("general error", e)
+        logger.exception(f"get_roblox_game_data GENERAL sent an error: {e}")
         return invalid_data
 
 

@@ -305,7 +305,7 @@ class Analytics(commands.Cog):
                 pass
 
             await self.bot.data_manager.add_ticket_message(
-                sent_message.id,
+                message.id,
                 None,
                 message.channel.id,
                 author.id,
