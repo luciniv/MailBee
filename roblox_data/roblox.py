@@ -56,6 +56,8 @@ async def api_call(
 async def get_roblox_user_data(
     guild_id: int, discord_id: int, api_key: str
 ) -> tuple[str, int] | None:
+    print("getting roblox user data for", guild_id, discord_id)
+    print("using api key", api_key)
     """
     Fetch Roblox username and ID linked to a Discord user via Bloxlink.
     """
@@ -70,6 +72,7 @@ async def get_roblox_user_data(
         headers = {"Authorization": api_key}
 
         response = await api_call(bloxlink_url, headers=headers)
+        print("bloxlink response", response)
         if response:
             roblox_id = response.get("robloxID")
             if not roblox_id:
@@ -86,6 +89,7 @@ async def get_roblox_user_data(
             roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
 
             response = await api_call(roblox_url)
+            print("roblox user response", response)
             if response:
                 username = response.get("name")
             else:
@@ -94,6 +98,7 @@ async def get_roblox_user_data(
         return [username, roblox_id]
 
     except Exception as e:
+        print("error in get_roblox_user_data", e)
         return None
 
 
