@@ -56,8 +56,6 @@ async def api_call(
 async def get_roblox_user_data(
     guild_id: int, discord_id: int, api_key: str
 ) -> tuple[str, int] | None:
-    print("getting roblox user data for", guild_id, discord_id)
-    print("using api key", api_key)
     """
     Fetch Roblox username and ID linked to a Discord user via Bloxlink.
     """
@@ -72,7 +70,6 @@ async def get_roblox_user_data(
         headers = {"Authorization": api_key}
 
         response = await api_call(bloxlink_url, headers=headers)
-        print("bloxlink response", response)
         if response:
             roblox_id = response.get("robloxID")
             if not roblox_id:
@@ -91,7 +88,6 @@ async def get_roblox_user_data(
         roblox_url = f"https://users.roblox.com/v1/users/{roblox_id}"
 
         response = await api_call(roblox_url)
-        print("roblox user response", response)
         if response:
             username = response.get("name")
         else:
@@ -100,7 +96,6 @@ async def get_roblox_user_data(
         return [username, roblox_id]
 
     except Exception as e:
-        print("error in get_roblox_user_data", e)
         return None
 
 
@@ -199,15 +194,11 @@ async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
         if not player_data:
             return invalid_data
 
-        print("player data should be valid", len(player_data))
-
         result = ""
         if "json_decoder" in game_config:
             result = game_config["json_decoder"](player_data)
-            print("result from json decoder", len(result))
         else:
             result = player_data
-            print("result is just player data")
 
         result_dict = json.loads(result)
         values = []
@@ -231,21 +222,16 @@ async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
 
 async def get_roblox_data(game_type: tuple, guild_id: int, user_id: int) -> list | None:
     try:
-        print("called get roblox data for", game_type, guild_id, user_id)
         user_info = await get_roblox_user_data(guild_id, user_id, game_type[2])
-        print("user info was", user_info)
         if user_info:
-            print("attempted to get game data")
             values = await get_roblox_game_data(
                 game_type[0], game_type[1], user_info[1]
             )
-            print("got game data values", values)
             user_info.extend(values)
+            print("user info found", user_info)
             return user_info
         else:
             print("no user info found")
             return None
     except Exception as e:
-        print("error in get_roblox_data", e)
-        print("returning None for some reason")
         return None

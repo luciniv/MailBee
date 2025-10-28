@@ -241,12 +241,9 @@ class DataManager:
         await self.connect_to_redis()
 
         # Pull DB data, send to redis
-        # FIXME change these to expire after 5 min
         # Pull redis data to local variables
         await self.load_status_dicts_from_redis()  # keep local
         await self.load_timers_from_redis()  # keep local
-
-        # NOTE this one stays, for mantid
         await self.load_mods_from_redis()
         await self.bot.ticket_queue.start_worker()
         await self.bot.channel_status.start_worker()
