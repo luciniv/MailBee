@@ -36,7 +36,6 @@ class Analytics(commands.Cog):
         self.processing_queue = asyncio.Queue()
 
     async def cog_load(self):
-        return
         logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
         await self.catch_modmail_backlog()
         await self.process_queue()

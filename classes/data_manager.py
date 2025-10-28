@@ -242,18 +242,18 @@ class DataManager:
 
         # Pull DB data, send to redis
         # Pull redis data to local variables
-        # await self.load_status_dicts_from_redis()  # keep local
-        # await self.load_timers_from_redis()  # keep local
-        # await self.load_mods_from_redis()
+        await self.load_status_dicts_from_redis()  # keep local
+        await self.load_timers_from_redis()  # keep local
+        await self.load_mods_from_redis()
         await self.bot.ticket_queue.start_worker()
         await self.bot.channel_status.start_worker()
 
     async def data_shutdown(self):
         await self.bot.ticket_queue.stop_worker()
         await self.bot.channel_status.stop_worker()
-        # await self.save_status_dicts_to_redis()
-        # await self.save_timers_to_redis()
-        # await self.save_mods_to_redis()
+        await self.save_status_dicts_to_redis()
+        await self.save_timers_to_redis()
+        await self.save_mods_to_redis()
         await self.close_db()
         await self.close_redis()
 
