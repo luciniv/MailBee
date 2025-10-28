@@ -190,6 +190,7 @@ class MailBee(commands.Bot):
         logger.log("SYSTEM", f"MailBee is ready! Logged in as {self.user}")
 
     async def _heartbeat(self):
+        return
         await self.data_manager.save_status_dicts_to_redis()
         await self.data_manager.save_timers_to_redis()
 
