@@ -386,7 +386,7 @@ class DMCategoryButtonView(discord.ui.View):
                 await view.setup()
                 print("sending sent_msg")
                 sent_msg = await dm_channel.send(embed=embed, view=view)
-                print("cound send dm:", sent_msg)
+                print("couldn't send dm:", sent_msg)
                 if sent_msg is None:
                     await interaction.followup.send(
                         embed=Embeds.error(

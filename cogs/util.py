@@ -22,6 +22,17 @@ class Util(commands.Cog):
 
     @commands.command()
     @checks.is_owner()
+    async def test_dm(self, ctx):
+        user = ctx.author
+        try:
+            dm_channel = await user.create_dm()
+            await dm_channel.send("This is a test DM message, via dm channel.")
+            await user.send("This is a test DM message, via user send.")
+        except discord.Forbidden:
+            await ctx.send("I couldn't send you a DM.")
+
+    @commands.command()
+    @checks.is_owner()
     async def refresh_ap(self, ctx, user: discord.Member):
         await self.bot.data_manager.get_or_load_ap(ctx.guild.id, user.id, False)
         await ctx.send(f"Refreshed AP for {user.name}")
