@@ -625,7 +625,10 @@ class CategorySelect(discord.ui.Select):
 
             def safe_partial_emoji(e):
                 try:
-                    return PartialEmoji.from_str(e) if e else None
+                    partial = PartialEmoji.from_str(e) if e else None
+                    if not partial:
+                        return None
+                    return str(partial)
                 except Exception:
                     return None
 
