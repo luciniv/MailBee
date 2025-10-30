@@ -4,9 +4,9 @@ import tempfile
 
 import discord
 from discord.ext import commands
+from discord.ui import SelectOption
 
 from classes.error_handler import *
-from classes.ticket_submitter import CategorySelectView
 from classes.embeds import Embeds
 from utils import checks, emojis
 from utils.logger import *
@@ -16,6 +16,80 @@ SERVER_TO_GAME = {
     346515443869286410: ("Dragon Adventures", 1235188606, os.getenv("DA_KEY")),
     1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY")),
 }
+
+
+class CategorySelect(discord.ui.Select):
+    def __init__(
+        self, bot, guild_id, dm_channel_id, types, options, parent_category_id=None
+    ):
+        self.bot = bot
+        self.guild_id = guild_id
+        self.dm_channel_id = dm_channel_id
+        self.types = types
+        self.parent_category_id = parent_category_id  # If selecting a subtype
+        super().__init__(
+            placeholder=(
+                "Choose a ticket type..."
+                if parent_category_id is None
+                else "Choose a sub-type..."
+            ),
+            options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        print("hooray")
+
+    @classmethod
+    async def create(cls, bot, guild_id, dm_channel_id, types, parent_category_id=None):
+        try:
+            print("creating category select...")
+
+            if parent_category_id is None:
+                filtered_types = [
+                    entry for entry in types if int(entry.get("sub_type")) == -1
+                ]
+            else:
+                filtered_types = [
+                    entry
+                    for entry in types
+                    if int(entry.get("sub_type")) == parent_category_id
+                ]
+
+            options = [
+                SelectOption(
+                    label=str(entry["type_name"]),
+                    value=f"{entry['type_id']} {entry['category_id']} {entry['nsfw_category_id']}",
+                    emoji=str(entry.get("type_emoji")),
+                    description=str(entry["type_descrip"]),
+                )
+                for entry in filtered_types
+            ]
+
+            print("created options:", options)
+
+            return cls(bot, guild_id, dm_channel_id, types, options, parent_category_id)
+        except Exception as e:
+            logger.exception(e)
+
+
+class CategorySelectView(discord.ui.View):
+    def __init__(self, bot, guild_id, dm_channel_id, types, parent_category_id=None):
+        super().__init__()
+        self.bot = bot
+        self.guild_id = guild_id
+        self.dm_channel_id = dm_channel_id
+        self.types = types
+        self.parent_category_id = parent_category_id
+
+    async def setup(self):
+        select = await CategorySelect.create(
+            self.bot,
+            self.guild_id,
+            self.dm_channel_id,
+            self.types,
+            self.parent_category_id,
+        )
+        self.add_item(select)
 
 
 class Util(commands.Cog):
@@ -44,9 +118,7 @@ class Util(commands.Cog):
 
         view = CategorySelectView(self.bot, guild.id, dm_channel.id, types)
         await view.setup()
-        print("sending sent_msg")
         sent_msg = await dm_channel.send(embed=embed, view=view)
-        print("send messaged:", sent_msg)
 
     @commands.command()
     @checks.is_owner()

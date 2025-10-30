@@ -180,10 +180,9 @@ async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
         while retries < MAX_RETRIES:
             player_data = await get_game_data(game_name, game_id, user_id)
 
-            if "NOT_FOUND" in player_data:
-                return invalid_data
-
             if player_data:
+                if "NOT_FOUND" in player_data:
+                    return invalid_data
                 retries = MAX_RETRIES
                 continue
 

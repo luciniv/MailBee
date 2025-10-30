@@ -25,12 +25,9 @@ async def processing_embed():
 
 
 async def roblox_data_fetch(ticket, guild_id, user_id):
-    print("Fetching Roblox data function...")
     game_type = SERVER_TO_GAME.get(guild_id, None)
-    print("game type is", game_type)
     roblox_data = None
     if game_type:
-        print("attempting to get roblox data")
         roblox_data = await get_roblox_data(game_type, guild_id, user_id)
         print("roblox data is", roblox_data)
         if roblox_data:
@@ -290,7 +287,6 @@ class DMCategoryButtonView(discord.ui.View):
             await interaction.response.defer(ephemeral=True)
 
             user = interaction.user
-            print("button pressed by user:", user)
             guild = interaction.guild
             limited, retry_after, was_notified = (
                 self.bot.queue.check_user_action_cooldown("open_ticket_button", user.id)
@@ -363,9 +359,7 @@ class DMCategoryButtonView(discord.ui.View):
                 return
 
             try:
-                print("attempting to create dm")
                 dm_channel = user.dm_channel or await user.create_dm()
-                print("dm created:", dm_channel)
 
                 types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
 
@@ -383,9 +377,8 @@ class DMCategoryButtonView(discord.ui.View):
 
                 view = CategorySelectView(self.bot, guild.id, dm_channel.id, types)
                 await view.setup()
-                print("sending sent_msg")
                 sent_msg = await dm_channel.send(embed=embed, view=view)
-                print("send messaged:", sent_msg)
+
                 if sent_msg is None:
                     await interaction.followup.send(
                         embed=Embeds.error(
@@ -415,7 +408,6 @@ class DMCategoryButtonView(discord.ui.View):
                 )
 
             except discord.Forbidden:
-                print("discord forbidden error")
                 await interaction.followup.send(
                     embed=Embeds.error(
                         description="❌ I couldn’t message you! Please enable "
@@ -621,7 +613,6 @@ class CategorySelect(discord.ui.Select):
     @classmethod
     async def create(cls, bot, guild_id, dm_channel_id, types, parent_category_id=None):
         try:
-            print("creating category select...")
 
             def safe_partial_emoji(e):
                 try:
@@ -652,8 +643,6 @@ class CategorySelect(discord.ui.Select):
                 )
                 for entry in filtered_types
             ]
-
-            print("created options:", options)
 
             return cls(bot, guild_id, dm_channel_id, types, options, parent_category_id)
         except Exception as e:
