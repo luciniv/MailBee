@@ -55,6 +55,9 @@ class CategorySelect(discord.ui.Select):
                     if int(entry.get("sub_type")) == parent_category_id
                 ]
 
+            for entry in filtered_types:
+                print("filtered emoji:", entry.get("type_emoji"))
+
             options = [
                 SelectOption(
                     label=str(entry["type_name"]),
