@@ -6,6 +6,8 @@ import discord
 from discord.ext import commands
 
 from classes.error_handler import *
+from classes.ticket_submitter import CategorySelectView
+from classes.embeds import Embeds
 from utils import checks, emojis
 from utils.logger import *
 
@@ -19,6 +21,32 @@ SERVER_TO_GAME = {
 class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command()
+    @checks.is_owner()
+    async def category_embed(self, ctx):
+        guild = ctx.guild
+        guild_id = ctx.guild.id
+        dm_channel = await ctx.author.create_dm()
+        types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
+
+        embed = Embeds.info(
+            title="Select Ticket Type",
+            description="Please select a type for your ticket with the "
+            "drop-down menu below.\n\nIf you're unsure what to choose, or "
+            'your topic isn\'t listed, select "Other."',
+        )
+        if guild.icon:
+            embed.set_author(name=guild.name, icon_url=guild.icon.url)
+            embed.set_thumbnail(url=guild.icon.url)
+        else:
+            embed.set_author(name=guild.name)
+
+        view = CategorySelectView(self.bot, guild, dm_channel.id, types)
+        await view.setup()
+        print("sending sent_msg")
+        sent_msg = await dm_channel.send(embed=embed, view=view)
+        print("send messaged:", sent_msg)
 
     @commands.command()
     @checks.is_owner()

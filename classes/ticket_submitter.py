@@ -368,7 +368,6 @@ class DMCategoryButtonView(discord.ui.View):
                 print("dm created:", dm_channel)
 
                 types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
-                print("types loaded:", types)
 
                 embed = Embeds.info(
                     title="Select Ticket Type",
@@ -621,6 +620,7 @@ class CategorySelect(discord.ui.Select):
     @classmethod
     async def create(cls, bot, guild, dm_channel_id, types, parent_category_id=None):
         try:
+
             def safe_partial_emoji(e):
                 try:
                     return PartialEmoji.from_str(e) if e else None
