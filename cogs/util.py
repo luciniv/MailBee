@@ -45,7 +45,7 @@ class Util(commands.Cog):
         view = CategorySelectView(self.bot, guild, dm_channel.id, types)
         await view.setup()
         print("sending sent_msg")
-        sent_msg = await dm_channel.send(embed=embed, view=view)
+        sent_msg = await dm_channel.send(embed=embed, view=None)
         print("send messaged:", sent_msg)
 
     @commands.command()
