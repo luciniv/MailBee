@@ -4,7 +4,7 @@ import tempfile
 
 import discord
 from discord.ext import commands
-from discord.ui import SelectOption
+from discord import PartialEmoji, SelectOption
 
 from classes.error_handler import *
 from classes.embeds import Embeds
