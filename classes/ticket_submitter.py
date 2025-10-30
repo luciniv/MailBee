@@ -613,16 +613,6 @@ class CategorySelect(discord.ui.Select):
     @classmethod
     async def create(cls, bot, guild_id, dm_channel_id, types, parent_category_id=None):
         try:
-
-            def safe_partial_emoji(e):
-                try:
-                    partial = PartialEmoji.from_str(e) if e else None
-                    if not partial:
-                        return None
-                    return str(partial)
-                except Exception:
-                    return None
-
             if parent_category_id is None:
                 filtered_types = [
                     entry for entry in types if int(entry.get("sub_type")) == -1
@@ -638,7 +628,7 @@ class CategorySelect(discord.ui.Select):
                 SelectOption(
                     label=str(entry["type_name"]),
                     value=f"{entry['type_id']} {entry['category_id']} {entry['nsfw_category_id']}",
-                    emoji=None,
+                    emoji=str(entry.get("type_emoji")),
                     description=str(entry["type_descrip"]),
                 )
                 for entry in filtered_types
