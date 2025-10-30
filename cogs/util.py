@@ -24,6 +24,7 @@ class Util(commands.Cog):
     @checks.is_owner()
     async def test_dm(self, ctx):
         user = ctx.author
+        print(user)
         try:
             dm_channel = await user.create_dm()
             await dm_channel.send("This is a test DM message, via dm channel.")

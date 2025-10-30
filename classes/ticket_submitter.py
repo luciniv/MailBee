@@ -290,6 +290,7 @@ class DMCategoryButtonView(discord.ui.View):
             await interaction.response.defer(ephemeral=True)
 
             user = interaction.user
+            print("button pressed by user:", user)
             guild = interaction.guild
             limited, retry_after, was_notified = (
                 self.bot.queue.check_user_action_cooldown("open_ticket_button", user.id)
@@ -325,7 +326,6 @@ class DMCategoryButtonView(discord.ui.View):
             )
 
             if blacklisted:
-                print("user was blacklisted")
                 await interaction.followup.send(
                     embed=Embeds.error(
                         description="❌ You are blacklisted from opening tickets "
@@ -334,7 +334,6 @@ class DMCategoryButtonView(discord.ui.View):
                     ephemeral=True,
                 )
                 return
-            print("blacklist check was fine")
 
             pending_ticket = await self.bot.ticket_queue.has_pending_ticket(
                 guild_id, user.id
@@ -351,7 +350,7 @@ class DMCategoryButtonView(discord.ui.View):
                     ephemeral=True,
                 )
                 return
-            print("no pending tickets")
+
             config = await self.bot.data_manager.get_or_load_config(guild_id)
             if config["accepting"] != "true":
                 await interaction.followup.send(
@@ -369,6 +368,7 @@ class DMCategoryButtonView(discord.ui.View):
                 print("dm created:", dm_channel)
 
                 types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
+                print("types loaded:", types)
 
                 embed = Embeds.info(
                     title="Select Ticket Type",
@@ -386,12 +386,11 @@ class DMCategoryButtonView(discord.ui.View):
                 await view.setup()
                 print("sending sent_msg")
                 sent_msg = await dm_channel.send(embed=embed, view=view)
-                print("couldn't send dm:", sent_msg)
+                print("send messaged:", sent_msg)
                 if sent_msg is None:
                     await interaction.followup.send(
                         embed=Embeds.error(
-                            description="❌ I couldn’t message you! Please enable "
-                            "direct messages and try again."
+                            description="❌ I'm currently experiencing an issue, please retry again later. Thank you!"
                         ),
                         ephemeral=True,
                     )
@@ -621,34 +620,37 @@ class CategorySelect(discord.ui.Select):
 
     @classmethod
     async def create(cls, bot, guild, dm_channel_id, types, parent_category_id=None):
-        def safe_partial_emoji(e):
-            try:
-                return PartialEmoji.from_str(e) if e else None
-            except Exception:
-                return None
+        try:
+            def safe_partial_emoji(e):
+                try:
+                    return PartialEmoji.from_str(e) if e else None
+                except Exception:
+                    return None
 
-        if parent_category_id is None:
-            filtered_types = [
-                entry for entry in types if int(entry.get("sub_type")) == -1
+            if parent_category_id is None:
+                filtered_types = [
+                    entry for entry in types if int(entry.get("sub_type")) == -1
+                ]
+            else:
+                filtered_types = [
+                    entry
+                    for entry in types
+                    if int(entry.get("sub_type")) == parent_category_id
+                ]
+
+            options = [
+                SelectOption(
+                    label=str(entry["type_name"]),
+                    value=f"{entry['type_id']} {entry['category_id']} {entry['nsfw_category_id']}",
+                    emoji=safe_partial_emoji(entry.get("type_emoji")),
+                    description=str(entry["type_descrip"]),
+                )
+                for entry in filtered_types
             ]
-        else:
-            filtered_types = [
-                entry
-                for entry in types
-                if int(entry.get("sub_type")) == parent_category_id
-            ]
 
-        options = [
-            SelectOption(
-                label=str(entry["type_name"]),
-                value=f"{entry['type_id']} {entry['category_id']} {entry['nsfw_category_id']}",
-                emoji=safe_partial_emoji(entry.get("type_emoji")),
-                description=str(entry["type_descrip"]),
-            )
-            for entry in filtered_types
-        ]
-
-        return cls(bot, guild, dm_channel_id, types, options, parent_category_id)
+            return cls(bot, guild, dm_channel_id, types, options, parent_category_id)
+        except Exception as e:
+            logger.exception(e)
 
 
 class CategorySelectView(TimeoutSafeView):
