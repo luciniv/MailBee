@@ -620,6 +620,7 @@ class CategorySelect(discord.ui.Select):
     @classmethod
     async def create(cls, bot, guild, dm_channel_id, types, parent_category_id=None):
         try:
+            print("creating category select...")
 
             def safe_partial_emoji(e):
                 try:
@@ -647,6 +648,8 @@ class CategorySelect(discord.ui.Select):
                 )
                 for entry in filtered_types
             ]
+
+            print("created options:", options)
 
             return cls(bot, guild, dm_channel_id, types, options, parent_category_id)
         except Exception as e:
