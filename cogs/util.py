@@ -42,10 +42,10 @@ class Util(commands.Cog):
         else:
             embed.set_author(name=guild.name)
 
-        view = CategorySelectView(self.bot, guild, dm_channel.id, types)
+        view = CategorySelectView(self.bot, guild.id, dm_channel.id, types)
         await view.setup()
         print("sending sent_msg")
-        sent_msg = await dm_channel.send(embed=embed, view=None)
+        sent_msg = await dm_channel.send(embed=embed, view=view)
         print("send messaged:", sent_msg)
 
     @commands.command()

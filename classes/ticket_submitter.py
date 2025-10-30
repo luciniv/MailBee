@@ -436,10 +436,10 @@ class DMCategoryButtonView(discord.ui.View):
 
 class CategorySelect(discord.ui.Select):
     def __init__(
-        self, bot, guild, dm_channel_id, types, options, parent_category_id=None
+        self, bot, guild_id, dm_channel_id, types, options, parent_category_id=None
     ):
         self.bot = bot
-        self.guild = guild
+        self.guild_id = guild_id
         self.dm_channel_id = dm_channel_id
         self.types = types
         self.parent_category_id = parent_category_id  # If selecting a subtype
@@ -458,7 +458,8 @@ class CategorySelect(discord.ui.Select):
         selected_category_id = int(value[1])
         selected_nsfw_id = int(value[2])
         dm_channel_id = self.dm_channel_id
-        guild = self.guild
+        guild_id = self.guild_id
+        guild = self.bot.get_guild(guild_id)
         subtypes = []
 
         if self.parent_category_id is None:
