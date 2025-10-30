@@ -323,7 +323,9 @@ class DMCategoryButtonView(discord.ui.View):
             blacklisted = await self.bot.data_manager.get_blacklist_entry(
                 guild_id, user.id
             )
+
             if blacklisted:
+                print("user was blacklisted")
                 await interaction.followup.send(
                     embed=Embeds.error(
                         description="❌ You are blacklisted from opening tickets "
@@ -332,6 +334,7 @@ class DMCategoryButtonView(discord.ui.View):
                     ephemeral=True,
                 )
                 return
+            print("blacklist check was fine")
 
             pending_ticket = await self.bot.ticket_queue.has_pending_ticket(
                 guild_id, user.id
@@ -348,7 +351,7 @@ class DMCategoryButtonView(discord.ui.View):
                     ephemeral=True,
                 )
                 return
-
+            print("no pending tickets")
             config = await self.bot.data_manager.get_or_load_config(guild_id)
             if config["accepting"] != "true":
                 await interaction.followup.send(
@@ -361,7 +364,10 @@ class DMCategoryButtonView(discord.ui.View):
                 return
 
             try:
+                print("attempting to create dm")
                 dm_channel = user.dm_channel or await user.create_dm()
+                print("dm created:", dm_channel)
+
                 types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
 
                 embed = Embeds.info(
@@ -378,8 +384,9 @@ class DMCategoryButtonView(discord.ui.View):
 
                 view = CategorySelectView(self.bot, guild, dm_channel.id, types)
                 await view.setup()
-
+                print("sending sent_msg")
                 sent_msg = await dm_channel.send(embed=embed, view=view)
+                print("cound send dm:", sent_msg)
                 if sent_msg is None:
                     await interaction.followup.send(
                         embed=Embeds.error(
@@ -410,6 +417,7 @@ class DMCategoryButtonView(discord.ui.View):
                 )
 
             except discord.Forbidden:
+                print("discord forbidden error")
                 await interaction.followup.send(
                     embed=Embeds.error(
                         description="❌ I couldn’t message you! Please enable "
@@ -419,6 +427,7 @@ class DMCategoryButtonView(discord.ui.View):
                 )
 
         except Exception as e:
+            logger.exception(e)
             await interaction.followup.send(
                 embed=Embeds.error(
                     description="❌ An error occurred. Please wait a bit and try again."
