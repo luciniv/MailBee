@@ -647,7 +647,7 @@ class CategorySelect(discord.ui.Select):
                 SelectOption(
                     label=str(entry["type_name"]),
                     value=f"{entry['type_id']} {entry['category_id']} {entry['nsfw_category_id']}",
-                    emoji=safe_partial_emoji(entry.get("type_emoji")),
+                    emoji=None,
                     description=str(entry["type_descrip"]),
                 )
                 for entry in filtered_types
