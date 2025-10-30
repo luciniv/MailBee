@@ -254,7 +254,7 @@ class ServerSelect(discord.ui.Select):
             category_embed.set_author(name=guild.name)
 
         # Build and send the category select view
-        view = CategorySelectView(self.bot, guild, dm_channel_id, types)
+        view = CategorySelectView(self.bot, guild.id, dm_channel_id, types)
         await view.setup()
 
         try:
@@ -381,7 +381,7 @@ class DMCategoryButtonView(discord.ui.View):
                 else:
                     embed.set_author(name=guild.name)
 
-                view = CategorySelectView(self.bot, guild, dm_channel.id, types)
+                view = CategorySelectView(self.bot, guild.id, dm_channel.id, types)
                 await view.setup()
                 print("sending sent_msg")
                 sent_msg = await dm_channel.send(embed=embed, view=view)
@@ -505,7 +505,7 @@ class CategorySelect(discord.ui.Select):
             # Show subtypes select
             newView = CategorySelectView(
                 self.bot,
-                self.guild,
+                self.guild_id,
                 self.dm_channel_id,
                 self.types,
                 parent_category_id=selected_category_id,
@@ -592,7 +592,7 @@ class CategorySelect(discord.ui.Select):
                     await send_dynamic_modal(
                         self.bot,
                         interaction,
-                        self.guild,
+                        self.guild_id,
                         category,
                         selected_type_id,
                         selected_nsfw_id,
@@ -619,7 +619,7 @@ class CategorySelect(discord.ui.Select):
             return
 
     @classmethod
-    async def create(cls, bot, guild, dm_channel_id, types, parent_category_id=None):
+    async def create(cls, bot, guild_id, dm_channel_id, types, parent_category_id=None):
         try:
             print("creating category select...")
 
@@ -652,16 +652,16 @@ class CategorySelect(discord.ui.Select):
 
             print("created options:", options)
 
-            return cls(bot, guild, dm_channel_id, types, options, parent_category_id)
+            return cls(bot, guild_id, dm_channel_id, types, options, parent_category_id)
         except Exception as e:
             logger.exception(e)
 
 
 class CategorySelectView(TimeoutSafeView):
-    def __init__(self, bot, guild, dm_channel_id, types, parent_category_id=None):
+    def __init__(self, bot, guild_id, dm_channel_id, types, parent_category_id=None):
         super().__init__()
         self.bot = bot
-        self.guild = guild
+        self.guild_id = guild_id
         self.dm_channel_id = dm_channel_id
         self.types = types
         self.parent_category_id = parent_category_id
@@ -669,7 +669,7 @@ class CategorySelectView(TimeoutSafeView):
     async def setup(self):
         select = await CategorySelect.create(
             self.bot,
-            self.guild,
+            self.guild_id,
             self.dm_channel_id,
             self.types,
             self.parent_category_id,
@@ -679,34 +679,35 @@ class CategorySelectView(TimeoutSafeView):
         # Only add back button if viewing subtypes
         if self.parent_category_id is not None:
             self.add_item(
-                BackButton(self.bot, self.guild, self.dm_channel_id, self.types)
+                BackButton(self.bot, self.guild_id, self.dm_channel_id, self.types)
             )
 
 
 class BackButton(discord.ui.Button):
-    def __init__(self, bot, guild, dm_channel_id, types):
+    def __init__(self, bot, guild_id, dm_channel_id, types):
         super().__init__(style=discord.ButtonStyle.success, label="⬅ Go Back")
         self.bot = bot
-        self.guild = guild
+        self.guild_id = guild_id
         self.dm_channel_id = dm_channel_id
         self.types = types
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=False)
+        guild = self.bot.get_guild(self.guild_id)
         category_embed = Embeds.info(
             title="Select a Ticket Type",
             description="Please select a type for your ticket with the drop-down menu below.\n\n"
             'If you are unsure what to choose, or your topic is not listed, select "Other."',
         )
-        if self.guild.icon:
-            category_embed.set_author(
-                name=self.guild.name, icon_url=self.guild.icon.url
-            )
-            category_embed.set_thumbnail(url=self.guild.icon.url)
+        if guild.icon:
+            category_embed.set_author(name=guild.name, icon_url=guild.icon.url)
+            category_embed.set_thumbnail(url=guild.icon.url)
         else:
-            category_embed.set_author(name=self.guild.name)
+            category_embed.set_author(name=guild.name)
 
-        view = CategorySelectView(self.bot, self.guild, self.dm_channel_id, self.types)
+        view = CategorySelectView(
+            self.bot, self.guild_id, self.dm_channel_id, self.types
+        )
         await view.setup()
 
         try:
@@ -720,7 +721,7 @@ class BackButton(discord.ui.Button):
 async def send_dynamic_modal(
     bot,
     interaction,
-    guild,
+    guild_id,
     category,
     type_id,
     nsfw_id,
@@ -750,7 +751,7 @@ async def send_dynamic_modal(
 
             ticket = Ticket(
                 user_id=user.id,
-                guild_id=guild.id,
+                guild_id=guild_id,
                 category_id=category.id,
                 type_id=type_id,
                 type_name=title,
@@ -795,7 +796,7 @@ async def send_dynamic_modal(
                     embed=await processing_embed()
                 )
                 await bot.cache.store_message(info_message)
-                await roblox_data_fetch(ticket, guild.id, user.id)
+                await roblox_data_fetch(ticket, guild_id, user.id)
                 await bot.ticket_queue._add_ticket(ticket, info_message)
 
         except Exception as e:
