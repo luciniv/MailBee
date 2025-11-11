@@ -233,7 +233,11 @@ class Snips(commands.Cog):
             content = ""
             guild = interaction.guild
             snips = await self.bot.data_manager.get_or_load_snips(guild.id)
-            abbrev = snip[: (snip.index(":"))]
+            try:
+                snip.index(":")
+                abbrev = snip[: (snip.index(":"))]
+            except Exception:
+                abbrev = snip.casefold()
 
             for entry in snips:
                 if abbrev.casefold() == entry["abbrev"]:
@@ -288,7 +292,11 @@ class Snips(commands.Cog):
             guild = interaction.guild
             snips = await self.bot.data_manager.get_or_load_snips(guild.id)
             full_snip = None
-            abbrev = snip[: (snip.index(":"))]
+            try:
+                snip.index(":")
+                abbrev = snip[: (snip.index(":"))]
+            except Exception:
+                abbrev = snip.casefold()
 
             for entry in snips:
                 if abbrev.casefold() == entry["abbrev"]:
@@ -437,8 +445,14 @@ class Snips(commands.Cog):
         try:
             await interaction.response.defer()
             guild = interaction.guild
-
-            abbrev = snip[: (snip.index(":"))]
+            try:
+                snip.index(":")
+                abbrev = snip[: (snip.index(":"))]
+            except Exception:
+                await interaction.followup.send(
+                    embed=Embeds.error(description="❌ Invalid snip selection")
+                )
+                return
 
             await self.bot.data_manager.remove_snip(guild.id, abbrev)
             await self.bot.data_manager.get_or_load_snips(guild.id, False)

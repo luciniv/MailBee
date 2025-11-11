@@ -147,7 +147,9 @@ def is_ticket_app():
 
         result = await _check_is_ticket(channel)
         if not result:
-            raise commands.CheckFailure("This command must be run in a ticket channel.")
+            raise app_commands.CheckFailure(
+                "This command must be run in a ticket channel."
+            )
         return result
 
     return app_commands.check(predicate)
