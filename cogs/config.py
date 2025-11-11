@@ -299,6 +299,7 @@ class Config(commands.Cog):
     @checks.is_admin()
     @checks.is_guild()
     async def remove(self, ctx, category: discord.CategoryChannel):
+        return
         try:
             name = category.name
             await self.bot.data_manager.delete_guild_type(ctx.guild.id, category.id)
@@ -319,6 +320,7 @@ class Config(commands.Cog):
     @checks.is_admin()
     @checks.is_guild()
     async def update(self, ctx, category: discord.CategoryChannel):
+        return
         try:
             name = category.name
             await self.bot.data_manager.delete_guild_type(ctx.guild.id, category.id)
@@ -343,6 +345,7 @@ class Config(commands.Cog):
         form_template="Template for the form, use /form_template to view a pre-made template"
     )
     async def set(self, ctx, category: discord.CategoryChannel, form_template: str):
+        return
         try:
             try:
                 parsed_form = json.loads(form_template)
@@ -373,6 +376,7 @@ class Config(commands.Cog):
     @checks.is_guild()
     @app_commands.describe(form_template="Form template JSON string")
     async def preview(self, ctx, form_template: str):
+        return
         await preview_form_template(ctx, form_template)
 
     @form_group.command(
@@ -382,6 +386,7 @@ class Config(commands.Cog):
     @checks.is_guild()
     @app_commands.describe(form_template="Form template JSON string")
     async def preview(self, ctx, form_template: str):
+        return
         await preview_form_template(ctx, form_template)
 
     @commands.command(name="config")
