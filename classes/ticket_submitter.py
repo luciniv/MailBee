@@ -3,12 +3,12 @@ import time
 from datetime import datetime, timezone
 
 import discord
-from discord import PartialEmoji, SelectOption
+from discord import SelectOption
 from discord.ext import commands
 from discord.ui import Button, View
 
 from classes.ticket_opener import TicketOpener
-from classes.helpers import Ticket
+from classes.helpers import *
 from roblox_data.roblox import *
 from classes.embeds import Embeds
 
@@ -514,7 +514,7 @@ class CategorySelect(discord.ui.Select):
             if selected_category_id == 0:
                 redirect_text = next(
                     (
-                        entry["redirectText"]
+                        entry["redirect_text"]
                         for entry in self.types
                         if int(entry["type_id"]) == selected_type_id
                     ),

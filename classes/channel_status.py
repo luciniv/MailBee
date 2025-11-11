@@ -169,50 +169,47 @@ class ChannelStatus:
 
     # Queues a channel name update, replacing any previous updates for that channel
     def queue_update(
-        self, channel: discord.TextChannel, new_name: str, manual: bool
+        self,
+        channel: discord.TextChannel,
+        new_emoji_str: str,
+        new_name: str,
+        manual: bool,
     ) -> bool:
         try:
-            # Pop updates for closing channels
-            if new_name is None:
+            restricted_updates = {"new": "alert", "inactive": "wait"}
+
+            if new_emoji_str is None:
                 self.pending_updates.pop(channel.id, None)
                 return False
 
-            # Returning to the current name, drop all updates
-            if new_name == channel.name:
-                self.pending_updates.pop(channel.id, None)
-                return False
-
+            # If update is the same as current or pending name, drop
             pending_name = self.pending_updates.get(channel.id, channel.name)
-            # Same as the current pending update, drop update
             if pending_name == new_name:
                 return False
 
-            # Mapping of restricted transitions
-            restricted_updates = [("new", "alert"), ("inactive", "wait")]
+            current_emoji_str = next(
+                (
+                    emoji
+                    for emoji, value in emojis.emoji_map.items()
+                    if value[0] == pending_name[0]
+                ),
+                None,
+            )
 
             # Check for restricted automatic updates
             if not manual:
-                for restriction in restricted_updates:
-                    if pending_name.startswith(
-                        (emojis.emoji_map.get(restriction[0])[0])
-                    ) and new_name.startswith(
-                        (emojis.emoji_map.get(restriction[1])[0])
-                    ):
+                if current_emoji_str:
+                    restriction = restricted_updates.get(current_emoji_str, None)
+                    if new_emoji_str == restriction:
                         return False
 
-                for emoji, permanent in emojis.emoji_map.values():
-                    if pending_name.startswith(emoji) and permanent:
+                    # If current name is permanent, drop new name
+                    if emojis.emoji_map.get(current_emoji_str)[0]:
                         return False
 
-                # Handle special case: deleting timer if switching from inactive/close to alert
-                if pending_name.startswith(
-                    (
-                        emojis.emoji_map.get("inactive")[0],
-                        emojis.emoji_map.get("close")[0],
-                    )
-                ) and new_name.startswith((emojis.emoji_map.get("alert", ""))[0]):
-                    if self.timers.pop(channel.id, None):
-                        pass
+                    # Delete timer if switching from inactive to alert
+                    if current_emoji_str == "inactive" and new_emoji_str == "alert":
+                        self.timers.pop(channel.id, None)
 
             # Queue the update
             self.pending_updates[channel.id] = new_name
@@ -245,7 +242,7 @@ class ChannelStatus:
 
         else:
             if emoji_str is None:
-                self.queue_update(channel, None, manual)
+                self.queue_update(channel, emoji_str, None, manual)
                 return True
 
             selected_emoji = (emojis.emoji_map.get(emoji_str))[0]
@@ -257,7 +254,7 @@ class ChannelStatus:
                 new_name = f"{selected_emoji}{(channel.name)[1:]}"
             else:
                 new_name = f"{selected_emoji}{channel.name}"
-        return self.queue_update(channel, new_name, manual)
+        return self.queue_update(channel, emoji_str, new_name, manual)
 
     # Check if the input is a valid Unicode emoji
     def check_unicode(self, input_emoji: str) -> bool:

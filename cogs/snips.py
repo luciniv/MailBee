@@ -64,7 +64,6 @@ class Snips(commands.Cog):
             return []
 
         snips_raw = await self.bot.data_manager.get_or_load_snips(guild.id)
-
         snips = [f"{snip['abbrev']}: {snip['summary']}" for snip in snips_raw]
         choices = [app_commands.Choice(name=snip, value=snip) for snip in snips]
 
@@ -357,6 +356,7 @@ class Snips(commands.Cog):
 
             message = None
             guild = interaction.guild
+            channel = interaction.channel
             snips = await self.bot.data_manager.get_or_load_snips(guild.id)
             abbrev = abbreviation.casefold()
             text = None
@@ -387,39 +387,22 @@ class Snips(commands.Cog):
                     return
 
             if content is None:
-                try:
-                    message = await interaction.channel.fetch_message(int(message_id))
-                except discord.NotFound:
+                message, response = await fetch_channel_message(channel, message_id)
+                if not message:
                     await interaction.followup.send(
-                        embed=Embeds.error(
-                            description="❌ Message ID must be from a valid message in the current channel"
-                        )
+                        embed=Embeds.error(description=response)
                     )
                     return
-                except Exception:
-                    pass
-
-                if message is None:
-                    await interaction.followup.send(
-                        Embeds.error(
-                            description="❌ Message not found, try re-entering the ID"
-                        )
-                    )
-                    return
-
-                if len(message.content) < 1:
-                    await interaction.followup.send(
-                        embed=Embeds.error(description="❌ Message is too short")
-                    )
-                    return
-
-                text = message.content
+                else:
+                    text = message.content
             else:
                 text = content
 
-            state, content = await verify_text(self.bot, guild, text, 4000)
-            if not state:
-                await interaction.followup.send(embed=Embeds.error(description=content))
+            content, response = await verify_text(self.bot, guild, text, 4000)
+            if not content:
+                await interaction.followup.send(
+                    embed=Embeds.error(description=response)
+                )
                 return
 
             await self.bot.data_manager.add_snip(

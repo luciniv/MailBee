@@ -2,9 +2,13 @@ import asyncio
 import os
 import re
 import time
+from dataclasses import asdict, dataclass
 
 import aiohttp
 import discord
+from discord import PartialEmoji
+
+from classes.embeds import Embeds
 from utils.logger import *
 
 tenor_key = os.getenv("TENOR_KEY")
@@ -46,10 +50,38 @@ class Ticket:
         return f"<@{self.user_id}>"
 
 
+def safe_partial_emoji(e):
+    try:
+        return PartialEmoji.from_str(e) if e else None
+    except Exception:
+        return None
+
+
 def clean_username_id(text: str):
     username = text.split(" ")[0].strip()
     user_id = text.split(" ")[2].strip()
     return username, user_id
+
+
+async def fetch_channel_message(
+    interaction, channel: discord.TextChannel, message_id: int
+):
+    try:
+        message = await channel.fetch_message(int(message_id))
+
+    except discord.NotFound:
+        return None, "❌ Message ID must be from a valid message in the current channel"
+
+    except Exception:
+        return None, "❌ An error occurred while fetching the message"
+
+    if not message:
+        return None, "❌ Message not found, try re-entering the ID"
+
+    if message.embeds:
+        return None, "❌ Embeds are not supported, please provide a text only message"
+
+    return message, None
 
 
 async def export_ticket_messages(channel: discord.TextChannel):
@@ -145,10 +177,10 @@ async def convert_mentions(bot, text: str, guild: discord.Guild):
 async def verify_text(bot, guild: discord.Guild, text: str, limit: int = 3000):
     text = await convert_mentions(bot, text, guild)
     if not text:
-        return False, "❌ No text provided."
+        return None, "❌ No text provided."
     elif len(text) > limit:
-        return False, f"❌ Text exceeds limit of {limit} characters."
-    return True, text
+        return None, f"❌ Text exceeds limit of {limit} characters."
+    return text, None
 
 
 def get_ticket_channel_info(channel: discord.TextChannel):

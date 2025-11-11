@@ -100,9 +100,9 @@ class Moderation(commands.Cog):
             await interaction.response.defer(ephemeral=True)
             guild = interaction.guild
             mod = interaction.user
-            state, content = await verify_text(self.bot, guild, note)
+            content, response = await verify_text(self.bot, guild, note)
 
-            if state:
+            if content:
                 ticket_exists, opener_id, log_id = (
                     await self.bot.data_manager.check_ticket_exists(guild.id, ticket_id)
                 )
@@ -133,7 +133,7 @@ class Moderation(commands.Cog):
                         )
                     )
             else:
-                await interaction.follow.send(embed=Embeds.error(description=content))
+                await interaction.follow.send(embed=Embeds.error(description=response))
 
         except Exception as e:
             raise BotError(f"/note add_ticket sent an error: {e}")
@@ -150,9 +150,9 @@ class Moderation(commands.Cog):
             await interaction.response.defer(ephemeral=True)
             guild = interaction.guild
             mod = interaction.user
-            state, content = await verify_text(self.bot, guild, note)
+            content, response = await verify_text(self.bot, guild, note)
 
-            if state:
+            if content:
                 note_id = await self.bot.data_manager.get_next_note_id(guild.id)
                 await self.bot.data_manager.add_note(
                     note_id,
@@ -173,7 +173,7 @@ class Moderation(commands.Cog):
                     )
                 )
             else:
-                await interaction.follow.send(embed=Embeds.error(description=content))
+                await interaction.follow.send(embed=Embeds.error(description=response))
 
         except Exception as e:
             raise BotError(f"/note add_user sent an error: {e}")

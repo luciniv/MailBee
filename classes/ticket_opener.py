@@ -56,10 +56,9 @@ class TicketOpener:
             category_id = ticket.category_id
             dm_message_id = ticket.dm_message_id
             user = await self.bot.cache.get_user(user_id)
-            if user is None:
-                print("ticket opener, user was none")
-                await self.bot.ticket_queue.re_add_ticket(ticket)
-                return
+            if not user:
+                print("Failed to fetch user for ticket opener, re-added ticket")
+                await self.bot.ticket_queue._re_add_ticket(ticket)
 
             guild = self.bot.get_guild(guild_id)
             category = guild.get_channel(category_id)
@@ -115,7 +114,7 @@ class TicketOpener:
                 return False
 
             # Create logging thread
-            if log_message is not None:
+            if log_message:
                 try:
                     thread = await log_message.create_thread(
                         name=f"Ticket Log {user.name} - {ticket_id}",
