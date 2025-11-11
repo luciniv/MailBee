@@ -273,8 +273,23 @@ class Config(commands.Cog):
 
             parent_id = None
             if parent:
-                parent_id = parent.value
-                await self._validate_subtype(types, parent_id)
+                types = await self.bot.data_manager.get_or_load_ticket_types(guild.id)
+                for type in types:
+                    if type["category_id"] == parent.id:
+                        if type["redirect_text"]:
+                            await interaction.followup.send(
+                                embed=Embeds.error(
+                                    description="❌ Cannot use a redirect category as a parent."
+                                )
+                            )
+                            return
+                        elif type["sub_type"] != -1:
+                            await interaction.followup.send(
+                                embed=Embeds.error(
+                                    description="❌ Cannot use a sub-type category as a parent."
+                                )
+                            )
+                            return
 
             inbox_category = guild.get_channel(config["inbox_id"])
             if inbox_category:
@@ -322,7 +337,9 @@ class Config(commands.Cog):
                         redirect,
                         ping_role,
                     )
-                    await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
+                    await self.bot.data_manager.get_or_load_ticket_types(
+                        guild.id, False
+                    )
 
                 else:
                     await interaction.followup.send(
@@ -515,7 +532,7 @@ class Config(commands.Cog):
             await self.bot.data_manager.set_form(
                 ctx.guild.id, category.id, cleaned_form
             )
-            await self.bot.data_manager.get_or_load_guild_types(ctx.guild.id, False)
+            await self.bot.data_manager.get_or_load_ticket_types(ctx.guild.id, False)
 
             response_embed = discord.Embed(
                 description=f"✅ Updated form for ticket type `{category.name}`"
@@ -803,7 +820,7 @@ class Config(commands.Cog):
                     return
 
             await self.bot.data_manager.set_ping_roles(guild.id, valid_role_ids)
-            await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
+            await self.bot.data_manager.get_or_load_ticket_types(guild.id, False)
             await ctx.send(
                 embed=discord.Embed(
                     description=f"✅ Set ping role(s) to: {' '.join(f'<@&{id}>' for id in valid_role_ids)}",

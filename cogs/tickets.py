@@ -1095,7 +1095,7 @@ class Tickets(commands.Cog):
                     return
 
                 ticket_is_nsfw = False
-                types_raw = await self.bot.data_manager.get_or_load_guild_types(
+                types_raw = await self.bot.data_manager.get_or_load_ticket_types(
                     guild.id
                 )
                 for type in types_raw:
@@ -1185,7 +1185,7 @@ class Tickets(commands.Cog):
             return []
 
         # Get types for the specific guild
-        types_raw = await self.bot.data_manager.get_or_load_guild_types(guild.id)
+        types_raw = await self.bot.data_manager.get_or_load_ticket_types(guild.id)
 
         id_flags = {}
         for t in types_raw:
@@ -1238,7 +1238,7 @@ class Tickets(commands.Cog):
             )
 
             ticket_is_nsfw = False
-            types_raw = await self.bot.data_manager.get_or_load_guild_types(guild.id)
+            types_raw = await self.bot.data_manager.get_or_load_ticket_types(guild.id)
             for type in types_raw:
                 if int(type["nsfw_category_id"]) == channel.category.id:
                     ticket_is_nsfw = True
@@ -1395,7 +1395,7 @@ class Tickets(commands.Cog):
     async def post_ticket_button(self, ctx, *, text=None):
         guild_id = ctx.guild.id
 
-        types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
+        types = await self.bot.data_manager.get_or_load_ticket_types(guild_id)
         if not types:
             await ctx.send("❌ This server doesn't have any ticket types configured")
             return

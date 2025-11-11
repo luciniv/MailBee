@@ -504,6 +504,64 @@ class DataManager:
         params = closing
         await self.execute_query(query, False, False, params)
 
+    """ CACHE """
+
+    def format_config(
+        self,
+        guild_id,
+        log_id,
+        inbox_id,
+        responses_id,
+        feedback_id,
+        report_id,
+        greeting,
+        closing,
+        accepting,
+        anon,
+        blacklisted,
+        analytics,
+        logging,
+        aps,
+    ):
+
+        if greeting is None:
+            greeting = ""
+        if closing is None:
+            closing = ""
+
+        return {
+            "guild_id": guild_id,
+            "log_id": log_id,
+            "inbox_id": inbox_id,
+            "responses_id": responses_id,
+            "feedback_id": feedback_id,
+            "report_id": report_id,
+            "greeting": greeting,
+            "closing": closing,
+            "accepting": accepting,
+            "anon": anon,
+            "blacklisted": blacklisted,
+            "analytics": analytics,
+            "logging": logging,
+            "aps": aps,
+        }
+
+    async def get_or_load_config(self, guild_id: int, get=True):
+        redis_key = f"config:{guild_id}"
+        if get:
+            cached = await self.redis.get(redis_key)
+
+            if cached:
+                return json.loads(cached)
+
+        config = await self.load_config_from_db(guild_id)
+        if not config:
+            return None
+
+        formatted = self.format_config(*config[0])
+        await self.set_with_expiry(redis_key, json.dumps(formatted))
+        return formatted
+
     """
     -------------------------------------------------------------------------
     ---------------------- TICKET MANAGEMENT FUNCTIONS ----------------------
@@ -712,6 +770,36 @@ class DataManager:
             """
         await self.execute_query(query, False)
 
+    """ CACHE """
+
+    def format_blacklist_entry(self, userID):
+        return {"userID": userID}
+
+    async def get_blacklist_entry(self, guild_id: int, userID: int):
+        redis_key = f"blacklist:{guild_id}:{userID}"
+        cached = await self.redis.get(redis_key)
+
+        if cached:
+            return json.loads(cached)
+        else:
+            return None
+
+    async def add_blacklist_entry(self, guild_id: int, userID: int, reason: str, mod):
+        # Add to DB
+        await self.add_blacklist_to_db(guild_id, userID, reason, mod)
+
+        # Add to Redis
+        redis_key = f"blacklist:{guild_id}:{userID}"
+        await self.redis.set(redis_key, json.dumps({"userID": userID}))
+
+    async def delete_blacklist_entry(self, guild_id: int, userID: int):
+        # Delete from DB
+        await self.delete_blacklist_from_db(guild_id, userID)
+
+        # Delete from Redis
+        redis_key = f"blacklist:{guild_id}:{userID}"
+        await self.redis.delete(redis_key)
+
     """
     -------------------------------------------------------------------------
     ---------------------- TYPE MANAGEMENT FUNCTIONS ------------------------
@@ -818,7 +906,7 @@ class DataManager:
 
     # TODO ability to set ping role for 1 specific type (sub or main)
     async def set_ping_roles(self, guild_id, roles):
-        types = await self.get_or_load_guild_types(guild_id)
+        types = await self.get_or_load_ticket_types(guild_id)
         type_ids = []
         for type in types:
             if int(type["sub_type"]) == -1:
@@ -844,6 +932,108 @@ class DataManager:
     async def replace_type(self, old_category_id, new_category_id):
         # gpt here yeaaaaah
         pass
+
+    """ CACHE """
+
+    # New type database entry
+    # typeID,
+    # guildID,
+    # orderID,
+    # parentID
+    # categoryID,
+    # NSFWCategoryID,
+    # typeName,
+    # typeDescription,
+    # typeEmoji,
+    # form,
+    # redirectText,
+    # pingRoles
+
+    def format_guild_type_entry(
+        self,
+        type_id,
+        order_id,
+        parent_id,
+        category_id,
+        nsfw_category_id,
+        type_name,
+        type_description,
+        type_emoji,
+        form,
+        redirect_text,
+        ping_roles,
+    ):
+        return {
+            "type_id": type_id,
+            "order_id": order_id,
+            "parent_id": parent_id,
+            "category_id": category_id,
+            "nsfw_category_id": nsfw_category_id,
+            "type_name": type_name,
+            "type_description": type_description,
+            "type_emoji": type_emoji,
+            "form": form,
+            "redirect_text": redirect_text,
+            "ping_roles": json.loads(ping_roles) if ping_roles else [],
+        }
+
+    async def get_or_load_ticket_types(self, guild_id, get=True):
+        redis_key = f"ticket_types:{guild_id}"
+
+        if get:
+            cached = await self.redis.get(redis_key)
+            if cached:
+                return json.loads(cached)
+
+        types = await self.get_types_from_db(guild_id)
+
+        if not types:
+            return []
+
+        result = []
+        for entry in types:
+            (
+                type_id,
+                _,
+                order_id,
+                parent_id,
+                category_id,
+                nsfw_category_id,
+                type_name,
+                type_description,
+                type_emoji,
+                form_json,
+                redirect_text,
+                ping_roles,
+            ) = entry
+            form = json.loads(form_json)
+            data = self.format_guild_type_entry(
+                type_id,
+                order_id,
+                parent_id,
+                category_id,
+                nsfw_category_id,
+                type_name,
+                type_description,
+                type_emoji,
+                form,
+                redirect_text,
+                ping_roles,
+            )
+            result.append(data)
+
+        await self.set_with_expiry(redis_key, json.dumps(result))
+        return result
+
+    # delete guild type
+    # NOTE redis modified to use type_id as key now
+    # Was category_id before
+    async def delete_guild_type(self, guild_id, type_id):
+        # Delete from DB
+        await self.delete_type_from_db(type_id)
+
+        redis_key = f"ticket_types:{guild_id}"
+        await self.redis.hdel(redis_key, str(type_id))
 
     """
     -------------------------------------------------------------------------
@@ -877,6 +1067,8 @@ class DataManager:
             AND roleID = {roleID};
             """
         await self.execute_query(query, False)
+
+    """ CACHE """
 
     """
     -------------------------------------------------------------------------
@@ -1028,6 +1220,48 @@ class DataManager:
             """
         await self.execute_query(query, False)
 
+    """ CACHE """
+
+    def format_snip_entry(self, author_id, abbrev, summary, content, date):
+        return {
+            "author_id": author_id,
+            "abbrev": abbrev,
+            "summary": summary,
+            "content": content,
+            "date": date,
+        }
+
+    async def get_or_load_snips(self, guild_id, get=True):
+        redis_key = f"snips:{guild_id}"
+
+        if get:
+            cached = await self.redis.get(redis_key)
+            if cached:
+                return json.loads(cached)
+
+        snips = await self.get_all_snips(guild_id)
+
+        if not snips:
+            await self.set_with_expiry(redis_key, json.dumps([]))
+            return []
+
+        result = []
+        for entry in snips:
+            _, author_id, abbrev, summary, content, date = entry
+            data = self.format_snip_entry(author_id, abbrev, summary, content, date)
+            result.append(data)
+
+        await self.set_with_expiry(redis_key, json.dumps(result))
+        return result
+
+    # delete snip
+    async def delete_snip(self, guild_id, category_id):
+        # Delete from DB
+        await self.delete_type_from_db(guild_id, category_id)
+
+        redis_key = f"ticket_types:{guild_id}"
+        await self.redis.hdel(redis_key, str(category_id))
+
     """
     -------------------------------------------------------------------------
     ---------------------- AI MANAGEMENT FUNCTIONS -------------------
@@ -1060,7 +1294,7 @@ class DataManager:
             """
         await self.execute_query(query, False)
 
-    """ REDIS STARTS HERE!!!!!!! """
+    """ UNSORTED STARTS HERE """
 
     # Returns the next auto-incrementing ticket ID for the given guild
     async def get_next_ticket_id(self, guild_id: int) -> int:
@@ -1087,62 +1321,6 @@ class DataManager:
     async def clear_channel_links(self, channel_id: int):
         key = f"linked_msgs:{channel_id}"
         await self.redis.delete(key)
-
-    def format_config(
-        self,
-        guild_id,
-        log_id,
-        inbox_id,
-        responses_id,
-        feedback_id,
-        report_id,
-        greeting,
-        closing,
-        accepting,
-        anon,
-        blacklisted,
-        analytics,
-        logging,
-        aps,
-    ):
-
-        if greeting is None:
-            greeting = ""
-        if closing is None:
-            closing = ""
-
-        return {
-            "guild_id": guild_id,
-            "log_id": log_id,
-            "inbox_id": inbox_id,
-            "responses_id": responses_id,
-            "feedback_id": feedback_id,
-            "report_id": report_id,
-            "greeting": greeting,
-            "closing": closing,
-            "accepting": accepting,
-            "anon": anon,
-            "blacklisted": blacklisted,
-            "analytics": analytics,
-            "logging": logging,
-            "aps": aps,
-        }
-
-    async def get_or_load_config(self, guild_id: int, get=True):
-        redis_key = f"config:{guild_id}"
-        if get:
-            cached = await self.redis.get(redis_key)
-
-            if cached:
-                return json.loads(cached)
-
-        config = await self.load_config_from_db(guild_id)
-        if not config:
-            return None
-
-        formatted = self.format_config(*config[0])
-        await self.set_with_expiry(redis_key, json.dumps(formatted))
-        return formatted
 
     def format_aps(self, adj, noun, url, date):
         return {"adj": adj, "noun": noun, "url": url, "date": date}
@@ -1191,154 +1369,6 @@ class DataManager:
     async def delete_user_ticket(self, userID: int, guild_id: int):
         redis_key = f"user_tickets:{userID}"
         await self.redis.hdel(redis_key, str(guild_id))
-
-    def format_blacklist_entry(self, userID):
-        return {"userID": userID}
-
-    async def get_blacklist_entry(self, guild_id: int, userID: int):
-        redis_key = f"blacklist:{guild_id}:{userID}"
-        cached = await self.redis.get(redis_key)
-
-        if cached:
-            return json.loads(cached)
-        else:
-            return None
-
-    async def add_blacklist_entry(self, guild_id: int, userID: int, reason: str, mod):
-        # Add to DB
-        await self.add_blacklist_to_db(guild_id, userID, reason, mod)
-
-        # Add to Redis
-        redis_key = f"blacklist:{guild_id}:{userID}"
-        await self.redis.set(redis_key, json.dumps({"userID": userID}))
-
-    async def delete_blacklist_entry(self, guild_id: int, userID: int):
-        # Delete from DB
-        await self.delete_blacklist_from_db(guild_id, userID)
-
-        # Delete from Redis
-        redis_key = f"blacklist:{guild_id}:{userID}"
-        await self.redis.delete(redis_key)
-
-    def format_snip_entry(self, author_id, abbrev, summary, content, date):
-        return {
-            "author_id": author_id,
-            "abbrev": abbrev,
-            "summary": summary,
-            "content": content,
-            "date": date,
-        }
-
-    async def get_or_load_snips(self, guild_id, get=True):
-        redis_key = f"snips:{guild_id}"
-
-        if get:
-            cached = await self.redis.get(redis_key)
-            if cached:
-                return json.loads(cached)
-
-        snips = await self.get_all_snips(guild_id)
-
-        if not snips:
-            await self.set_with_expiry(redis_key, json.dumps([]))
-            return []
-
-        result = []
-        for entry in snips:
-            _, author_id, abbrev, summary, content, date = entry
-            data = self.format_snip_entry(author_id, abbrev, summary, content, date)
-            result.append(data)
-
-        await self.set_with_expiry(redis_key, json.dumps(result))
-        return result
-
-    # delete snip
-    async def delete_snip(self, guild_id, category_id):
-        # Delete from DB
-        await self.delete_type_from_db(guild_id, category_id)
-
-        redis_key = f"ticket_types:{guild_id}"
-        await self.redis.hdel(redis_key, str(category_id))
-
-    def format_guild_type_entry(
-        self,
-        type_id,
-        category_id,
-        type_name,
-        type_descrip,
-        type_emoji,
-        form,
-        sub_type,
-        redirectText,
-        nsfw_category_id,
-        ping_roles,
-    ):
-        return {
-            "type_id": type_id,
-            "category_id": category_id,
-            "type_name": type_name,
-            "type_descrip": type_descrip,
-            "type_emoji": type_emoji,
-            "form": form,
-            "sub_type": sub_type,
-            "redirectText": redirectText,
-            "nsfw_category_id": nsfw_category_id,
-            "ping_roles": json.loads(ping_roles) if ping_roles else [],
-        }
-
-    async def get_or_load_guild_types(self, guild_id, get=True):
-        redis_key = f"ticket_types:{guild_id}"
-
-        if get:
-            cached = await self.redis.get(redis_key)
-            if cached:
-                return json.loads(cached)
-
-        types = await self.get_types_from_db(guild_id)
-
-        if not types:
-            return []
-
-        result = []
-        for entry in types:
-            (
-                type_id,
-                _,
-                category_id,
-                type_name,
-                type_descrip,
-                type_emoji,
-                form_json,
-                sub_type,
-                redirectText,
-                nsfw_category_id,
-                pingRoles,
-            ) = entry
-            form = json.loads(form_json)
-            data = self.format_guild_type_entry(
-                type_id,
-                category_id,
-                type_name,
-                type_descrip,
-                type_emoji,
-                form,
-                sub_type,
-                redirectText,
-                nsfw_category_id,
-                pingRoles,
-            )
-            result.append(data)
-
-        await self.set_with_expiry(redis_key, json.dumps(result))
-        return result
-
-    # delete guild type
-    async def delete_guild_type(self, guild_id, category_id):
-        # Delete from DB
-        await self.delete_type_from_db(guild_id, category_id)
-
-        redis_key = f"ticket_types:{guild_id}"
-        await self.redis.hdel(redis_key, str(category_id))
 
     # Lazy get or load permissions for a guild
     async def get_or_load_permissions(self, guild_id, get=True):
