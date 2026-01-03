@@ -224,7 +224,7 @@ class ServerSelect(discord.ui.Select):
             return
 
         # Load available ticket types
-        types = await self.bot.data_manager.get_or_load_ticket_types(guild_id)
+        types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
         if not types:
             await self.error_out(
                 interaction,
@@ -360,7 +360,7 @@ class DMCategoryButtonView(discord.ui.View):
             try:
                 dm_channel = user.dm_channel or await user.create_dm()
 
-                types = await self.bot.data_manager.get_or_load_ticket_types(guild_id)
+                types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
 
                 embed = Embeds.info(
                     title="Select Ticket Type",
@@ -454,20 +454,17 @@ class CategorySelect(discord.ui.Select):
         guild = self.bot.get_guild(guild_id)
         subtypes = []
 
-        # Check for subtypes
         if self.parent_category_id is None:
+            # Check for subtypes
             subtypes = [
                 entry
                 for entry in self.types
-                if int(entry["parent_id"]) == selected_category_id
+                if int(entry.get("sub_type")) == selected_category_id
             ]
         else:
             selected_category_id = self.parent_category_id
 
-        # either populates subtypes (parent was none, first time around)
-        # or its the second time around and we just use the parent_category_id directly
-
-        category = await self.bot.cache.get_channel(selected_category_id, timeout=3)
+        category = await self.bot.cache.get_channel(selected_category_id, timeout=2)
         if not category:
             error_embed = Embeds.error(
                 description="❌ Couldn't find ticket category in the destination "
@@ -616,15 +613,15 @@ class CategorySelect(discord.ui.Select):
     @classmethod
     async def create(cls, bot, guild_id, dm_channel_id, types, parent_category_id=None):
         try:
-            # Filter for parent types only
             if parent_category_id is None:
-                filtered_types = [entry for entry in types if not entry["parent_type"]]
-            # Filter for subtypes of the given parent
+                filtered_types = [
+                    entry for entry in types if int(entry.get("sub_type")) == -1
+                ]
             else:
                 filtered_types = [
                     entry
                     for entry in types
-                    if int(entry["parent_id"]) == parent_category_id
+                    if int(entry.get("sub_type")) == parent_category_id
                 ]
 
             options = [
@@ -632,7 +629,7 @@ class CategorySelect(discord.ui.Select):
                     label=str(entry["type_name"]),
                     value=f"{entry['type_id']} {entry['category_id']} {entry['nsfw_category_id']}",
                     emoji=str(entry.get("type_emoji")),
-                    description=str(entry["type_description"]),
+                    description=str(entry["type_descrip"]),
                 )
                 for entry in filtered_types
             ]
