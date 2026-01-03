@@ -14,11 +14,11 @@ from classes.embeds import Embeds
 
 
 async def processing_embed():
-    process_time = int(time.time()) + 21
+    process_time = int(time.time()) + 31
     return Embeds.info(
         title="Processing your ticket...",
         description=(
-            "This may take a moment! Please wait up to `20 seconds` "
+            "This may take a moment! Please wait up to `30 seconds` "
             f"for your ticket to be processed: <t:{process_time}:R>"
         ),
     )
@@ -29,7 +29,6 @@ async def roblox_data_fetch(ticket, guild_id, user_id):
     roblox_data = None
     if game_type:
         roblox_data = await get_roblox_data(game_type, guild_id, user_id)
-        print("roblox data is", roblox_data)
         if roblox_data:
             ticket.roblox_username = roblox_data[0]
             ticket.roblox_id = roblox_data[1]
@@ -382,7 +381,8 @@ class DMCategoryButtonView(discord.ui.View):
                 if sent_msg is None:
                     await interaction.followup.send(
                         embed=Embeds.error(
-                            description="❌ I'm currently experiencing an issue, please retry again later. Thank you!"
+                            description="❌ I couldn’t message you! Please enable "
+                            "direct messages and try again."
                         ),
                         ephemeral=True,
                     )

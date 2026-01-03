@@ -211,11 +211,11 @@ async def get_roblox_game_data(game_name: str, game_id: int, user_id: int):
             return values
 
         except Exception as e:
-            logger.exception(f"get_roblox_game_data PARSING sent an error: {e}")
+            # logger.exception(f"get_roblox_game_data PARSING sent an error: {e}")
             return invalid_data
 
     except Exception as e:
-        logger.exception(f"get_roblox_game_data GENERAL sent an error: {e}")
+        # logger.exception(f"get_roblox_game_data GENERAL sent an error: {e}")
         return invalid_data
 
 
@@ -227,10 +227,8 @@ async def get_roblox_data(game_type: tuple, guild_id: int, user_id: int) -> list
                 game_type[0], game_type[1], user_info[1]
             )
             user_info.extend(values)
-            print("user info found", user_info)
             return user_info
         else:
-            print("no user info found")
             return None
     except Exception as e:
         return None
