@@ -12,6 +12,8 @@ from classes.ticket_processor import TicketQueue
 from classes.ticket_submitter import DMCategoryButtonView, TicketRatingView
 from utils.logger import *
 
+env = os.getenv("ENV")
+
 
 class MailBee(commands.Bot):
     """
@@ -55,8 +57,9 @@ class MailBee(commands.Bot):
             description=description,
             case_insensitive=True,
             help_command=None,
-            max_messages=1000,
+            max_messages=500,
         )
+        self.mode = env
         self.data_manager = DataManager(self)
         self.channel_status = ChannelStatus(self)
         self.cache = Cache(self)

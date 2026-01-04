@@ -36,9 +36,13 @@ class Analytics(commands.Cog):
         self.processing_queue = asyncio.Queue()
 
     async def cog_load(self):
-        logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-        await self.catch_modmail_backlog()
-        await self.process_queue()
+        if self.bot.mode == "prod":
+            logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
+            await self.catch_modmail_backlog()
+            await self.process_queue()
+        else:
+            logger.log("SYSTEM", "------- DEV MODE: SKIPPING BACKLOG -----------------")
+            return
 
     async def bot_dm(self, message: discord.Message):
         try:

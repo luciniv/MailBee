@@ -176,8 +176,6 @@ class ChannelStatus:
         manual: bool,
     ) -> bool:
         try:
-            restricted_updates = {"new": "alert", "inactive": "wait"}
-
             if new_emoji_str is None:
                 self.pending_updates.pop(channel.id, None)
                 return False
@@ -196,6 +194,7 @@ class ChannelStatus:
                 None,
             )
 
+            restricted_updates = {"new": "alert", "inactive": "wait"}
             # Check for restricted automatic updates
             if not manual:
                 if current_emoji_str:
@@ -204,7 +203,7 @@ class ChannelStatus:
                         return False
 
                     # If current name is permanent, drop new name
-                    if emojis.emoji_map.get(current_emoji_str)[0]:
+                    if emojis.emoji_map.get(current_emoji_str)[1]:
                         return False
 
                     # Delete timer if switching from inactive to alert
@@ -219,7 +218,7 @@ class ChannelStatus:
             logger.exception(f"queue_update sent an error: {e}")
             return False
 
-    # Add emoji to the start of a channel's name
+    # Set emoji at the start of a channel's name
     async def set_emoji(
         self,
         channel: discord.TextChannel,
@@ -228,6 +227,7 @@ class ChannelStatus:
         make_nsfw: bool = None,
     ) -> bool:
         new_name = ""
+
         if make_nsfw is not None:
             current_name = self.pending_updates.get(channel.id, channel.name)
 
@@ -246,7 +246,6 @@ class ChannelStatus:
                 return True
 
             selected_emoji = (emojis.emoji_map.get(emoji_str))[0]
-
             # Remove prefixed emoji if there is one
             if (channel.name)[0] in emoji.EMOJI_DATA and (
                 not channel.name.startswith((emojis.emoji_map.get("nsfw"))[0])
@@ -254,6 +253,7 @@ class ChannelStatus:
                 new_name = f"{selected_emoji}{(channel.name)[1:]}"
             else:
                 new_name = f"{selected_emoji}{channel.name}"
+
         return self.queue_update(channel, emoji_str, new_name, manual)
 
     # Check if the input is a valid Unicode emoji
