@@ -63,9 +63,7 @@ def clean_username_id(text: str):
     return username, user_id
 
 
-async def fetch_channel_message(
-    interaction, channel: discord.TextChannel, message_id: int
-):
+async def fetch_channel_message(channel: discord.TextChannel, message_id: int):
     try:
         message = await channel.fetch_message(int(message_id))
 
