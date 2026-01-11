@@ -9,7 +9,7 @@ from discord.ext import commands
 
 from classes.error_handler import *
 from classes.embeds import Embeds
-from classes.helpers import *
+from utils.helpers import *
 from classes.paginator import *
 from utils import checks
 from utils.logger import *

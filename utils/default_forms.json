@@ -1,0 +1,32 @@
+{"title":"Reimbursement Request",
+"fields":[{
+    "label":"What is your Roblox username?",
+    "placeholder":"Please send your USERNAME, not your display name!",
+    "style":"short",
+    "min_length":3,
+    "max_length":50,
+    "required":true
+    },{
+    "label":"Which item(s) do you want reimbursements for?",
+    "placeholder":"Please list them here as specifically as possible. Include exact numbers for each item.",
+    "style":"paragraph",
+    "max_length":1024,
+    "required":true
+    },{
+    "label":"How and when were your items lost?",
+    "placeholder":"Explain as accurately as possible. Please include the day(s) and time(s) the items were lost.",
+    "style":"paragraph",
+    "max_length":1024,
+    "required":false
+    },{
+    "label":"Link any relevant images or videos here",
+    "placeholder":"Upload images to www.imgur.com, videos to www.youtube.com, or send them later in your opened ticket",
+    "style":"paragraph",
+    "max_length":1024,
+    "required":false
+    },{
+    "label":"Is there anything else you'd like to add?",
+    "style":"paragraph",
+    "max_length":1024,
+    "required":false
+    }]}

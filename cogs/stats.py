@@ -8,7 +8,7 @@ from discord.ext.commands import Greedy
 
 from classes.embeds import Embeds
 from classes.error_handler import *
-from classes.helpers import *
+from utils.helpers import *
 from classes.paginator import Paginator
 from utils import checks, csv_write, queries
 from utils.logger import *

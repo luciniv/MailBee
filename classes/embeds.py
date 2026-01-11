@@ -11,6 +11,7 @@ class Embeds(discord.Embed):
         kwargs.setdefault("timestamp", datetime.now(timezone.utc))
         super().__init__(*args, **kwargs)
 
+    # TODO: change embeds to accept description by default
     @classmethod
     def success(cls, **kwargs):
         return cls(timestamp=None, **kwargs)

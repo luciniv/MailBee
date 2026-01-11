@@ -4,7 +4,7 @@ from collections import namedtuple
 
 import discord
 
-from classes.helpers import *
+from utils.helpers import *
 from classes.embeds import Embeds
 from classes.paginator import Paginator
 from utils.logger import logger

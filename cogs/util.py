@@ -8,6 +8,7 @@ from discord import PartialEmoji, SelectOption
 
 from classes.error_handler import *
 from classes.embeds import Embeds
+from apis.imagechest import create_post
 from utils import checks, emojis
 from utils.logger import *
 
@@ -17,10 +18,78 @@ SERVER_TO_GAME = {
     1196293227976863806: ("Horse Life", 5422546686, os.getenv("HL_KEY")),
 }
 
+MAX_FILE_SIZE = 20 * 1024 * 1024
+ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4"}
+
 
 class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    def allowed_file(self, filename: str) -> bool:
+        return any(filename.lower().endswith(ext) for ext in ALLOWED_EXTS)
+
+    @commands.command(name="upload")
+    @checks.is_user()
+    async def upload(self, ctx: commands.Context, *, title: str = None):
+        attachments = ctx.message.attachments
+        nsfw = "nsfw" in title.lower() if title else False
+
+        if not attachments:
+            return await ctx.send(
+                embed=Embeds.error(
+                    description="❌ Attach one or more images/videos to upload."
+                )
+            )
+
+        raw_files: list[tuple[bytes, str]] = []
+        total_size = 0
+        skipped = False
+
+        status_embed = Embeds.info(
+            description="Uploading files to ImageChest...",
+        )
+        status_msg = await ctx.send(embed=status_embed)
+
+        for att in attachments:
+            if not self.allowed_file(att.filename):
+                skipped = True
+                continue
+
+            if att.size + total_size > MAX_FILE_SIZE:
+                skipped = True
+                continue
+
+            data = await att.read()
+            raw_files.append((data, att.filename))
+            total_size += att.size
+
+        if not raw_files:
+            return await status_msg.edit(
+                embed=Embeds.error(description="❌ No valid files to upload.")
+            )
+
+        try:
+            url, images = await create_post(
+                images=raw_files,
+                title=title,
+                nsfw=nsfw,
+            )
+        except Exception as e:
+            return await status_msg.edit(
+                embed=Embeds.error(
+                    description=f"❌ Upload failed:\n```{e}```",
+                )
+            )
+
+        result_embed = Embeds.success(
+            description=f"✅ Upload successful: {url} ({len(images)} files)",
+        )
+
+        if skipped:
+            result_embed.set_footer(text="Some files were skipped (size/type limits)")
+
+        await status_msg.edit(embed=result_embed)
 
     @commands.command()
     @checks.is_owner()

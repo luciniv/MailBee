@@ -9,7 +9,7 @@ import discord
 from discord import Embed
 from discord.permissions import PermissionOverwrite
 
-from classes.helpers import Ticket
+from utils.helpers import Ticket
 from roblox_data.roblox import *
 from utils.logger import *
 

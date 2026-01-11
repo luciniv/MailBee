@@ -5,7 +5,7 @@ from discord.ui import View, Button
 
 
 class Paginator(View):
-    def __init__(self, pages, timeout=120):
+    def __init__(self, pages, timeout=600):
         super().__init__(timeout=timeout)
         self.pages = pages
         self.current_page = 0

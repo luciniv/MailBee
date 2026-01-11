@@ -39,7 +39,7 @@ async def reload(ctx, cog: str):
         await bot.unload_extension(f"cogs.{cog}")
         await bot.load_extension(f"cogs.{cog}")
 
-        await ctx.send(f"{emojis.mantis} Cog **{cog}** has been reloaded")
+        await ctx.send(f"✅ Cog **{cog}** has been reloaded")
         logger.success(f"Reloaded cog: {cog}.py")
 
     except Exception as e:
@@ -53,7 +53,7 @@ async def sync_commands(ctx):
     """
     Syncs the bot's command tree globally.
     """
-    message = await ctx.send(f"{emojis.mantis} Syncing global tree...")
+    message = await ctx.send("✅ Syncing global tree...")
     try:
         await bot.wait_until_ready()
         synced = await bot.tree.sync()
@@ -65,7 +65,7 @@ async def sync_commands(ctx):
         await message.edit(content=f"❌ An error has occurred: {e}")
     else:
         await message.edit(
-            content=f"{emojis.mantis} Main tree globally synced {len(synced)} commands."
+            content=f"✅ Main tree globally synced {len(synced)} commands."
         )
 
 

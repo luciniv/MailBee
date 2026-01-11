@@ -11,7 +11,7 @@ import redis.asyncio as redis
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
-from classes.helpers import Ticket
+from utils.helpers import Ticket
 from utils.logger import *
 
 load_dotenv()
@@ -807,16 +807,16 @@ class DataManager:
 
         await self.execute_query(query, False, False, params)
 
-    async def set_form(self, guild_id, category_id, form=None):
+    async def set_form(self, type_id, form=None):
         if form is None:
             form = await self.template_form("Ticket Form")
 
         query = """
             UPDATE ticket_types
             SET formJson = %s
-            WHERE guildID = %s AND categoryID = %s;
+            WHERE typeID = %s;
             """
-        params = (json.dumps(form), guild_id, category_id)
+        params = (json.dumps(form), type_id)
         await self.execute_query(query, False, False, params)
 
     # TODO ability to set ping role for 1 specific type (sub or main)

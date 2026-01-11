@@ -8,7 +8,7 @@ from discord.ext import commands
 from discord.ui import Button, View
 
 from classes.ticket_opener import TicketOpener
-from classes.helpers import *
+from utils.helpers import *
 from roblox_data.roblox import *
 from classes.embeds import Embeds
 

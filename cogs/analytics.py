@@ -9,18 +9,18 @@ import discord
 from discord.ext import commands
 
 from classes.error_handler import *
-from classes.helpers import *
+from utils.helpers import *
 from classes.ticket_submitter import TicketSelectView
 from roblox_data.roblox import *
 from utils import emojis
 from utils.logger import *
 
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 20MB in bytes
+MAX_FILE_SIZE = 20 * 1024 * 1024
 
 
 class MessageReceivedButton(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=None)  # no timeout needed
+        super().__init__(timeout=None)
         self.add_item(
             discord.ui.Button(
                 label="Send a message to reply!",

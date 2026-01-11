@@ -10,54 +10,289 @@ from discord.ext import commands
 from ai_integration.prompt import build_server_context
 from classes.embeds import Embeds
 from classes.error_handler import *
-from classes.helpers import *
+from utils.helpers import *
 from classes.paginator import *
 from classes.ticket_opener import get_overwrites
 from utils import checks, emojis
 from utils.logger import *
 
 
+class ExampleMessage(discord.ui.View):
+    def __init__(self, form):
+        super().__init__(timeout=300)
+        self.add_item(ExampleButton(form))
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+
+
+class ExampleButton(discord.ui.Button):
+    def __init__(self, modal_template):
+        super().__init__(style=discord.ButtonStyle.success, label="Open Example Form")
+        self.modal_template = modal_template
+
+    async def callback(self, interaction: discord.Interaction):
+        await send_modal(interaction, self.modal_template)
+
+
+async def send_modal(interaction, modal_template):
+    title = modal_template.get("title", "Form")
+    fields = modal_template.get("fields", [])
+    await interaction.response.send_modal(ExampleFormModal(title, fields))
+
+
+class ExampleFormModal(discord.ui.Modal):
+    def __init__(self, title, fields):
+        super().__init__(title=title)
+        self.values = {}
+
+        for field in fields:
+            input = discord.ui.TextInput(
+                label=field["label"],
+                placeholder=field.get("placeholder", ""),
+                style=(
+                    discord.TextStyle.paragraph
+                    if field["style"] == "paragraph"
+                    else discord.TextStyle.short
+                ),
+                min_length=field.get("min_length", 1),
+                max_length=field.get("max_length", 1024),
+                required=field.get("required", True),
+            )
+            self.add_item(input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            embed=Embeds.success(description="Mock submission sent"), ephemeral=True
+        )
+
+
 class Config(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # async def _key_format_types(self, guild_id):
-    #     types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
-    #     type_dict = {type["type_id"]: type for type in types}
-    #     return type_dict
+    async def _key_format_types(self, guild_id):
+        types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
+        type_dict = {str(type["type_id"]): type for type in types}
+        return type_dict
 
-    # async def _validate_subtype(self, types, parent_id):
-    #     type = types[str(parent_id)]
+    def _validate_subtype(self, types, parent_id):
+        type = types[str(parent_id)]
 
-    #     if type["redirect_text"]:
-    #         return False, "❌ Cannot use a redirect category as a parent."
-    #     elif type["parent_id"]:
-    #         return False, "❌ Cannot use a sub-type category as a parent."
-    #     return True, None
+        if type["redirect_text"]:
+            return False, "❌ Cannot use a redirect category as a parent."
+        elif type["parent_id"]:
+            return False, "❌ Cannot use a sub-type category as a parent."
+        return True, None
 
-    # async def _load_type_choices(
-    #     self, guild: discord.Guild
-    # ) -> List[app_commands.Choice[str]]:
-    #     if not guild:
-    #         return []
+    async def _load_type_choices(
+        self, guild: discord.Guild
+    ) -> List[app_commands.Choice[str]]:
+        if not guild:
+            return []
 
-    #     types_raw = await self.bot.data_manager.get_or_load_guild_types(guild.id)
-    #     types = [
-    #         (
-    #             f"{safe_partial_emoji(type['type_emoji'])} {type['type_name']}",
-    #             type["type_id"],
-    #         )
-    #         for type in types_raw
-    #     ]
-    #     choices = [app_commands.Choice(name=type[0], value=type[1]) for type in types]
+        types_raw = await self.bot.data_manager.get_or_load_guild_types(guild.id)
+        types = [
+            (
+                f"{safe_partial_emoji(type['type_emoji'])} {type['type_name']}",
+                f"{safe_partial_emoji(type['type_emoji'])} {type['type_name']},{type['type_id']}",
+            )
+            for type in types_raw
+        ]
+        choices = [app_commands.Choice(name=type[0], value=type[1]) for type in types]
 
-    #     return choices
+        return choices
 
-    # async def _parse_form(form_text):
-    #     pass
+    def _get_line(self, form_text_list):
+        if form_text_list:
+            return form_text_list.pop(0).strip()
+        else:
+            return None
 
-    # async def _make_form_embed(form):
-    #     pass
+    def _check_prefix(self, line, prefix):
+        if not line:
+            return False
+        return re.match(rf"^{prefix}:", line, re.IGNORECASE)
+
+    def _remove_prefix(self, line, prefix):
+        return re.sub(rf"^{prefix}:\s*", "", line, flags=re.IGNORECASE).strip()
+
+    def _parse_form(self, form_text):
+        if not form_text or form_text.strip() == "":
+            return None, None, "❌ Form text cannot be empty."
+
+        form_text = form_text.splitlines()
+        line = self._get_line(form_text)
+        index = 1
+        fields = []
+
+        if not self._check_prefix(line, "Title"):
+            return None, index, "❌ Expected 'Title:' line."
+        else:
+            title = self._remove_prefix(line, "Title")
+            if len(title) == 0:
+                return None, index, "❌ Title cannot be empty."
+            elif len(title) > 45:
+                return None, index, "❌ Title cannot exceed 45 characters."
+
+            line = self._get_line(form_text)
+            index += 1
+
+        while line or line == "":
+            print(f"entered while loop, line: {line}")
+            if line == "":
+                pass
+
+            elif self._check_prefix(line, "Question"):
+                question = self._remove_prefix(line, "Question")
+                if len(question) == 0:
+                    return None, index, "❌ Question text cannot be empty."
+                elif len(question) > 45:
+                    return None, index, "❌ Question text cannot exceed 45 characters."
+
+                line = self._get_line(form_text)
+                index += 1
+                print(f"after question, line: {line}")
+                if self._check_prefix(line, "Placeholder"):
+                    placeholder = self._remove_prefix(line, "Placeholder")
+                    if len(placeholder) == 0:
+                        placeholder = None
+                    elif len(placeholder) > 100:
+                        return (
+                            None,
+                            index,
+                            "❌ Placeholder text cannot exceed 100 characters.",
+                        )
+
+                    line = self._get_line(form_text)
+                    index += 1
+                    print(f"after placeholder, line: {line}")
+                    if self._check_prefix(line, "Style"):
+                        style = self._remove_prefix(line, "Style").lower()
+                        if style not in ["paragraph", "short"]:
+                            return (
+                                None,
+                                index,
+                                "❌ Style field must be either 'paragraph' or 'short'.",
+                            )
+
+                        line = self._get_line(form_text)
+                        index += 1
+                        print(f"after style, line: {line}")
+                        if self._check_prefix(line, "Min"):
+                            min = self._remove_prefix(line, "Min").lower()
+                            if not min.isdigit():
+                                return (
+                                    None,
+                                    index,
+                                    "❌ Min field must be an integer.",
+                                )
+                            elif int(min) < 0 or int(min) > 1024:
+                                return (
+                                    None,
+                                    index,
+                                    "❌ Min field must be between 0 and 1024.",
+                                )
+
+                            line = self._get_line(form_text)
+                            index += 1
+                            print(f"after min, line: {line}")
+                            if self._check_prefix(line, "Max"):
+                                max = self._remove_prefix(line, "Max").lower()
+                                if not max.isdigit():
+                                    return (
+                                        None,
+                                        index,
+                                        "❌ Max field must be an integer.",
+                                    )
+                                elif int(max) < 1 or int(max) > 1024:
+                                    return (
+                                        None,
+                                        index,
+                                        "❌ Max field must be between 1 and 1024.",
+                                    )
+                                elif int(max) < int(min):
+                                    return (
+                                        None,
+                                        index,
+                                        "❌ Max field must be greater than or equal to Min field.",
+                                    )
+
+                                line = self._get_line(form_text)
+                                index += 1
+                                print(f"after max, line: {line}")
+                                if self._check_prefix(line, "Required"):
+                                    required = self._remove_prefix(
+                                        line, "Required"
+                                    ).lower()
+                                    if required == "true":
+                                        required = True
+                                    elif required == "false":
+                                        required = False
+                                    else:
+                                        return (
+                                            None,
+                                            index,
+                                            "❌ Required field must be either 'true' or 'false'.",
+                                        )
+
+                                    field = {
+                                        "label": question,
+                                        "placeholder": placeholder,
+                                        "style": style,
+                                        "min_length": min,
+                                        "max_length": max,
+                                        "required": required,
+                                    }
+                                    fields.append(field)
+                                    if len(fields) > 5:
+                                        return (
+                                            None,
+                                            index,
+                                            "❌ Cannot have more than 5 questions in a form.",
+                                        )
+                                    print(
+                                        f"after fields append, fields: {fields}, line: {line}"
+                                    )
+
+                                else:
+                                    return None, index, "❌ Expected 'Required:' line."
+                            else:
+                                return None, index, "❌ Expected 'Max:' line."
+                        else:
+                            return None, index, "❌ Expected 'Min:' line."
+                    else:
+                        return None, index, "❌ Expected 'Style:' line."
+                else:
+                    return None, index, "❌ Expected 'Placeholder:' line."
+            else:
+                return None, index, "❌ Expected 'Question:' line."
+
+            line = self._get_line(form_text)
+            index += 1
+            print(f"end of while loop, line: {line}")
+
+        print(f"returning, fields: {fields}, line: {line}")
+        return {"title": title, "fields": fields}, None, None
+
+    async def _make_form_embed(self, form_json):
+        title = form_json["title"]
+        fields = form_json["fields"]
+
+        embed = Embeds.success(title=title)
+
+        for field in fields:
+            embed.add_field(
+                name=f"{field['label']}",
+                value=f"**Placeholder:** {field.get('placeholder', 'N/A')}\n"
+                f"**Style:** {field['style'].capitalize()}\n"
+                f"**Min Length:** {field.get('min_length', 1)}\n"
+                f"**Max Length:** {field.get('max_length', 1024)}\n"
+                f"**Required:** {field.get('required', True)}",
+                inline=False,
+            )
+        return embed
 
     @commands.command(name="setup")
     @checks.is_admin()
@@ -227,341 +462,480 @@ class Config(commands.Cog):
         except Exception as e:
             raise BotError(f"/setup sent an error: {e}")
 
-    # type_group = app_commands.Group(name="type", description="Add a ticket type")
+    type_group = app_commands.Group(name="type", description="Add a ticket type")
 
-    # @type_group.command(name="add", description="Add a new ticket type")
-    # @checks.is_user_app()
-    # @checks.is_setup()
-    # @checks.is_guild_app()
-    # @app_commands.describe(
-    #     name="Type name",
-    #     description="Type description",
-    #     emoji="Emoji to show for select option",
-    #     category="Destination category for this ticket type",
-    #     parent="Parent type if this is a sub-type",
-    #     nsfw="NSFW category for this type",
-    #     redirect="Redirect text for redirect types",
-    #     ping_role="Role to ping when a ticket is created with this type",
-    # )
-    # async def add(
-    #     self,
-    #     interaction: discord.Interaction,
-    #     name: Range[str, 1, 45],
-    #     description: Range[str, 1, 200],
-    #     emoji: str = None,
-    #     category: discord.CategoryChannel = None,
-    #     parent: str = None,
-    #     nsfw: discord.CategoryChannel = None,
-    #     redirect: str = None,
-    #     ping_role: discord.Role = None,
-    # ):
-    #     try:
-    #         await interaction.response.defer()
-    #         guild = interaction.guild
-    #         category_id = category.id if category else None
-    #         config = await self.bot.data_manager.get_or_load_config(guild.id)
+    @type_group.command(name="add", description="Add a new ticket type")
+    @checks.is_user_app()
+    @checks.is_setup()
+    @checks.is_guild_app()
+    @app_commands.describe(
+        name="Type name",
+        description="Type description",
+        emoji="Emoji to show for select option",
+        category="Destination category for this ticket type",
+        parent="Parent type if this is a sub-type",
+        nsfw="NSFW category for this type",
+        redirect="Redirect text or message ID for redirect types",
+        ping_role="Role(s) to ping when a ticket is created with this type",
+    )
+    async def type_add(
+        self,
+        interaction: discord.Interaction,
+        name: Range[str, 1, 45],
+        description: Range[str, 1, 200],
+        emoji: str = None,
+        category: discord.CategoryChannel = None,
+        parent: str = None,
+        nsfw: discord.CategoryChannel = None,
+        redirect: str = None,
+        ping_role: discord.Role = None,
+    ):
+        try:
+            await interaction.response.defer()
+            guild = interaction.guild
+            category_id = category.id if category else None
+            config = await self.bot.data_manager.get_or_load_config(guild.id)
 
-    #         if nsfw and redirect:
-    #             await interaction.followup.send(
-    #                 embed=Embeds.error(
-    #                     description="❌ Redirect types do not need NSFW categories."
-    #                 )
-    #             )
-    #             return
+            if nsfw and redirect:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Redirect types do not need NSFW categories."
+                    )
+                )
+                return
 
-    #         types = await self._key_format_types(guild.id)
+            types = await self._key_format_types(guild.id)
 
-    #         parent_id = None
-    #         if parent:
-    #             types = await self.bot.data_manager.get_or_load_ticket_types(guild.id)
-    #             for type in types:
-    #                 if type["category_id"] == parent.id:
-    #                     if type["redirect_text"]:
-    #                         await interaction.followup.send(
-    #                             embed=Embeds.error(
-    #                                 description="❌ Cannot use a redirect category as a parent."
-    #                             )
-    #                         )
-    #                         return
-    #                     elif type["sub_type"] != -1:
-    #                         await interaction.followup.send(
-    #                             embed=Embeds.error(
-    #                                 description="❌ Cannot use a sub-type category as a parent."
-    #                             )
-    #                         )
-    #                         return
+            parent_id = None
+            if parent:
+                types = await self.bot.data_manager.get_or_load_ticket_types(guild.id)
+                for type in types:
+                    if type["category_id"] == parent.id:
+                        if type["redirect_text"]:
+                            await interaction.followup.send(
+                                embed=Embeds.error(
+                                    description="❌ Cannot use a redirect category as a parent."
+                                )
+                            )
+                            return
+                        elif type["sub_type"] != -1:
+                            await interaction.followup.send(
+                                embed=Embeds.error(
+                                    description="❌ Cannot use a sub-type category as a parent."
+                                )
+                            )
+                            return
 
-    #         inbox_category = guild.get_channel(config["inbox_id"])
-    #         if inbox_category:
-    #             if not category_id:
-    #                 if parent_id:
-    #                     category_id = types[str(parent_id)]["category_id"]
-    #                 else:
-    #                     roles = []
-    #                     permissions = (
-    #                         await self.bot.data_manager.get_or_load_permissions(
-    #                             guild.id
-    #                         )
-    #                     )
-    #                     for role_id in permissions.keys():
-    #                         role = guild.get_role(role_id)
-    #                         roles.append(role)
+            inbox_category = guild.get_channel(config["inbox_id"])
+            if inbox_category:
+                if not category_id:
+                    if parent_id:
+                        category_id = types[str(parent_id)]["category_id"]
+                    else:
+                        roles = []
+                        permissions = (
+                            await self.bot.data_manager.get_or_load_permissions(
+                                guild.id
+                            )
+                        )
+                        for role_id in permissions.keys():
+                            role = guild.get_role(role_id)
+                            roles.append(role)
 
-    #                     overwrites = await get_overwrites(guild, roles)
+                        overwrites = await get_overwrites(guild, roles)
 
-    #                     try:
-    #                         # Create the new category
-    #                         new_category = await guild.create_category(
-    #                             name=name,
-    #                             overwrites=overwrites,
-    #                             position=(inbox_category.position + 1),
-    #                         )
-    #                     except Exception:
-    #                         await interaction.followup.send(
-    #                             embed=Embeds.error(
-    #                                 description="❌ Failed to create ticket category."
-    #                             )
-    #                         )
-    #                         return
+                        try:
+                            # Create the new category
+                            new_category = await guild.create_category(
+                                name=name,
+                                overwrites=overwrites,
+                                position=(inbox_category.position + 1),
+                            )
+                        except Exception:
+                            await interaction.followup.send(
+                                embed=Embeds.error(
+                                    description="❌ Failed to create ticket category."
+                                )
+                            )
+                            return
 
-    #             if new_category:
-    #                 await self.bot.data_manager.add_type_to_db(
-    #                     parent_id,
-    #                     None,
-    #                     guild.id,
-    #                     new_category.id,
-    #                     nsfw.id if nsfw else None,
-    #                     name,
-    #                     description,
-    #                     emoji,
-    #                     redirect,
-    #                     ping_role,
-    #                 )
-    #                 await self.bot.data_manager.get_or_load_ticket_types(
-    #                     guild.id, False
-    #                 )
+                if new_category:
+                    await self.bot.data_manager.add_type_to_db(
+                        parent_id,
+                        None,
+                        guild.id,
+                        new_category.id,
+                        nsfw.id if nsfw else None,
+                        name,
+                        description,
+                        emoji,
+                        redirect,
+                        ping_role,
+                    )
+                    await self.bot.data_manager.get_or_load_ticket_types(
+                        guild.id, False
+                    )
 
-    #             else:
-    #                 await interaction.followup.send(
-    #                     embed=Embeds.error(
-    #                         description="❌ Failed to create new category. Please ensure "
-    #                         "bot has **administrator permissions** and this server "
-    #                         "is not at the maximum category / channel limit."
-    #                     )
-    #                 )
-    #         else:
-    #             await interaction.followup.send(
-    #                 embed=Embeds.error(
-    #                     description="❌ Ticket inbox category not found, please run `/setup` first."
-    #                 )
-    #             )
+                else:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Failed to create new category. Please ensure "
+                            "bot has **administrator permissions** and this server "
+                            "is not at the maximum category / channel limit."
+                        )
+                    )
+            else:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Ticket inbox category not found, please run `/setup` first."
+                    )
+                )
 
-    #     except Exception as e:
-    #         logger.exception(f"type_add error: {e}")
-    #         raise BotError(f"/type_add sent an error: {e}")
+        except Exception as e:
+            logger.exception(f"type_add error: {e}")
+            raise BotError(f"/type_add sent an error: {e}")
 
-    # @add.autocomplete("parent")
-    # async def type_add_autocomplete(
-    #     self, interaction: discord.Interaction, current: str
-    # ) -> List[app_commands.Choice[str]]:
-    #     guild = interaction.guild
-    #     choices = await self._load_type_choices(guild)
+    @type_add.autocomplete("parent")
+    async def type_add_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_type_choices(guild)
 
-    #     matches = []
+        matches = []
 
-    #     for choice in choices:
-    #         if current.casefold() in choice.name.casefold():
-    #             matches.append(choice)
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
-    #     return matches[:25]
+        return matches[:25]
 
-    # @type_group.command(
-    #     name="remove",
-    #     description="Remove a ticket type",
-    # )
-    # @checks.is_admin()
-    # @checks.is_guild()
-    # async def remove(self, interaction: discord.Interaction, type: str):
-    #     try:
-    #         await interaction.response.defer()
-    #         guild_id = interaction.guild.id
-    #         type_name = type.name
-    #         type_id = type.value
+    @type_group.command(
+        name="remove",
+        description="Remove a ticket type",
+    )
+    @checks.is_admin()
+    @checks.is_guild()
+    async def type_remove(self, interaction: discord.Interaction, type: str):
+        try:
+            await interaction.response.defer()
+            guild_id = interaction.guild.id
+            type_name, type_id = type.split(",")
 
-    #         await self.bot.data_manager.delete_type_from_db(type_id)
-    #         await self.bot.data_manager.get_or_load_guild_types(guild_id, False)
+            await self.bot.data_manager.delete_type_from_db(type_id)
+            await self.bot.data_manager.get_or_load_guild_types(guild_id, False)
 
-    #         await interaction.followup.send(
-    #             embed=Embeds.success(description=f"✅ Removed ticket type {type_name}")
-    #         )
+            await interaction.followup.send(
+                embed=Embeds.success(description=f"✅ Removed ticket type {type_name}")
+            )
 
-    #     except Exception as e:
-    #         raise BotError(f"/type_remove sent an error: {e}")
+        except Exception as e:
+            raise BotError(f"/type_remove sent an error: {e}")
 
-    # @remove.autocomplete("type")
-    # async def type_remove_autocomplete(
-    #     self, interaction: discord.Interaction, current: str
-    # ) -> List[app_commands.Choice[str]]:
-    #     guild = interaction.guild
-    #     choices = await self._load_type_choices(guild)
+    @type_remove.autocomplete("type")
+    async def type_remove_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_type_choices(guild)
 
-    #     matches = []
+        matches = []
 
-    #     for choice in choices:
-    #         if current.casefold() in choice.name.casefold():
-    #             matches.append(choice)
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
-    #     return matches[:25]
+        return matches[:25]
 
-    # @type_group.command(
-    #     name="update", description="Update a ticket type's configuration"
-    # )
-    # @checks.is_user_app()
-    # @checks.is_setup()
-    # @checks.is_guild_app()
-    # @app_commands.describe(
-    #     type="Ticket type to update",
-    #     name="Type name",
-    #     description="Type description",
-    #     emoji="Emoji to show for select option",
-    #     category="Destination category for this ticket type",
-    #     parent="Parent type if this is a sub-type",
-    #     nsfw="NSFW category for this type",
-    #     redirect="Redirect text for redirect types",
-    #     ping_role="Role to ping when a ticket is created with this type",
-    # )
-    # async def update(
-    #     self,
-    #     interaction: discord.Interaction,
-    #     type: str,
-    #     name: Range[str, 1, 45] = None,
-    #     description: Range[str, 1, 200] = None,
-    #     emoji: str = None,
-    #     category: discord.CategoryChannel = None,
-    #     parent: discord.CategoryChannel = None,
-    #     nsfw: discord.CategoryChannel = None,
-    #     redirect: str = None,
-    #     ping_role: discord.Role = None,
-    # ):
-    #     try:
-    #         await interaction.response.defer()
-    #         guild = interaction.guild
-    #         type_name = type.name
-    #         type_id = type.value
+    @type_group.command(name="edit", description="Edit a ticket type's configuration")
+    @checks.is_user_app()
+    @checks.is_setup()
+    @checks.is_guild_app()
+    @app_commands.describe(
+        type="Ticket type to edit",
+        name="Type name",
+        description="Type description",
+        emoji="Emoji to show for select option",
+        category="Destination category for this ticket type",
+        parent="Parent type if this is a sub-type",
+        nsfw="NSFW category for this type",
+        redirect="Redirect text for redirect types",
+        ping_role="Role to ping when a ticket is created with this type",
+    )
+    async def type_edit(
+        self,
+        interaction: discord.Interaction,
+        type: str,
+        name: Range[str, 1, 45] = None,
+        description: Range[str, 1, 200] = None,
+        emoji: str = None,
+        category: discord.CategoryChannel = None,
+        parent: str = None,
+        nsfw: discord.CategoryChannel = None,
+        redirect: str = None,
+        ping_role: discord.Role = None,
+    ):
+        try:
+            await interaction.response.defer()
+            guild = interaction.guild
+            type_name, type_id = type.split(",")
 
-    #         if nsfw and redirect:
-    #             await interaction.followup.send(
-    #                 embed=Embeds.error(
-    #                     description="❌ Redirect types do not need NSFW categories."
-    #                 )
-    #             )
-    #             return
+            if nsfw and redirect:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Redirect types do not need NSFW categories."
+                    )
+                )
+                return
 
-    #         parent_id = None
-    #         if parent:
-    #             parent_id = parent.value
-    #             await self._validate_subtype(type, parent_id)
+            parent_id = None
+            if parent:
+                parent_id = parent.value
+                self._validate_subtype(type, parent_id)
+                # FIXME MORE TO DO HERE!!!
 
-    #         await self.bot.data_manager.update_type(
-    #             type_id,
-    #             parent_id,
-    #             category.id,
-    #             nsfw.id if nsfw else None,
-    #             name,
-    #             description,
-    #             emoji,
-    #             redirect,
-    #             ping_role,
-    #         )
-    #         await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
+            await self.bot.data_manager.update_type(
+                type_id,
+                parent_id,
+                category.id,
+                nsfw.id if nsfw else None,
+                name,
+                description,
+                emoji,
+                redirect,
+                ping_role,
+            )
+            await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
 
-    #     except Exception as e:
-    #         logger.exception(f"/type_update error: {e}")
-    #         raise BotError(f"/type_update sent an error: {e}")
+        except Exception as e:
+            logger.exception(f"/type_update error: {e}")
+            raise BotError(f"/type_update sent an error: {e}")
 
-    # @update.autocomplete("type")
-    # async def type_update_autocomplete(
-    #     self, interaction: discord.Interaction, current: str
-    # ) -> List[app_commands.Choice[str]]:
-    #     guild = interaction.guild
-    #     choices = await self._load_type_choices(guild)
+    @type_edit.autocomplete("type")
+    async def type_update_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_type_choices(guild)
 
-    #     matches = []
+        matches = []
 
-    #     for choice in choices:
-    #         if current.casefold() in choice.name.casefold():
-    #             matches.append(choice)
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
-    #     return matches[:25]
+        return matches[:25]
 
-    # @update.autocomplete("parent")
-    # async def type_update_autocomplete(
-    #     self, interaction: discord.Interaction, current: str
-    # ) -> List[app_commands.Choice[str]]:
-    #     guild = interaction.guild
-    #     choices = await self._load_type_choices(guild)
+    @type_edit.autocomplete("parent")
+    async def type_update_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_type_choices(guild)
 
-    #     matches = []
+        matches = []
 
-    #     for choice in choices:
-    #         if current.casefold() in choice.name.casefold():
-    #             matches.append(choice)
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
-    #     return matches[:25]
+        return matches[:25]
 
-    # form_group = app_commands.Group(name="form", description="Manage ticket forms")
+    form_group = app_commands.Group(name="form", description="Manage ticket forms")
 
-    # @form_group.command(name="set", description="Change the form used by a ticket type")
-    # @checks.is_admin()
-    # @checks.is_guild()
-    # @app_commands.describe(category="Ticket category ID to edit the form for")
-    # @app_commands.describe(
-    #     form_template="Template for the form, use /form_template to view a pre-made template"
-    # )
-    # async def set(self, ctx, category: discord.CategoryChannel, form_template: str):
-    #     return
-    #     try:
-    #         try:
-    #             parsed_form = json.loads(form_template)
-    #         except json.JSONDecodeError as decode_err:
-    #             raise BotError(
-    #                 f"❌ Invalid form template. Please ensure it is valid JSON.\n\nError: `{decode_err}`"
-    #             )
+    @form_group.command(
+        name="edit", description="Change the form used by a ticket type"
+    )
+    @checks.is_admin()
+    @checks.is_guild()
+    @app_commands.describe(type="Ticket type to edit the form for")
+    @app_commands.describe(message_id="ID of the message containing the form template")
+    async def form_edit(
+        self, interaction: discord.Interaction, type: str, message_id: str
+    ):
+        try:
+            await interaction.response.defer(ephemeral=True)
+            channel = interaction.channel
+            message, response = await fetch_channel_message(channel, message_id)
+            if response:
+                await interaction.response.send_message(
+                    embed=Embeds.error(description=response)
+                )
+                return
 
-    #         cleaned_form = validate_and_clean_form_template(parsed_form)
-    #         await self.bot.data_manager.set_form(
-    #             ctx.guild.id, category.id, cleaned_form
-    #         )
-    #         await self.bot.data_manager.get_or_load_ticket_types(ctx.guild.id, False)
+            form_content, index, error = self._parse_form(message.content)
+            if error:
+                await interaction.followup.send(
+                    embed=Embeds.error(description=f"{error} (line {index})")
+                )
+                return
 
-    #         response_embed = discord.Embed(
-    #             description=f"✅ Updated form for ticket type `{category.name}`"
-    #         )
-    #         await ctx.send(embed=response_embed)
+            type_name, type_id = type.split(",")
+            await self.bot.data_manager.set_form(type_id, form_content)
+            await self.bot.data_manager.get_or_load_guild_types(
+                interaction.guild.id, False
+            )
+            await interaction.followup.send(
+                embed=Embeds.success(
+                    description=f"✅ Updated form for ticket type {type_name}"
+                )
+            )
 
-    #     except Exception as e:
-    #         logger.exception(f"set_form error: {e}")
-    #         raise BotError(f"/set_form sent an error: {e}")
+        except Exception as e:
+            logger.exception(f"form edit error: {e}")
+            raise BotError(f"/form edit sent an error: {e}")
 
-    # @form_group.command(
-    #     name="view", description="Preview how a form template will look"
-    # )
-    # @checks.is_admin()
-    # @checks.is_guild()
-    # @app_commands.describe(form_template="Form template JSON string")
-    # async def preview(self, ctx, form_template: str):
-    #     return
-    #     await preview_form_template(ctx, form_template)
+    @form_edit.autocomplete("type")
+    async def form_edit_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_type_choices(guild)
 
-    # @form_group.command(
-    #     name="preview", description="Preview how a form template will look"
-    # )
-    # @checks.is_admin()
-    # @checks.is_guild()
-    # @app_commands.describe(form_template="Form template JSON string")
-    # async def preview(self, ctx, form_template: str):
-    #     return
-    #     await preview_form_template(ctx, form_template)
+        matches = []
+
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
+
+        return matches[:25]
+
+    @form_group.command(name="view", description="View the form for a ticket type")
+    @checks.is_admin()
+    @checks.is_guild()
+    @app_commands.describe(type="Ticket type to view the form of")
+    async def form_view(self, interaction: discord.Interaction, type: str):
+        try:
+            await interaction.response.defer(ephemeral=False)
+            guild_id = interaction.guild.id
+            type_name, type_id = type.split(",")
+            form = None
+
+            types = await self._key_format_types(guild_id)
+            form = types[type_id]["form"]
+
+            form_embed = await self._make_form_embed(form)
+            await interaction.followup.send(embed=form_embed, view=ExampleMessage(form))
+
+        except Exception as e:
+            logger.exception(f"form view error: {e}")
+            raise BotError(f"/form view sent an error: {e}")
+
+    @form_view.autocomplete("type")
+    async def form_view_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_type_choices(guild)
+
+        matches = []
+
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
+
+        return matches[:25]
+
+    @form_group.command(
+        name="preview", description="Preview how a form template will look"
+    )
+    @checks.is_admin()
+    @checks.is_guild()
+    @app_commands.describe(message_id="ID of the message containing the form template")
+    async def form_preview(self, interaction: discord.Interaction, message_id: str):
+        try:
+            await interaction.response.defer(ephemeral=True)
+            channel = interaction.channel
+            message, response = await fetch_channel_message(channel, message_id)
+            if response:
+                await interaction.response.send_message(
+                    embed=Embeds.error(description=response)
+                )
+                return
+
+            form, index, error = self._parse_form(message.content)
+            if error:
+                await interaction.followup.send(
+                    embed=Embeds.error(description=f"{error} (line {index})")
+                )
+                return
+
+            form_embed = await self._make_form_embed(form)
+            await interaction.followup.send(embed=form_embed, view=ExampleMessage(form))
+
+        except Exception as e:
+            logger.exception(f"form edit error: {e}")
+            raise BotError(f"/form edit sent an error: {e}")
+
+    @form_group.command(
+        name="example", description="Display an example template and form"
+    )
+    @checks.is_admin()
+    @checks.is_guild()
+    async def form_example(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer(ephemeral=True)
+            explanation = (
+                "**Editing a form? Use the example template below as a reference.**\n"
+                "Forms are created from text templates (similar to snips) "
+                "and must follow these rules:\n"
+                "- Maximum of **5** questions\n"
+                "- **Question:** up to 45 characters\n"
+                "- **Placeholder:** up to 100 characters\n"
+                "- **Style:** short or paragraph\n"
+                "- **Min:** 0–1024\n"
+                "- **Max:** 1–1024\n"
+                "- **Required:** true or false\n\n"
+                "Leaving a field blank will result in an error or a default value "
+                "(it’s recommended to fill out every field). "
+                "When formatting your input:\n"
+                "- The title must be the first line\n"
+                "- Each field must start with its indicator "
+                "(e.g., Question: or Placeholder:)\n"
+                "- Follow the same field order as the example\n"
+                "- Do not add line breaks within a field — each new line is treated "
+                "as a new field\n"
+                "- Extra blank lines between questions are allowed"
+            )
+            explanation_embed = Embeds.info(description=explanation)
+
+            form_text = (
+                "Title: Example Support Form\n"
+                "Question: What is your issue?\n"
+                "Placeholder: Describe your issue here...\n"
+                "Style: paragraph\n"
+                "Min: 10\n"
+                "Max: 500\n"
+                "Required: true\n\n"
+                "Question: How urgent is this?\n"
+                "Placeholder: From 1 to 10\n"
+                "Style: short\n"
+                "Min: 1\n"
+                "Max: 50\n"
+                "Required: false"
+            )
+
+            form, index, error = self._parse_form(form_text)
+            if error:
+                await interaction.followup.send(
+                    embed=Embeds.error(description=f"{error} (line {index})")
+                )
+                return
+
+            text_embed = Embeds.info(description=f"```{form_text}```")
+            form_embed = await self._make_form_embed(form)
+            await interaction.followup.send(
+                embeds=[
+                    explanation_embed,
+                    text_embed,
+                    form_embed,
+                ],
+                view=ExampleMessage(form),
+            )
+
+        except Exception as e:
+            logger.exception(f"form view error: {e}")
+            raise BotError(f"/form view sent an error: {e}")
 
     @commands.command(name="config")
     @checks.is_admin()
