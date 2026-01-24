@@ -983,7 +983,7 @@ class Tickets(commands.Cog):
             if not state:
                 errorEmbed = discord.Embed(
                     title="",
-                    description="❌ Ticket was not inactive",
+                    description="❌ Ticket is not set to inactive",
                     color=discord.Color.red(),
                 )
                 await channel.send(embed=errorEmbed)
@@ -1066,6 +1066,7 @@ class Tickets(commands.Cog):
                 )
                 await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                 return
+
             if category is not None:
                 category_id, flag = category.split()
                 category = await self.bot.cache.get_channel(category_id)
@@ -1152,7 +1153,9 @@ class Tickets(commands.Cog):
                     await interaction.followup.send(embed=errorEmbed, ephemeral=True)
                     return
                 try:
-                    await channel.edit(category=anywhere)
+                    await channel.edit(
+                        category=anywhere, overwrites=anywhere.overwrites
+                    )
 
                 except Exception:
                     errorEmbed.description = (
@@ -1277,7 +1280,7 @@ class Tickets(commands.Cog):
 
             if category.id == channel.category.id:
                 errorEmbed = discord.Embed(
-                    description="❌ Cannot move channel to the category it's already in.",
+                    description="❌ This ticket is already in its NSFW category.",
                     color=discord.Color.red(),
                 )
                 await ctx.send(embed=errorEmbed)
@@ -1325,6 +1328,7 @@ class Tickets(commands.Cog):
             current_name = self.bot.channel_status.pending_updates.get(
                 channel.id, channel.name
             )
+            # FIXME, change this to check the timer
             if current_name.startswith((emojis.emoji_map.get("inactive"))[0]):
                 errorEmbed = discord.Embed(
                     description="❌ Cannot change the status of an **inactive** ticket",

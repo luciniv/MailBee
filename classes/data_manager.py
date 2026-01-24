@@ -472,7 +472,6 @@ class DataManager:
         """
         await self.execute_query(query, False)
 
-    # edit config calls
     async def set_anon_status(self, guild_id, anon):
         query = f"""
             UPDATE config
@@ -506,6 +505,14 @@ class DataManager:
             """
         params = closing
         await self.execute_query(query, False, False, params)
+
+    async def set_aps(self, guild_id, aps):
+        query = f"""
+            UPDATE config
+            SET aps = '{aps}'
+            WHERE guildID = {guild_id};
+        """
+        await self.execute_query(query, False)
 
     """
     -------------------------------------------------------------------------
@@ -633,6 +640,8 @@ class DataManager:
     -------------------------------------------------------------------------
     """
 
+    """ DATABASE """
+
     # Load all ajectives
     async def load_adjs_from_db(self):
         query = f"""
@@ -656,7 +665,7 @@ class DataManager:
         links = await self.execute_query(query)
         return links
 
-    # Load specific AP from the database
+    # Load specific user's AP from the database
     async def load_ap_from_db(self, guild_id, user_id):
         query = f"""
             SELECT ap_adjs.adj, ap_nouns.noun, ap_nouns.nounURL, ap_links.date FROM
@@ -669,6 +678,99 @@ class DataManager:
             LIMIT 1;"""
         ap = await self.execute_query(query)
         return ap
+
+    async def add_noun_to_db(self, guild_id, noun, noun_url):
+        query = """
+            INSERT INTO ap_nouns (guildID, noun, nounURL) 
+            VALUES (%s, %s, %s);
+            """
+        params = (guild_id, noun, noun_url)
+        await self.execute_query(query, False, False, params)
+
+    async def add_adj_to_db(self, adj):
+        query = """
+            INSERT INTO ap_adjs (adj) 
+            VALUES (%s);
+            """
+        params = adj
+        await self.execute_query(query, False, False, params)
+
+    async def add_link_to_db(self, guild_id, mod_id, noun_id, adj_id):
+        epoch_time = int(time.time())
+
+        query = """
+            INSERT INTO ap_links (guildID, modID, nounID, adjID, date) 
+            VALUES (%s, %s, %s, %s, %s);
+            """
+        params = (guild_id, mod_id, noun_id, adj_id, epoch_time)
+        await self.execute_query(query, False, False, params)
+
+    async def delete_noun_from_db(self, noun_id):
+        query = f"""
+            DELETE FROM ap_links WHERE nounID = {noun_id};
+            DELETE FROM ap_nouns WHERE nounID = {noun_id};
+            """
+        await self.execute_query(query, False)
+
+    async def delete_adj_from_db(self, adj_id):
+        query = f"""
+            DELETE FROM ap_links WHERE adjID = {adj_id};
+            DELETE FROM ap_adjs WHERE adjID = {adj_id};
+            """
+        await self.execute_query(query, False)
+
+    async def delete_link_from_db(self, guild_id, mod_id):
+        query = f"""
+            DELETE FROM ap_links 
+            WHERE guildID = {guild_id}
+            AND modID = {mod_id};
+            """
+        await self.execute_query(query, False)
+
+    async def edit_noun_url(self, noun_id, noun_url):
+        query = f"""
+            UPDATE ap_nouns
+            SET nounURL = %s
+            WHERE nounID = {noun_id};
+            """
+        params = (noun_url,)
+        await self.execute_query(query, False, False, params)
+
+    async def generate_random_ap(self, guild_id):
+        query = f"""
+            SELECT adjs.adjID, adjs.adj, nouns.nounID, nouns.noun, nouns.nounURL
+            FROM ap_adjs AS adjs
+            CROSS JOIN ap_nouns AS nouns
+            WHERE nouns.guildID = {guild_id}
+            AND (adjs.adjID, nouns.nounID) NOT IN (
+                SELECT adjID, nounID FROM ap_links WHERE guildID = {guild_id}
+            )
+            ORDER BY RAND()
+            LIMIT 1;
+            """
+        ap = await self.execute_query(query)
+        return ap
+
+    """ CACHE """
+
+    def format_aps(self, adj, noun, url, date):
+        return {"adj": adj, "noun": noun, "url": url, "date": date}
+
+    async def get_or_load_ap(self, guild_id: int, userID: int, get=True):
+        redis_key = f"aps:{guild_id}:{userID}"
+        if get:
+            cached = await self.redis.get(redis_key)
+
+            if cached:
+                return json.loads(cached)
+
+        ap = await self.load_ap_from_db(guild_id, userID)
+        if not ap:
+            return None
+
+        formatted = self.format_aps(*ap[0])
+        await self.set_with_expiry(redis_key, json.dumps(formatted))
+        return formatted
 
     """
     -------------------------------------------------------------------------
@@ -755,9 +857,9 @@ class DataManager:
             )
         return result
 
-    def template_form(header: str):
+    def template_form(self, title: str):
         return {
-            "title": header,
+            "title": title,
             "fields": [
                 {
                     "label": "Explain your issue in detail.",
@@ -786,12 +888,13 @@ class DataManager:
         sub_type=-1,
         redirect=None,
         nsfw_category_id=-1,
+        ping_roles=[],
     ):
-        form_json = await self.template_form(type_name)
+        form_json = self.template_form(type_name)
 
         query = """
-            INSERT INTO ticket_types (guildID, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText, NSFWCategoryID) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+            INSERT INTO ticket_types (guildID, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText, NSFWCategoryID, pingRoles) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """
         params = (
             guild_id,
@@ -803,13 +906,58 @@ class DataManager:
             sub_type,
             redirect,
             nsfw_category_id,
+            json.dumps(ping_roles),
         )
 
         await self.execute_query(query, False, False, params)
 
+    async def update_type_in_db(
+        self,
+        type_id,
+        category_id,
+        type_name,
+        type_descrip,
+        type_emoji,
+        sub_type,
+        redirect,
+        nsfw_category_id,
+        ping_roles,
+    ):
+        query = """
+            UPDATE ticket_types
+            SET categoryID = %s,
+                typeName = %s,
+                typeDescrip = %s,
+                typeEmoji = %s,
+                subType = %s,
+                redirectText = %s,
+                NSFWCategoryID = %s,
+                pingRoles = %s
+            WHERE typeID = %s;
+            """
+        params = (
+            category_id,
+            type_name,
+            type_descrip,
+            type_emoji,
+            sub_type,
+            redirect,
+            nsfw_category_id,
+            json.dumps(ping_roles),
+            type_id,
+        )
+        await self.execute_query(query, False, False, params)
+
+    async def delete_type_from_db(self, type_id):
+        query = f"""
+            DELETE FROM ticket_types
+            WHERE typeID = {type_id};
+            """
+        await self.execute_query(query, False)
+
     async def set_form(self, type_id, form=None):
-        if form is None:
-            form = await self.template_form("Ticket Form")
+        if not form:
+            form = self.template_form("Ticket Form")
 
         query = """
             UPDATE ticket_types
@@ -819,8 +967,7 @@ class DataManager:
         params = (json.dumps(form), type_id)
         await self.execute_query(query, False, False, params)
 
-    # TODO ability to set ping role for 1 specific type (sub or main)
-    async def set_ping_roles(self, guild_id, roles):
+    async def set_all_ping_roles(self, guild_id, roles):
         types = await self.get_or_load_guild_types(guild_id)
         type_ids = []
         for type in types:
@@ -835,18 +982,13 @@ class DataManager:
             """
         await self.execute_query(query, False, False, (json.dumps(roles),))
 
-    # Delete ticket type
-    async def delete_type_from_db(self, guild_id, category_id):
-        query = f"""
-            DELETE FROM ticket_types 
-            WHERE guildID = {guild_id}
-            AND categoryID = {category_id};
+    async def set_ping_roles(self, type_id, roles):
+        query = """
+            UPDATE ticket_types
+            SET pingRoles = %s
+            WHERE typeID = %s;
             """
-        await self.execute_query(query, False)
-
-    async def replace_type(self, old_category_id, new_category_id):
-        # gpt here yeaaaaah
-        pass
+        await self.execute_query(query, False, False, (json.dumps(roles), type_id))
 
     """
     -------------------------------------------------------------------------
@@ -871,15 +1013,28 @@ class DataManager:
             '{permLevel}');
             """
         await self.execute_query(query, False)
+        await self.update_cache(0)
+        await self.get_or_load_permissions(guild_id, False)
+
+    async def update_permission_in_db(self, guild_id, roleID, permLevel):
+        query = f"""
+            UPDATE permissions
+            SET permLevel = '{permLevel}'
+            WHERE roleID = {roleID};
+            """
+        await self.execute_query(query, False)
+        await self.update_cache(0)
+        await self.get_or_load_permissions(guild_id, False)
 
     # Delete permission
     async def delete_permission_from_db(self, guild_id, roleID):
         query = f"""
             DELETE FROM permissions 
-            WHERE guildID = {guild_id}
-            AND roleID = {roleID};
+            WHERE roleID = {roleID};
             """
         await self.execute_query(query, False)
+        await self.update_cache(0)
+        await self.get_or_load_permissions(guild_id, False)
 
     """
     -------------------------------------------------------------------------
@@ -1147,25 +1302,6 @@ class DataManager:
         await self.set_with_expiry(redis_key, json.dumps(formatted))
         return formatted
 
-    def format_aps(self, adj, noun, url, date):
-        return {"adj": adj, "noun": noun, "url": url, "date": date}
-
-    async def get_or_load_ap(self, guild_id: int, userID: int, get=True):
-        redis_key = f"aps:{guild_id}:{userID}"
-        if get:
-            cached = await self.redis.get(redis_key)
-
-            if cached:
-                return json.loads(cached)
-
-        ap = await self.load_ap_from_db(guild_id, userID)
-        if not ap:
-            return None
-
-        formatted = self.format_aps(*ap[0])
-        await self.set_with_expiry(redis_key, json.dumps(formatted))
-        return formatted
-
     # Combined load/get user tickets from Redis, with fallback to DB
     async def get_or_load_user_tickets(self, userID: int, get=True) -> list[dict]:
         redis_key = f"user_tickets:{userID}"
@@ -1255,14 +1391,6 @@ class DataManager:
         await self.set_with_expiry(redis_key, json.dumps(result))
         return result
 
-    # delete snip
-    async def delete_snip(self, guild_id, category_id):
-        # Delete from DB
-        await self.delete_type_from_db(guild_id, category_id)
-
-        redis_key = f"ticket_types:{guild_id}"
-        await self.redis.hdel(redis_key, str(category_id))
-
     def format_guild_type_entry(
         self,
         type_id,
@@ -1335,13 +1463,12 @@ class DataManager:
         await self.set_with_expiry(redis_key, json.dumps(result))
         return result
 
-    # delete guild type
-    async def delete_guild_type(self, guild_id, category_id):
-        # Delete from DB
-        await self.delete_type_from_db(guild_id, category_id)
-
-        redis_key = f"ticket_types:{guild_id}"
-        await self.redis.hdel(redis_key, str(category_id))
+    async def get_ticket_type(self, guild_id: int, type_id: int):
+        types = await self.get_or_load_guild_types(guild_id)
+        for type in types:
+            if str(type["type_id"]) == type_id:
+                return type
+        return None
 
     # Lazy get or load permissions for a guild
     async def get_or_load_permissions(self, guild_id, get=True):
@@ -1366,14 +1493,6 @@ class DataManager:
             result[int(roleID)] = permLevel
 
         return result
-
-    # delete permission
-    async def delete_permission(self, guild_id, roleID):
-        # Delete from DB
-        await self.delete_permission_from_db(guild_id, roleID)
-
-        redis_key = f"permissions:{guild_id}"
-        await self.redis.hdel(redis_key, str(roleID))
 
     # Add a ticket to the tickets cache, relies on channel_id
     async def add_ticket(self, channel_id: int, modmail_log_id: int):
