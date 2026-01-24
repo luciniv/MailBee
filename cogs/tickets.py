@@ -1165,9 +1165,7 @@ class Tickets(commands.Cog):
                     return
 
                 successEmbed = discord.Embed(
-                    description=f"✅ Moved this channel to **{anywhere.name}**\n"
-                    "**NOTE:** Using `/move` with **anywhere** will not "
-                    "sync channel permissions or stauses.",
+                    description=f"✅ Moved this channel to **{anywhere.name}**",
                     color=discord.Color.green(),
                 )
                 await interaction.followup.send(embed=successEmbed)
