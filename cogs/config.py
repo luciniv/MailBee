@@ -862,7 +862,7 @@ class Config(commands.Cog):
     #             nsfw.id if nsfw else None,
     #             ping_roles,
     #         )
-    #         await self.bot.data_manager.get_or_load_ticket_types(guild.id, False)
+    #         await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
     #         await interaction.followup.send(
     #             embed=Embeds.success(description=f"✅ Added ticket type {name}")
     #         )
@@ -1675,7 +1675,7 @@ class Config(commands.Cog):
                 return
 
             await self.bot.data_manager.set_ping_roles(guild.id, valid_role_ids)
-            await self.bot.data_manager.get_or_load_ticket_types(guild.id, False)
+            await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
             await ctx.send(
                 embed=discord.Embed(
                     description=f"✅ Set ping role(s) to: {' '.join(f'<@&{id}>' for id in valid_role_ids)}",
