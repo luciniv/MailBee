@@ -303,7 +303,7 @@ class Analytics(commands.Cog):
                 await thread.send(
                     embed=send_embed,
                     files=files,
-                    allowed_mentions=discord.AllowedMentions(users=False),
+                    allowed_mentions=discord.AllowedMentions(users=False, roles=False),
                 )
             except Exception:
                 pass
@@ -593,7 +593,7 @@ class Analytics(commands.Cog):
                 thread_message = await thread.send(
                     embed=receipt_embed,
                     files=files,
-                    allowed_mentions=discord.AllowedMentions(users=False),
+                    allowed_mentions=discord.AllowedMentions(users=False, roles=False),
                 )
             except Exception as e:
                 print("Thread send exception", e)
@@ -661,7 +661,7 @@ class Analytics(commands.Cog):
         thread_message = await thread.send(
             f"**{author.name}**\n{content}\n" f"-# `ID: {author.id}`",
             files=files,
-            allowed_mentions=discord.AllowedMentions(users=False),
+            allowed_mentions=discord.AllowedMentions(users=False, roles=False),
         )
 
         await self.bot.data_manager.add_message_link(
