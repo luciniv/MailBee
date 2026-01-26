@@ -981,6 +981,7 @@ class DataManager:
             AND typeID IN ({', '.join(map(str, type_ids))});
             """
         await self.execute_query(query, False, False, (json.dumps(roles),))
+        await self.get_or_load_guild_types(guild_id, False)
 
     async def set_ping_roles(self, type_id, roles):
         query = """

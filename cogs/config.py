@@ -745,190 +745,190 @@ class Config(commands.Cog):
 
         return matches[:25]
 
-    # @type_group.command(name="add", description="Add a new ticket type")
-    # @checks.is_user_app()
-    # @checks.is_setup()
-    # @checks.is_guild_app()
-    # @app_commands.describe(
-    #     name="Type name",
-    #     description="Type description",
-    #     emoji="Emoji to show for select option",
-    #     category="Destination category for this ticket type",
-    #     parent="Parent type if this is a sub-type",
-    #     nsfw="NSFW category for this type",
-    #     redirect="Redirect text or message ID for redirect types",
-    #     ping_roles="SPACE SEPARATED list of role IDs",
-    # )
-    # async def type_add(
-    #     self,
-    #     interaction: discord.Interaction,
-    #     name: Range[str, 1, 45],
-    #     description: Range[str, 1, 200],
-    #     emoji: str,
-    #     category: discord.CategoryChannel = None,
-    #     parent: str = None,
-    #     nsfw: discord.CategoryChannel = None,
-    #     redirect: str = None,
-    #     ping_roles: str = None,
-    # ):
-    #     try:
-    #         await interaction.response.defer()
-    #         guild = interaction.guild
-    #         guild_id = guild.id
-    #         category_id = category.id if category else None
-    #         parent_category_id = None
+    @type_group.command(name="add", description="Add a new ticket type")
+    @checks.is_user_app()
+    @checks.is_setup()
+    @checks.is_guild_app()
+    @app_commands.describe(
+        name="Type name",
+        description="Type description",
+        emoji="Emoji to show for select option",
+        category="Destination category for this ticket type",
+        parent="Parent type if this is a sub-type",
+        nsfw="NSFW category for this type",
+        redirect="Redirect text or message ID for redirect types",
+        ping_roles="SPACE SEPARATED list of role IDs",
+    )
+    async def type_add(
+        self,
+        interaction: discord.Interaction,
+        name: Range[str, 1, 45],
+        description: Range[str, 1, 200],
+        emoji: str,
+        category: discord.CategoryChannel = None,
+        parent: str = None,
+        nsfw: discord.CategoryChannel = None,
+        redirect: str = None,
+        ping_roles: str = None,
+    ):
+        try:
+            await interaction.response.defer()
+            guild = interaction.guild
+            guild_id = guild.id
+            category_id = category.id if category else None
+            parent_category_id = None
 
-    #         if parent:
-    #             parent_name, parent_id, parent_category_id = parent.split(",")
+            if parent:
+                parent_name, parent_id, parent_category_id = parent.split(",")
 
-    #         if ping_roles:
-    #             ping_roles, error = await self._fetch_ping_roles(guild, ping_roles)
-    #             if error:
-    #                 await interaction.followup.send(
-    #                     embed=Embeds.error(description=error)
-    #                 )
-    #                 return
+            if ping_roles:
+                ping_roles, error = await self._fetch_ping_roles(guild, ping_roles)
+                if error:
+                    await interaction.followup.send(
+                        embed=Embeds.error(description=error)
+                    )
+                    return
 
-    #         if redirect:
-    #             category_id = 0
-    #             nsfw = None
-    #             ping_roles = None
+            if redirect:
+                category_id = 0
+                nsfw = None
+                ping_roles = None
 
-    #         else:
-    #             if not category_id:
-    #                 if parent_category_id:
-    #                     category_id = -1
-    #                 else:
-    #                     roles = []
-    #                     permissions = (
-    #                         await self.bot.data_manager.get_or_load_permissions(
-    #                             guild_id
-    #                         )
-    #                     )
-    #                     for role_id in permissions.keys():
-    #                         role = guild.get_role(role_id)
-    #                         roles.append(role)
-    #                     overwrites = await get_overwrites(guild, roles)
+            else:
+                if not category_id:
+                    if parent_category_id:
+                        category_id = -1
+                    else:
+                        roles = []
+                        permissions = (
+                            await self.bot.data_manager.get_or_load_permissions(
+                                guild_id
+                            )
+                        )
+                        for role_id in permissions.keys():
+                            role = guild.get_role(role_id)
+                            roles.append(role)
+                        overwrites = await get_overwrites(guild, roles)
 
-    #                     config = await self.bot.data_manager.get_or_load_config(
-    #                         guild_id
-    #                     )
-    #                     inbox_category = await self.bot.cache.get_channel(
-    #                         config["inbox_id"]
-    #                     )
-    #                     if inbox_category:
-    #                         try:
-    #                             new_category = await guild.create_category(
-    #                                 name=name,
-    #                                 overwrites=overwrites,
-    #                                 position=(inbox_category.position),
-    #                             )
-    #                             category_id = new_category.id
-    #                         except Exception:
-    #                             await interaction.followup.send(
-    #                                 embed=Embeds.error(
-    #                                     description="❌ Failed to create new ticket category."
-    #                                 )
-    #                             )
-    #                             return
-    #                     else:
-    #                         await interaction.followup.send(
-    #                             embed=Embeds.error(
-    #                                 description="❌ Ticket inbox category not found. "
-    #                                 "Please re-run the /setup command."
-    #                             )
-    #                         )
-    #                         return
+                        config = await self.bot.data_manager.get_or_load_config(
+                            guild_id
+                        )
+                        inbox_category = await self.bot.cache.get_channel(
+                            config["inbox_id"]
+                        )
+                        if inbox_category:
+                            try:
+                                new_category = await guild.create_category(
+                                    name=name,
+                                    overwrites=overwrites,
+                                    position=(inbox_category.position),
+                                )
+                                category_id = new_category.id
+                            except Exception:
+                                await interaction.followup.send(
+                                    embed=Embeds.error(
+                                        description="❌ Failed to create new ticket category."
+                                    )
+                                )
+                                return
+                        else:
+                            await interaction.followup.send(
+                                embed=Embeds.error(
+                                    description="❌ Ticket inbox category not found. "
+                                    "Please re-run the /setup command."
+                                )
+                            )
+                            return
 
-    #         await self.bot.data_manager.add_type_to_db(
-    #             guild_id,
-    #             category_id,
-    #             name,
-    #             description,
-    #             emoji,
-    #             parent_category_id,
-    #             redirect,
-    #             nsfw.id if nsfw else None,
-    #             ping_roles,
-    #         )
-    #         await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
-    #         await interaction.followup.send(
-    #             embed=Embeds.success(description=f"✅ Added ticket type {name}")
-    #         )
+            await self.bot.data_manager.add_type_to_db(
+                guild_id,
+                category_id,
+                name,
+                description,
+                emoji,
+                parent_category_id,
+                redirect,
+                nsfw.id if nsfw else None,
+                ping_roles,
+            )
+            await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
+            await interaction.followup.send(
+                embed=Embeds.success(description=f"✅ Added ticket type {name}")
+            )
 
-    #     except Exception as e:
-    #         logger.exception(f"type_add error: {e}")
-    #         raise BotError(f"/type_add sent an error: {e}")
+        except Exception as e:
+            logger.exception(f"type_add error: {e}")
+            raise BotError(f"/type_add sent an error: {e}")
 
-    # @type_add.autocomplete("parent")
-    # async def type_add_autocomplete(
-    #     self, interaction: discord.Interaction, current: str
-    # ) -> List[app_commands.Choice[str]]:
-    #     guild = interaction.guild
-    #     choices = await self._load_parent_type_choices(guild)
+    @type_add.autocomplete("parent")
+    async def type_add_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_parent_type_choices(guild)
 
-    #     matches = []
+        matches = []
 
-    #     for choice in choices:
-    #         if current.casefold() in choice.name.casefold():
-    #             matches.append(choice)
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
-    #     return matches[:25]
+        return matches[:25]
 
-    # @type_group.command(
-    #     name="remove",
-    #     description="Remove a ticket type",
-    # )
-    # @checks.is_admin()
-    # @checks.is_guild()
-    # async def type_remove(self, interaction: discord.Interaction, type: str):
-    #     try:
-    #         await interaction.response.defer()
-    #         guild_id = interaction.guild.id
-    #         type_name, type_id, type_subtype_id = type.split(",")
+    @type_group.command(
+        name="remove",
+        description="Remove a ticket type",
+    )
+    @checks.is_admin()
+    @checks.is_guild()
+    async def type_remove(self, interaction: discord.Interaction, type: str):
+        try:
+            await interaction.response.defer()
+            guild_id = interaction.guild.id
+            type_name, type_id, type_subtype_id = type.split(",")
 
-    #         is_parent = False
-    #         if int(type_subtype_id) == -1:
-    #             type_structure = await self._list_format_types(guild_id)
-    #             for parent in type_structure:
-    #                 if parent["data"]["type_id"] == int(type_id):
-    #                     if parent["sub_types"]:
-    #                         is_parent = True
-    #                     break
+            is_parent = False
+            if int(type_subtype_id) == -1:
+                type_structure = await self._list_format_types(guild_id)
+                for parent in type_structure:
+                    if parent["data"]["type_id"] == int(type_id):
+                        if parent["sub_types"]:
+                            is_parent = True
+                        break
 
-    #         if is_parent:
-    #             await interaction.followup.send(
-    #                 embed=Embeds.error(
-    #                     description="❌ Cannot remove a ticket type that has sub-types. "
-    #                     "Please remove all sub-types first."
-    #                 )
-    #             )
-    #             return
+            if is_parent:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Cannot remove a ticket type that has sub-types. "
+                        "Please remove all sub-types first."
+                    )
+                )
+                return
 
-    #         await self.bot.data_manager.delete_type_from_db(type_id)
-    #         await self.bot.data_manager.get_or_load_guild_types(guild_id, False)
+            await self.bot.data_manager.delete_type_from_db(type_id)
+            await self.bot.data_manager.get_or_load_guild_types(guild_id, False)
 
-    #         await interaction.followup.send(
-    #             embed=Embeds.success(description=f"✅ Removed ticket type {type_name}")
-    #         )
+            await interaction.followup.send(
+                embed=Embeds.success(description=f"✅ Removed ticket type {type_name}")
+            )
 
-    #     except Exception as e:
-    #         raise BotError(f"/type_remove sent an error: {e}")
+        except Exception as e:
+            raise BotError(f"/type_remove sent an error: {e}")
 
-    # @type_remove.autocomplete("type")
-    # async def type_remove_autocomplete(
-    #     self, interaction: discord.Interaction, current: str
-    # ) -> List[app_commands.Choice[str]]:
-    #     guild = interaction.guild
-    #     choices = await self._load_type_choices(guild)
+    @type_remove.autocomplete("type")
+    async def type_remove_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_type_choices(guild)
 
-    #     matches = []
+        matches = []
 
-    #     for choice in choices:
-    #         if current.casefold() in choice.name.casefold():
-    #             matches.append(choice)
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
-    #     return matches[:25]
+        return matches[:25]
 
     # @type_group.command(name="edit", description="Edit a ticket type's configuration")
     # @checks.is_user_app()
@@ -1423,6 +1423,9 @@ class Config(commands.Cog):
             logging = config["logging"]
             analytics = config["analytics"]
 
+            pingroles = config["ping_roles"]
+            pingrole_list = " ".join([f"<@&{role_id}>" for role_id in pingroles])
+
             def convert_state(state):
                 if state.casefold() == "true":
                     return "Enabled"
@@ -1458,8 +1461,7 @@ class Config(commands.Cog):
                 value=f"Accepting tickets: **{convert_state(accepting)}**\n"
                 f"Default anonymous: **{convert_state(anon)}**\n"
                 f"Anonymous profiles: **{convert_state(aps)}**\n"
-                f"History logging: **{convert_state(logging)}**\n"
-                f"Analytics: **{convert_state(analytics)}**",
+                f"Ping roles: {pingrole_list if pingrole_list else 'None'}\n",
                 inline=True,
             )
             config_embed.add_field(name="Greeting", value=greeting, inline=False)
@@ -1665,7 +1667,6 @@ class Config(commands.Cog):
                 return
 
             await self.bot.data_manager.set_all_ping_roles(guild.id, valid_role_ids)
-            await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
             await ctx.send(
                 embed=discord.Embed(
                     description=f"✅ Set ping role(s) to: {' '.join(f'<@&{id}>' for id in valid_role_ids)}",
