@@ -260,7 +260,6 @@ class Config(commands.Cog):
             index += 1
 
         while line or line == "":
-            print(f"entered while loop, line: {line}")
             if line == "":
                 pass
 
@@ -273,7 +272,6 @@ class Config(commands.Cog):
 
                 line = self._get_line(form_text)
                 index += 1
-                print(f"after question, line: {line}")
                 if self._check_prefix(line, "Placeholder"):
                     placeholder = self._remove_prefix(line, "Placeholder")
                     if len(placeholder) == 0:
@@ -287,7 +285,6 @@ class Config(commands.Cog):
 
                     line = self._get_line(form_text)
                     index += 1
-                    print(f"after placeholder, line: {line}")
                     if self._check_prefix(line, "Style"):
                         style = self._remove_prefix(line, "Style").lower()
                         if style not in ["paragraph", "short"]:
@@ -299,7 +296,6 @@ class Config(commands.Cog):
 
                         line = self._get_line(form_text)
                         index += 1
-                        print(f"after style, line: {line}")
                         if self._check_prefix(line, "Min"):
                             min = self._remove_prefix(line, "Min").lower()
                             if not min.isdigit():
@@ -317,7 +313,6 @@ class Config(commands.Cog):
 
                             line = self._get_line(form_text)
                             index += 1
-                            print(f"after min, line: {line}")
                             if self._check_prefix(line, "Max"):
                                 max = self._remove_prefix(line, "Max").lower()
                                 if not max.isdigit():
@@ -341,7 +336,6 @@ class Config(commands.Cog):
 
                                 line = self._get_line(form_text)
                                 index += 1
-                                print(f"after max, line: {line}")
                                 if self._check_prefix(line, "Required"):
                                     required = self._remove_prefix(
                                         line, "Required"
@@ -372,9 +366,6 @@ class Config(commands.Cog):
                                             index,
                                             "❌ Cannot have more than 5 questions in a form.",
                                         )
-                                    print(
-                                        f"after fields append, fields: {fields}, line: {line}"
-                                    )
 
                                 else:
                                     return None, index, "❌ Expected 'Required:' line."
@@ -391,9 +382,7 @@ class Config(commands.Cog):
 
             line = self._get_line(form_text)
             index += 1
-            print(f"end of while loop, line: {line}")
 
-        print(f"returning, fields: {fields}, line: {line}")
         return {"title": title, "fields": fields}, None, None
 
     async def _make_form_embed(self, form_json):
@@ -1188,7 +1177,7 @@ class Config(commands.Cog):
             channel = interaction.channel
             message, response = await fetch_channel_message(channel, message_id)
             if response:
-                await interaction.response.send_message(
+                await interaction.followup.send_message(
                     embed=Embeds.error(description=response)
                 )
                 return
@@ -1278,7 +1267,7 @@ class Config(commands.Cog):
             channel = interaction.channel
             message, response = await fetch_channel_message(channel, message_id)
             if response:
-                await interaction.response.send_message(
+                await interaction.followup.send_message(
                     embed=Embeds.error(description=response)
                 )
                 return
@@ -1654,6 +1643,7 @@ class Config(commands.Cog):
             logger.exception(f"/aps error: {e}")
             raise BotError(f"/aps sent an error: {e}")
 
+    # change pingrole to be a slash command with ticket type selection
     @commands.command(name="pingrole")
     @checks.is_admin()
     @checks.is_guild()
@@ -1674,7 +1664,7 @@ class Config(commands.Cog):
                 await ctx.send(embed=Embeds.error(description=error))
                 return
 
-            await self.bot.data_manager.set_ping_roles(guild.id, valid_role_ids)
+            await self.bot.data_manager.set_all_ping_roles(guild.id, valid_role_ids)
             await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
             await ctx.send(
                 embed=discord.Embed(
@@ -1755,16 +1745,12 @@ class Config(commands.Cog):
     async def view_permissions(self, interaction: discord.Interaction):
         try:
             await interaction.response.defer()
-            this_guild_id = interaction.guild.id
+            guild_id = interaction.guild.id
 
-            search_access = [
-                (role_id, perm_level)
-                for guild_id, role_id, perm_level in self.bot.data_manager.access_roles
-                if guild_id == this_guild_id
-            ]
+            perms = await self.bot.data_manager.get_or_load_permissions(guild_id)
 
             embed = Embeds.success(title=f"Server Role Permissions")
-            if not search_access:
+            if not perms:
                 embed.color = discord.Color.red()
                 embed.add_field(
                     name="",
@@ -1772,10 +1758,10 @@ class Config(commands.Cog):
                     inline=False,
                 )
             else:
-                for row in search_access:
+                for key, value in perms.items():
                     embed.add_field(
                         name="",
-                        value=f"<@&{row[0]}> - **{row[1]}**",
+                        value=f"<@&{key}> - **{value}**",
                         inline=False,
                     )
             await interaction.followup.send(embed=embed)
@@ -1809,18 +1795,11 @@ class Config(commands.Cog):
             new_level_name = level.name
             new_level_value = level.value
 
-            curr_perm_level = None
-            for guild_id, r_id, perm_level in self.bot.data_manager.access_roles:
-                if r_id == role_id:
-                    curr_perm_level = perm_level
-                    break
+            perms = await self.bot.data_manager.get_or_load_permissions(guild_id)
+            print(perms)
 
-            if not curr_perm_level:
-                await self.bot.data_manager.add_permission_to_db(
-                    guild_id, role_id, new_level_value
-                )
-
-            else:
+            if perms.get(role_id, None):
+                curr_perm_level = perms[role_id]
                 if curr_perm_level == new_level_value:
                     await interaction.followup.send(
                         embed=Embeds.error(
@@ -1837,6 +1816,16 @@ class Config(commands.Cog):
                         )
                     )
 
+            else:
+                await self.bot.data_manager.add_permission_to_db(
+                    guild_id, role_id, new_level_value
+                )
+                await interaction.followup.send(
+                    embed=Embeds.success(
+                        description=f"Added **{new_level_name}** permissions to <@&{role_id}>."
+                    )
+                )
+
         except Exception as e:
             raise BotError(f"/permissions add sent an error: {e}")
 
@@ -1845,21 +1834,15 @@ class Config(commands.Cog):
     @checks.is_guild_app()
     @app_commands.describe(role="Selected role")
     async def remove_permissions(
-        self,
-        interaction: discord.Interaction,
-        role: discord.Role,
-        level: discord.app_commands.Choice[str],
+        self, interaction: discord.Interaction, role: discord.Role
     ):
         try:
             await interaction.response.defer()
             guild_id = interaction.guild.id
             role_id = role.id
 
-            curr_perm_level = None
-            for guild_id, r_id, perm_level in self.bot.data_manager.access_roles:
-                if r_id == role_id:
-                    curr_perm_level = perm_level
-                    break
+            perms = await self.bot.data_manager.get_or_load_permissions(guild_id)
+            curr_perm_level = perms.get(role_id, None)
 
             if not curr_perm_level:
                 await interaction.followup.send(
