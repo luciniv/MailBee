@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import emoji as emj
 
 import discord
 from discord import app_commands, SelectOption
@@ -69,67 +70,67 @@ class ExampleFormModal(discord.ui.Modal):
         )
 
 
-class TypeOrderView(TimeoutSafeView):
-    def __init__(self, bot, guild_id, type_id, target):
-        super().__init__(timeout=300)
-        self.bot = bot
-        self.guild_id = guild_id
-        self.type_id = type_id
-        self.target = target
-        self.add_item(OrderSelect(bot, guild_id, type_id, target))
-
-    async def on_timeout(self):
-        for child in self.children:
-            child.disabled = True
-
-
-class OrderSelect(discord.ui.Select):
-    def __init__(self, bot, guild_id, type_id, target):
-        options = [
-            SelectOption(label=f"Position {i + 1}", value=str(i + 1))
-            for i in range(len(target))
-        ]
-
-        super().__init__(
-            placeholder="Choose a position...",
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
-        self.bot = bot
-        self.guild_id = guild_id
-        self.type_id = type_id
-        self.target = target
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        position = int(self.values[0])
-
-        if self.target[position - 1]["data"]["type_id"] == self.type_id:
-            await interaction.followup.send(
-                embed=Embeds.error(
-                    description="❌ This type is already in the selected position."
-                )
-            )
-            return
-
-        current_index = None
-        for type in self.target:
-            if type["data"]["type_id"] == self.type_id:
-                current_index = self.target.index(type)
-                break
-
-        await self._update_type_order(
-            self.target, current_index, position - 1
-        )  # move to under config class
-        await interaction.followup.send(
-            embed=Embeds.success(description=f"✅ Moved type to position {position}.")
-        )
-
-
 class Config(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    class TypeOrderView(TimeoutSafeView):
+        def __init__(self, bot, guild_id, type_id, target):
+            super().__init__(timeout=300)
+            self.bot = bot
+            self.guild_id = guild_id
+            self.type_id = type_id
+            self.target = target
+            self.add_item(self.OrderSelect(bot, guild_id, type_id, target))
+
+        async def on_timeout(self):
+            for child in self.children:
+                child.disabled = True
+
+    class OrderSelect(discord.ui.Select):
+        def __init__(self, bot, guild_id, type_id, target):
+            options = [
+                SelectOption(label=f"Position {i + 1}", value=str(i + 1))
+                for i in range(len(target))
+            ]
+
+            super().__init__(
+                placeholder="Choose a position...",
+                min_values=1,
+                max_values=1,
+                options=options,
+            )
+            self.bot = bot
+            self.guild_id = guild_id
+            self.type_id = type_id
+            self.target = target
+
+        async def callback(self, interaction: discord.Interaction):
+            await interaction.response.defer()
+            position = int(self.values[0])
+
+            if self.target[position - 1]["data"]["type_id"] == self.type_id:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ This type is already in the selected position."
+                    )
+                )
+                return
+
+            current_index = None
+            for type in self.target:
+                if type["data"]["type_id"] == self.type_id:
+                    current_index = self.target.index(type)
+                    break
+
+            await self._update_type_order(
+                self.target, current_index, position - 1
+            )  # move to under config class
+            await interaction.followup.send(
+                embed=Embeds.success(
+                    description=f"✅ Moved type to position {position}."
+                )
+            )
 
     async def _key_format_types(self, guild_id):
         types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
@@ -138,13 +139,10 @@ class Config(commands.Cog):
 
     async def _list_format_types(self, guild_id):
         types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
-        # types are read in based on order number
-        # add parents to list, and subtypes under their parents
-        # issue --> subtype exists before parent
-        # create 2 lists?
 
         parent_list = []
         subtype_list = []
+        subtypes_to_remove = []
         for type in types:
             if type["sub_type"] == -1:
                 parent_list.append(
@@ -160,9 +158,16 @@ class Config(commands.Cog):
             for subtype in subtype_list:
                 if subtype["data"]["sub_type"] == parent["data"]["category_id"]:
                     parent["sub_types"].append(subtype)
-                    subtype_list.remove(subtype)
+                    subtypes_to_remove.append(subtype)
+
+            for subtype in subtypes_to_remove:
+                subtype_list.remove(subtype)
+            subtypes_to_remove = []
 
         return parent_list
+
+    # list of parents, data field gives type, subtype field gives subtype list
+    # each subtype in list has a data field as well that gives the type
 
     async def _load_type_choices(
         self, guild: discord.Guild
@@ -223,6 +228,11 @@ class Config(commands.Cog):
             for index, type in enumerate(self.target)
         ]
         await self.bot.data_manager.update_type_order(self.guild_id, updates)
+
+    def _check_emoji(self, emoji_str):
+        if emoji_str in emj.EMOJI_DATA:
+            return emoji_str
+        return None
 
     def _get_line(self, form_text_list):
         if form_text_list:
@@ -412,10 +422,10 @@ class Config(commands.Cog):
                 if role:
                     valid_role_ids.append(role_id)
                 else:
-                    return None, f"❌ Role ID {role_id} not found in this server"
+                    return [], f"❌ Role ID {role_id} not found in this server"
 
             except ValueError:
-                return None, f"❌ Invalid role ID: {role_id}"
+                return [], f"❌ Invalid role ID: {role_id}"
 
         return valid_role_ids, None
 
@@ -602,58 +612,45 @@ class Config(commands.Cog):
         try:
             await interaction.response.defer()
             guild_id = interaction.guild.id
-            type_structure = {}
-            types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
-
-            # TODO swap to new data structure for ordering
-
-            for ticket_type in types:
-                if ticket_type["sub_type"] == -1:
-                    if ticket_type["category_id"] not in type_structure:
-                        type_structure[ticket_type["category_id"]] = {
-                            "parent": None,
-                            "sub_types": [],
-                        }
-                    type_structure[ticket_type["category_id"]]["parent"] = ticket_type
-                else:
-                    if ticket_type["sub_type"] not in type_structure:
-                        type_structure[ticket_type["sub_type"]] = {
-                            "parent": None,
-                            "sub_types": [],
-                        }
-                    type_structure[ticket_type["sub_type"]]["sub_types"].append(
-                        ticket_type
-                    )
+            sorted_types = await self._list_format_types(guild_id)
 
             if type:
                 type_name, type_id, type_subtype_id = type.split(",")
-                type_data = await self.bot.data_manager.get_ticket_type(
-                    guild_id, type_id
-                )
+                type_data = None
+                subtypes = None
+                type_parent = None
+                for parent in sorted_types:
+                    if parent["data"]["type_id"] == int(type_id):
+                        type_data = parent["data"]
+                        subtypes = parent["sub_types"]
+                        break
+                    for subtype in parent["sub_types"]:
+                        if subtype["data"]["type_id"] == int(type_id):
+                            type_data = subtype["data"]
+                            type_parent = parent["data"]
+                            break
 
                 embed = Embeds.success(
                     title=f"Ticket Type: {safe_partial_emoji(type_data['type_emoji'])} {type_data['type_name']}",
                     description=type_data["type_descrip"],
                 )
-                if type_data["sub_type"] == -1:
-                    sub_types = type_structure[type_data["category_id"]]["sub_types"]
-                    if sub_types:
-                        sub_type_list = ""
-                        for sub_type in sub_types:
-                            sub_type_list += (
-                                f"{safe_partial_emoji(sub_type['type_emoji'])} "
-                                f"{sub_type['type_name']}\n"
-                            )
-                        embed.add_field(
-                            name="Sub Types",
-                            value=sub_type_list,
-                            inline=False,
-                        )
-                else:
-                    parent = type_structure[type_data["sub_type"]]["parent"]
+                if subtypes:
+                    sub_type_list = ""
+                    for sub_type in subtypes:
+                        emoji = sub_type["data"]["type_emoji"]
+                        name = sub_type["data"]["type_name"]
+                        sub_type_list += f"{safe_partial_emoji(emoji)} " f"{name}\n"
+                    embed.add_field(
+                        name="Sub Types",
+                        value=sub_type_list,
+                        inline=False,
+                    )
+                elif type_parent:
+                    emoji = type_parent["type_emoji"]
+                    name = type_parent["type_name"]
                     embed.add_field(
                         name="Parent Type",
-                        value=f"{safe_partial_emoji(parent['type_emoji'])} {parent['type_name']}",
+                        value=f"{safe_partial_emoji(emoji)} {name}",
                         inline=False,
                     )
 
@@ -703,19 +700,23 @@ class Config(commands.Cog):
 
             else:
                 pages = []
-                for category_id, ticket_types in type_structure.items():
-                    emoji = ticket_types["parent"]["type_emoji"]
-                    name = ticket_types["parent"]["type_name"]
+                for parent in sorted_types:
+                    emoji = parent["data"]["type_emoji"]
+                    name = parent["data"]["type_name"]
+                    description = parent["data"]["type_descrip"]
                     embed = Embeds.success(
                         title=f"Main Type: {safe_partial_emoji(emoji)} {name}",
-                        description=f"{ticket_types['parent']['type_descrip']}\n\n** **",
+                        description=f"{description}\n\n** **",
                     )
 
-                    if ticket_types["sub_types"]:
-                        for sub_type in ticket_types["sub_types"]:
+                    if parent["sub_types"]:
+                        for sub_type in parent["sub_types"]:
+                            emoji = sub_type["data"]["type_emoji"]
+                            name = sub_type["data"]["type_name"]
+                            description = sub_type["data"]["type_descrip"]
                             embed.add_field(
-                                name=f"Sub Type: {safe_partial_emoji(sub_type['type_emoji'])} {sub_type['type_name']}",
-                                value=sub_type["type_descrip"],
+                                name=f"Sub Type: {safe_partial_emoji(emoji)} {name}",
+                                value=description,
                                 inline=False,
                             )
                     pages.append(embed)
@@ -777,6 +778,28 @@ class Config(commands.Cog):
             guild_id = guild.id
             category_id = category.id if category else None
             parent_category_id = None
+
+            emoji = self._check_emoji(emoji)
+            if not emoji:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid emoji. Please provide a valid Unicode emoji (Discord default emojis)."
+                    )
+                )
+                return
+
+            sorted_types = await self._list_format_types(guild_id)
+            if category:
+                for parent_type in sorted_types:
+                    if parent_type["data"]["category_id"] == category.id:
+                        emoji = parent_type["data"]["type_emoji"]
+                        name = parent_type["data"]["type_name"]
+                        await interaction.followup.send(
+                            embed=Embeds.error(
+                                description=f"❌ This category is already assigned to the **{emoji} {name}** parent ticket type."
+                            )
+                        )
+                        return
 
             if parent:
                 parent_name, parent_id, parent_category_id = parent.split(",")
@@ -846,14 +869,14 @@ class Config(commands.Cog):
                 name,
                 description,
                 emoji,
-                parent_category_id,
+                parent_category_id if parent_category_id else -1,
                 redirect,
-                nsfw.id if nsfw else None,
+                nsfw.id if nsfw else -1,
                 ping_roles,
             )
             await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
             await interaction.followup.send(
-                embed=Embeds.success(description=f"✅ Added ticket type {name}")
+                embed=Embeds.success(description=f"✅ Added ticket type {emoji} {name}")
             )
 
         except Exception as e:
@@ -888,13 +911,12 @@ class Config(commands.Cog):
             type_name, type_id, type_subtype_id = type.split(",")
 
             is_parent = False
-            if int(type_subtype_id) == -1:
-                type_structure = await self._list_format_types(guild_id)
-                for parent in type_structure:
-                    if parent["data"]["type_id"] == int(type_id):
-                        if parent["sub_types"]:
-                            is_parent = True
-                        break
+            sorted_types = await self._list_format_types(guild_id)
+            for parent in sorted_types:
+                if parent["data"]["type_id"] == int(type_id):
+                    if parent["sub_types"]:
+                        is_parent = True
+                    break
 
             if is_parent:
                 await interaction.followup.send(
@@ -1051,7 +1073,7 @@ class Config(commands.Cog):
     #             emoji,
     #             parent_category_id,
     #             redirect,
-    #             nsfw_id,
+    #             new_nsfw_id,
     #             ping_roles,
     #         )
     #         await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
@@ -1098,7 +1120,9 @@ class Config(commands.Cog):
     # @checks.is_guild()
     # @app_commands.describe(type="Ticket type to reorder")
     # @app_commands.describe(position="New position for the ticket type (1 = top)")
-    # async def type_order(self, interaction: discord.Interaction, type: str):
+    # async def type_order(
+    #     self, interaction: discord.Interaction, type: str, position: str
+    # ):
     #     try:
     #         await interaction.response.defer()
     #         guild_id = interaction.guild.id
@@ -1138,14 +1162,14 @@ class Config(commands.Cog):
 
     #         await interaction.followup.send(
     #             embed=embed,
-    #             view=TypeOrderView(self.bot, guild_id, type_id, target),
+    #             view=self.TypeOrderView(self.bot, guild_id, type_id, target),
     #         )
 
     #     except Exception as e:
     #         logger.exception(f"/type_order error: {e}")
     #         raise BotError(f"/type_order sent an error: {e}")
 
-    # @type_edit.autocomplete("type")
+    # @type_order.autocomplete("type")
     # async def type_update_autocomplete(
     #     self, interaction: discord.Interaction, current: str
     # ) -> List[app_commands.Choice[str]]:
@@ -1420,11 +1444,8 @@ class Config(commands.Cog):
             accepting = config["accepting"]
             anon = config["anon"]
             aps = config["aps"]
-            logging = config["logging"]
-            analytics = config["analytics"]
-
-            pingroles = config["ping_roles"]
-            pingrole_list = " ".join([f"<@&{role_id}>" for role_id in pingroles])
+            # logging = config["logging"]
+            # analytics = config["analytics"]
 
             def convert_state(state):
                 if state.casefold() == "true":
@@ -1460,8 +1481,7 @@ class Config(commands.Cog):
                 name="Server Settings",
                 value=f"Accepting tickets: **{convert_state(accepting)}**\n"
                 f"Default anonymous: **{convert_state(anon)}**\n"
-                f"Anonymous profiles: **{convert_state(aps)}**\n"
-                f"Ping roles: {pingrole_list if pingrole_list else 'None'}\n",
+                f"Anonymous profiles: **{convert_state(aps)}**\n",
                 inline=True,
             )
             config_embed.add_field(name="Greeting", value=greeting, inline=False)
@@ -1797,7 +1817,6 @@ class Config(commands.Cog):
             new_level_value = level.value
 
             perms = await self.bot.data_manager.get_or_load_permissions(guild_id)
-            print(perms)
 
             if perms.get(role_id, None):
                 curr_perm_level = perms[role_id]
