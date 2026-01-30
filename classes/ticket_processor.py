@@ -41,6 +41,12 @@ class TicketQueue:
         return False
 
     async def _add_ticket(self, ticket: Ticket, info_message: discord.Message):
+        guild_id = ticket.guild_id
+        user_id = ticket.user_id
+        pending_ticket = await self.has_pending_ticket(guild_id, user_id)
+        if pending_ticket:
+            logger.warning("Had to drop ticket, user had a pending one already")
+            return
         ticket.dm_message_id = info_message.id
         await self.bot.cache.store_message(info_message)
         await self.bot.data_manager.add_ticket_back_queue(ticket)
@@ -84,6 +90,7 @@ class TicketQueue:
         queues = await self.bot.data_manager.get_all_queues()
 
         for guild_id, queue in queues.items():
+            ticket_users = set()
             for ticket in queue:
                 category_id = ticket.category_id
                 if category_id in full_categories:
@@ -104,8 +111,19 @@ class TicketQueue:
                             ticket.guild_id, ticket.user_id
                         )
                     continue
+                if ticket.user_id in ticket_users:
+                    # A ticket for this user has already been opened in this cycle for this guild
+                    # Remove from queue without opening another
+                    await self.bot.data_manager.remove_ticket_from_queue(
+                        ticket.guild_id, ticket.user_id
+                    )
+                    logger.warning(
+                        "Had to drop ticket, 2nd ticket for user in same cycle"
+                    )
+                    continue
                 try:
                     asyncio.create_task(self.bot.opener.open_ticket(ticket))
+                    ticket_users.add(ticket.user_id)
                     await self.bot.data_manager.remove_ticket_from_queue(
                         ticket.guild_id, ticket.user_id
                     )

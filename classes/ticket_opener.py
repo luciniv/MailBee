@@ -59,6 +59,8 @@ class TicketOpener:
             if not user:
                 print("Failed to fetch user for ticket opener, re-added ticket")
                 await self.bot.ticket_queue._re_add_ticket(ticket)
+                # TODO explore better handling for this case
+                return
 
             guild = self.bot.get_guild(guild_id)
             category = guild.get_channel(category_id)
