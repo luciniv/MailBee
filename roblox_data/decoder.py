@@ -27,7 +27,7 @@ def call_luau_script(input_string):
         [
             "/root/.rokit/bin/lune",
             "run",
-            "/root/Mantid/roblox_data/translate.luau",
+            "/root/MailBee/roblox_data/translate.luau",
             temp_file_path,
         ],
         text=True,
