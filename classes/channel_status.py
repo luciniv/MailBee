@@ -218,26 +218,32 @@ class ChannelStatus:
             logger.exception(f"queue_update sent an error: {e}")
             return False
 
+    # normal emoji changes are FALSE for manual and have NONE for nsfw_state
+    # nsfw_state changes are TRUE for manual and have TRUE/FALSE for nsfw_state
+    # inactive / other perm emojis are TRUE for manual and have NONE for nsfw_state
+
+    # the inactive emojis specifically cant be overwritten unless by a non-manual wait
+
     # Set emoji at the start of a channel's name
     async def set_emoji(
         self,
         channel: discord.TextChannel,
         emoji_str: str,
         manual: bool = False,
-        make_nsfw: bool = None,
+        nsfw_state: bool = None,
     ) -> bool:
         new_name = ""
 
-        if make_nsfw is not None:
+        if nsfw_state is not None:
             current_name = self.pending_updates.get(channel.id, channel.name)
 
-            if make_nsfw:
+            if nsfw_state:
                 new_name = (
                     f"{(current_name)[0]}"
                     f"{(emojis.emoji_map.get('nsfw'))[0]}"
                     f"{(current_name)[1:]}"
                 )
-            elif not make_nsfw:
+            elif not nsfw_state:
                 new_name = f"{(current_name)[0]}{(current_name)[2:]}"
 
         else:

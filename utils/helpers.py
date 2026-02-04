@@ -37,6 +37,7 @@ class Ticket:
     dm_message_id: int | None = None
     is_new: bool = True
     is_queued: bool = False
+    opening_began: bool = False
 
     def to_dict(self):
         return asdict(self)

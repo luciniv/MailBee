@@ -5,7 +5,7 @@ from discord.ext import commands
 from classes.error_handler import *
 
 
-# Checks if user is the owner of Mantid
+# Checks if user is the owner of MailBee
 def is_owner():
     def predicate(ctx):
         if ctx.author.id != 429711831695753237:
@@ -17,7 +17,7 @@ def is_owner():
 
 
 # Is admin command for weighted permissions
-# Checks if user has Admin permissions for that channel or their ID is set as bot admin in Mantid's permissions cache
+# Checks if user has Admin permissions for that channel or their ID is set as bot admin in MailBee's permissions cache
 def is_admin():
     async def predicate(ctx):
         result = await _check_is_admin(

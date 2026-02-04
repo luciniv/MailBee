@@ -747,7 +747,7 @@ class Config(commands.Cog):
         return matches[:25]
 
     @type_group.command(name="add", description="Add a new ticket type")
-    @checks.is_user_app()
+    @checks.is_admin_app()
     @checks.is_setup()
     @checks.is_guild_app()
     @app_commands.describe(
@@ -902,8 +902,8 @@ class Config(commands.Cog):
         name="remove",
         description="Remove a ticket type",
     )
-    @checks.is_admin()
-    @checks.is_guild()
+    @checks.is_admin_app()
+    @checks.is_guild_app()
     async def type_remove(self, interaction: discord.Interaction, type: str):
         try:
             await interaction.response.defer()
@@ -1189,8 +1189,8 @@ class Config(commands.Cog):
     @form_group.command(
         name="edit", description="Change the form used by a ticket type"
     )
-    @checks.is_admin()
-    @checks.is_guild()
+    @checks.is_admin_app()
+    @checks.is_guild_app()
     @app_commands.describe(type="Ticket type to edit the form for")
     @app_commands.describe(message_id="ID of the message containing the form template")
     async def form_edit(
@@ -1244,8 +1244,8 @@ class Config(commands.Cog):
         return matches[:25]
 
     @form_group.command(name="view", description="View the form for a ticket type")
-    @checks.is_admin()
-    @checks.is_guild()
+    @checks.is_admin_app()
+    @checks.is_guild_app()
     @app_commands.describe(type="Ticket type to view the form of")
     async def form_view(self, interaction: discord.Interaction, type: str):
         try:
@@ -1282,8 +1282,8 @@ class Config(commands.Cog):
     @form_group.command(
         name="preview", description="Preview how a form template will look"
     )
-    @checks.is_admin()
-    @checks.is_guild()
+    @checks.is_admin_app()
+    @checks.is_guild_app()
     @app_commands.describe(message_id="ID of the message containing the form template")
     async def form_preview(self, interaction: discord.Interaction, message_id: str):
         try:
@@ -1313,8 +1313,8 @@ class Config(commands.Cog):
     @form_group.command(
         name="template", description="View the text template for a pre-existing form"
     )
-    @checks.is_admin()
-    @checks.is_guild()
+    @checks.is_admin_app()
+    @checks.is_guild_app()
     @app_commands.describe(type="Ticket type to view the form template of")
     async def form_template(self, interaction: discord.Interaction, type: str):
         try:
@@ -1352,8 +1352,8 @@ class Config(commands.Cog):
     @form_group.command(
         name="example", description="Display an example template and form"
     )
-    @checks.is_admin()
-    @checks.is_guild()
+    @checks.is_admin_app()
+    @checks.is_guild_app()
     async def form_example(self, interaction: discord.Interaction):
         try:
             await interaction.response.defer(ephemeral=True)

@@ -52,6 +52,8 @@ class TicketQueue:
         await self.bot.data_manager.add_ticket_back_queue(ticket)
 
     async def _re_add_ticket(self, ticket: Ticket):
+        print("Re-adding ticket to back of queue")
+        ticket.opening_began = False
         await self.bot.data_manager.add_ticket_back_queue(ticket)
 
     async def _get_next_ticket(self, guild_id: int) -> Ticket | None:

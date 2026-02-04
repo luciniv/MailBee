@@ -51,6 +51,11 @@ class TicketOpener:
 
     async def open_ticket(self, ticket: Ticket):
         try:
+            if ticket.opening_began:
+                print("Ticket opening already began, returning")
+                return
+            ticket.opening_began = True
+
             user_id = ticket.user_id
             guild_id = ticket.guild_id
             category_id = ticket.category_id
@@ -195,6 +200,13 @@ class TicketOpener:
             return True
 
         except Exception as e:
+            if dm_channel:
+                error_embed.description = (
+                    "❌ An unexpected error occurred while opening your ticket. "
+                    "Please try again later or contact a server admin if this "
+                    "issue persists."
+                )
+                await dm_channel.send(embed=error_embed)
             logger.exception("ticket_opener sent an exception:", e)
 
     async def create_ticket_channel(self, guild, category, user, threadID, NSFW):
@@ -229,210 +241,231 @@ class TicketOpener:
     async def handle_server_embeds(
         self, ticket, guild, channel, thread, user, ticket_id
     ):
-
-        member = await self.bot.cache.get_guild_member(guild, user.id)
-
-        if member is None:
-            logger.warning(f"Failed to find member object for user once: {user.id}")
+        try:
             member = await self.bot.cache.get_guild_member(guild, user.id)
+
             if member is None:
-                logger.error("Creating ticket embeds without member object")
-                member = None
+                logger.warning(f"Failed to find member object for user once: {user.id}")
+                member = await self.bot.cache.get_guild_member(guild, user.id)
+                if member is None:
+                    logger.error("Creating ticket embeds without member object")
+                    member = None
 
-        count = await self.bot.data_manager.get_ticket_count(guild.id, user.id)
-        if count is not None:
-            count = int(count[0][0])
-            if count != 0:
-                count -= 1
-        else:
-            count = 0
+            count = await self.bot.data_manager.get_ticket_count(guild.id, user.id)
+            if count is not None:
+                count = int(count[0][0])
+                if count != 0:
+                    count -= 1
+            else:
+                count = 0
 
-        ticket_embed = discord.Embed(
-            title=f'New "{ticket.type_name}" Ticket [ID {ticket_id}]',
-            description="To reply, send a message in this channel prefixed with `+`. "
-            "Any other messages will send as a comment (not visible to the ticket opener). "
-            "To use commands, prefix with `+` or type `/` and select from the displayed "
-            "list.\n\n`+close [reason]` will close a ticket. `+inactive [hours] [reason]` "
-            "will close a ticket after X hours of inactivity from the ticket opener.",
-        )
-        ticket_embed.timestamp = datetime.now(timezone.utc)
-        name = f"{user.name} | {user.id}"
-        if member is not None:
-            ticket_embed.set_footer(
-                text=name,
-                icon_url=(
-                    (member.avatar and member.avatar.url) or member.display_avatar.url
-                ),
+            ticket_embed = discord.Embed(
+                title=f'New "{ticket.type_name}" Ticket [ID {ticket_id}]',
+                description="To reply, send a message in this channel prefixed with `+`. "
+                "Any other messages will send as a comment (not visible to the ticket opener). "
+                "To use commands, prefix with `+` or type `/` and select from the displayed "
+                "list.\n\n`+close [reason]` will close a ticket. `+inactive [hours] [reason]` "
+                "will close a ticket after X hours of inactivity from the ticket opener.",
             )
-        else:
-            ticket_embed.set_footer(
-                text=name, icon_url=((user.avatar and user.avatar.url) or None)
-            )
-
-        # Populate ticket info embed depending on the member object existing
-        ticket_embed.add_field(name="Opener @", value=f"<@{user.id}>", inline=True)
-        ticket_embed.add_field(name="Opener ID", value=user.id, inline=True)
-        # Member-specific info
-        if member is not None:
-            roles = member.roles
-            default = guild.default_role
-            formatted_roles = "*None*"
-            if len(roles) > 1:
-                formatted_roles = " ".join(
-                    [f"<@&{role.id}>" for role in roles if role != default]
+            ticket_embed.timestamp = datetime.now(timezone.utc)
+            name = f"{user.name} | {user.id}"
+            if member is not None:
+                ticket_embed.set_footer(
+                    text=name,
+                    icon_url=(
+                        (member.avatar and member.avatar.url)
+                        or member.display_avatar.url
+                    ),
                 )
-                if len(formatted_roles) > 1024:
-                    formatted_roles = (
-                        f"*{len([role for role in roles if role != default])} roles*"
+            else:
+                ticket_embed.set_footer(
+                    text=name, icon_url=((user.avatar and user.avatar.url) or None)
+                )
+
+            # Populate ticket info embed depending on the member object existing
+            ticket_embed.add_field(name="Opener @", value=f"<@{user.id}>", inline=True)
+            ticket_embed.add_field(name="Opener ID", value=user.id, inline=True)
+            # Member-specific info
+            if member is not None:
+                roles = member.roles
+                default = guild.default_role
+                formatted_roles = "*None*"
+                if len(roles) > 1:
+                    formatted_roles = " ".join(
+                        [f"<@&{role.id}>" for role in roles if role != default]
                     )
-            ticket_embed.add_field(name="Roles", value=formatted_roles, inline=True)
+                    if len(formatted_roles) > 1024:
+                        formatted_roles = f"*{len([role for role in roles if role != default])} roles*"
+                ticket_embed.add_field(name="Roles", value=formatted_roles, inline=True)
+                ticket_embed.add_field(name="", value="", inline=False)
+                ticket_embed.add_field(
+                    name="Join Date",
+                    value=f"<t:{int(member.joined_at.timestamp())}:R>",
+                    inline=True,
+                )
+                ticket_embed.add_field(
+                    name="Account Age",
+                    value=f"<t:{int(user.created_at.timestamp())}:R>",
+                    inline=True,
+                )
+                roblox_username = (
+                    ticket.roblox_username if ticket.roblox_username else "N/A"
+                )
+                roblox_id = ticket.roblox_id if ticket.roblox_id != -1 else "N/A"
+                robux_spent = ticket.robux_spent if ticket.robux_spent != -1 else "N/A"
+                hours_played = (
+                    ticket.hours_played if ticket.hours_played != -1 else "N/A"
+                )
+
+                ticket_embed.add_field(name="", value="", inline=False)
+                ticket_embed.add_field(
+                    name="Roblox Username", value=roblox_username, inline=True
+                )
+                ticket_embed.add_field(name="Roblox ID", value=roblox_id, inline=True)
+                ticket_embed.add_field(name="", value="", inline=False)
+                ticket_embed.add_field(
+                    name="Robux Spent", value=robux_spent, inline=True
+                )
+                ticket_embed.add_field(
+                    name="Hours Ingame", value=hours_played, inline=True
+                )
+
+            # Member-nonspecific info
             ticket_embed.add_field(name="", value="", inline=False)
             ticket_embed.add_field(
-                name="Join Date",
-                value=f"<t:{int(member.joined_at.timestamp())}:R>",
+                name="Time Taken on Form",
+                value=f"`{ticket.time_taken}` seconds",
                 inline=True,
             )
-            ticket_embed.add_field(
-                name="Account Age",
-                value=f"<t:{int(user.created_at.timestamp())}:R>",
-                inline=True,
+            ticket_embed.add_field(name="Prior Tickets", value=count, inline=True)
+
+            submission_embed = await self.create_submission_embed(
+                None, user, ticket.data, ticket.type_name
             )
-            roblox_username = (
-                ticket.roblox_username if ticket.roblox_username else "N/A"
-            )
-            roblox_id = ticket.roblox_id if ticket.roblox_id != -1 else "N/A"
-            robux_spent = ticket.robux_spent if ticket.robux_spent != -1 else "N/A"
-            hours_played = ticket.hours_played if ticket.hours_played != -1 else "N/A"
 
-            ticket_embed.add_field(name="", value="", inline=False)
-            ticket_embed.add_field(
-                name="Roblox Username", value=roblox_username, inline=True
-            )
-            ticket_embed.add_field(name="Roblox ID", value=roblox_id, inline=True)
-            ticket_embed.add_field(name="", value="", inline=False)
-            ticket_embed.add_field(name="Robux Spent", value=robux_spent, inline=True)
-            ticket_embed.add_field(name="Hours Ingame", value=hours_played, inline=True)
+            pings = None
+            if ticket.ping_roles:
+                pings = " ".join([f"<@&{role}>" for role in ticket.ping_roles])
 
-        # Member-nonspecific info
-        ticket_embed.add_field(name="", value="", inline=False)
-        ticket_embed.add_field(
-            name="Time Taken on Form",
-            value=f"`{ticket.time_taken}` seconds",
-            inline=True,
-        )
-        ticket_embed.add_field(name="Prior Tickets", value=count, inline=True)
-
-        submission_embed = await self.create_submission_embed(
-            None, user, ticket.data, ticket.type_name
-        )
-
-        pings = None
-        if ticket.ping_roles:
-            pings = " ".join([f"<@&{role}>" for role in ticket.ping_roles])
-
-        await channel.send(pings, embeds=[ticket_embed, submission_embed])
-        await thread.send(embeds=[ticket_embed, submission_embed])
+            await channel.send(pings, embeds=[ticket_embed, submission_embed])
+            await thread.send(embeds=[ticket_embed, submission_embed])
+        except Exception as e:
+            logger.exception("handle_server_embeds sent an exception:", e)
 
     async def handle_dm_embeds(self, guild, dm_channel, user, values, type_name):
+        try:
+            config = await self.bot.data_manager.get_or_load_config(guild.id)
 
-        config = await self.bot.data_manager.get_or_load_config(guild.id)
-
-        dm_embed = discord.Embed(
-            title=f'New "{type_name}" Ticket',
-            description=f"You have opened a new ticket with {guild.name}\n\n"
-            f"Send a message in this DM to speak to "
-            f"the server's staff team. Run `/create_ticket` "
-            f"to open a ticket with a different server. You may "
-            f"only have one ticket open per server at a time.",
-            color=discord.Color.blue(),
-        )
-        dm_embed.timestamp = datetime.now(timezone.utc)
-
-        if guild.icon:
-            dm_embed.set_footer(text=guild.name, icon_url=guild.icon.url)
-        else:
-            dm_embed.set_footer(text=guild.name)
-
-        greeting_embed = None
-        if config is not None:
-            greeting_text = config["greeting"]
-            if len(greeting_text) == 0:
-                greeting_text = (
-                    "Hi {mention}, thanks for reaching out! We'll get back to you "
-                    "as soon as we can.\n\nIn the meantime, please refer to the "
-                    "informational channels in our server regarding MailBee and its "
-                    "rules."
-                )
-            try:
-                greeting = greeting_text.format(
-                    mention=f"<@{user.id}>", name=user.name, id=user.id
-                )
-            except KeyError:
-                return
-
-            greeting_embed = discord.Embed(
-                title="Greeting Message",
-                description=greeting,
+            dm_embed = discord.Embed(
+                title=f'New "{type_name}" Ticket',
+                description=f"You have opened a new ticket with {guild.name}\n\n"
+                f"Send a message in this DM to speak to "
+                f"the server's staff team. Run `/create_ticket` "
+                f"to open a ticket with a different server. You may "
+                f"only have one ticket open per server at a time.",
                 color=discord.Color.blue(),
             )
-            greeting_embed.timestamp = datetime.now(timezone.utc)
+            dm_embed.timestamp = datetime.now(timezone.utc)
 
             if guild.icon:
-                greeting_embed.set_footer(text=guild.name, icon_url=guild.icon.url)
+                dm_embed.set_footer(text=guild.name, icon_url=guild.icon.url)
             else:
-                greeting_embed.set_footer(text=guild.name)
+                dm_embed.set_footer(text=guild.name)
 
-        submission_embed = await self.create_submission_embed(
-            guild, None, values, type_name
-        )
+            greeting_embed = None
+            if config is not None:
+                greeting_text = config["greeting"]
+                if len(greeting_text) == 0:
+                    greeting_text = (
+                        "Hi {mention}, thanks for reaching out! We'll get back to you "
+                        "as soon as we can.\n\nIn the meantime, please refer to the "
+                        "informational channels in our server regarding MailBee and its "
+                        "rules."
+                    )
+                try:
+                    greeting = greeting_text.format(
+                        mention=f"<@{user.id}>", name=user.name, id=user.id
+                    )
+                except KeyError:
+                    return
 
-        info_embed = discord.Embed(
-            description="**Tip**: Any messages sent in this DM will go to the staff team. "
-            "If you have additional images / files to add to your ticket, **send "
-            "them now.**"
-        )
-        info_embed.set_footer(
-            text="This is an automated message. Further messages you may receive are from staff."
-        )
+                greeting_embed = discord.Embed(
+                    title="Greeting Message",
+                    description=greeting,
+                    color=discord.Color.blue(),
+                )
+                greeting_embed.timestamp = datetime.now(timezone.utc)
 
-        if greeting_embed:
-            await dm_channel.send(
-                embeds=[dm_embed, greeting_embed, submission_embed, info_embed]
+                if guild.icon:
+                    greeting_embed.set_footer(text=guild.name, icon_url=guild.icon.url)
+                else:
+                    greeting_embed.set_footer(text=guild.name)
+
+            submission_embed = await self.create_submission_embed(
+                guild, None, values, type_name
             )
-        else:
-            await dm_channel.send(embeds=[dm_embed, submission_embed, info_embed])
+
+            info_embed = discord.Embed(
+                description="**Tip**: Any messages sent in this DM will go to the staff team. "
+                "If you have additional images / files to add to your ticket, **send "
+                "them now.**"
+            )
+            info_embed.set_footer(
+                text="This is an automated message. Further messages you may receive are from staff."
+            )
+
+            if greeting_embed:
+                await dm_channel.send(
+                    embeds=[dm_embed, greeting_embed, submission_embed, info_embed]
+                )
+            else:
+                await dm_channel.send(embeds=[dm_embed, submission_embed, info_embed])
+        except Exception as e:
+            logger.exception("handle_dm_embeds sent an exception:", e)
 
     async def create_submission_embed(self, guild, member, values, type_name):
-        submission_embed = discord.Embed(
-            title=f'"{type_name}" Form Submission', color=discord.Color.green()
-        )
-        submission_embed.timestamp = datetime.now(timezone.utc)
-
-        for label, answer in values.items():
-            submission_embed.add_field(
-                name=label, value=answer if answer.strip() else "N/A", inline=False
+        try:
+            submission_embed = discord.Embed(
+                title=f'"{type_name}" Form Submission', color=discord.Color.green()
             )
+            submission_embed.timestamp = datetime.now(timezone.utc)
 
-        if guild is None:
-            submission_embed.set_footer(
-                text=f"{member.name} | {member.id}",
-                icon_url=(member.avatar and member.avatar.url)
-                or member.display_avatar.url,
-            )
-        else:
-            if guild.icon:
-                submission_embed.set_footer(text=guild.name, icon_url=guild.icon.url)
+            for label, answer in values.items():
+                submission_embed.add_field(
+                    name=label, value=answer if answer.strip() else "N/A", inline=False
+                )
+
+            if guild is None:
+                submission_embed.set_footer(
+                    text=f"{member.name} | {member.id}",
+                    icon_url=(member.avatar and member.avatar.url)
+                    or member.display_avatar.url,
+                )
             else:
-                submission_embed.set_footer(text=guild.name)
+                if guild.icon:
+                    submission_embed.set_footer(
+                        text=guild.name, icon_url=guild.icon.url
+                    )
+                else:
+                    submission_embed.set_footer(text=guild.name)
 
-        return submission_embed
+            return submission_embed
+        except Exception as e:
+            logger.exception("create_submission_embed sent an exception:", e)
+            return None
 
     async def priority(guild, user_id):
-        priority_values = [-1, -1]
-        game_type = SERVER_TO_GAME.get(guild.id, None)
-
-        if game_type is not None:
-            priority_values = await get_roblox_data(game_type, guild.id, user_id)
-
-        if not priority_values:
+        try:
             priority_values = [-1, -1]
+            game_type = SERVER_TO_GAME.get(guild.id, None)
+
+            if game_type is not None:
+                priority_values = await get_roblox_data(game_type, guild.id, user_id)
+
+            if not priority_values:
+                priority_values = [-1, -1]
+
+            return priority_values
+        except Exception as e:
+            logger.exception(f"priority check exception: {e}")
+            return [-1, -1]
