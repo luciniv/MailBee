@@ -19,7 +19,7 @@ SERVER_TO_GAME = {
 }
 
 MAX_FILE_SIZE = 20 * 1024 * 1024
-ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4", ".mov"}
+ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4"}
 
 
 class Util(commands.Cog):
