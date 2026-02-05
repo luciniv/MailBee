@@ -89,7 +89,7 @@ async def on_command_error(ctx, error: commands.CommandError):
             errorMsg = "❌ Command error: You are missing arguments"
 
         elif isinstance(error, commands.UserNotFound):
-            errorMsg = "❌ Command error: Unable to find user"
+            errorMsg = "❌ Command error: Unable to find user, try their ID instead"
 
         elif isinstance(error, commands.CommandNotFound):
             return
