@@ -179,5 +179,8 @@ class Profiles(commands.Cog):
             logger.exception(f"/profile add sent an error: {e}")
 
 
+    
+
+
 async def setup(bot):
     await bot.add_cog(Profiles(bot))

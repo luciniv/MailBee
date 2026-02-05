@@ -21,7 +21,7 @@ class Moderation(commands.Cog):
     @commands.command(name="ticket_history", aliases=["tickets", "history", "th"])
     @checks.is_user()
     @checks.is_guild()
-    async def ticket_history(self, ctx, user: discord.Member):
+    async def ticket_history(self, ctx, user: discord.User):
         try:
             pages = []
 
