@@ -132,7 +132,7 @@ class Util(commands.Cog):
         await channel.send(embed=postEmbed)
 
     @commands.command()
-    @checks.is_owner()
+    @checks.is_admin()
     async def say_reply(
         self, ctx, channel: discord.TextChannel, message_id: str, *, message: str
     ):
@@ -148,7 +148,7 @@ class Util(commands.Cog):
         await found_message.reply(message, mention_author=True)
 
     @commands.command()
-    @checks.is_owner()
+    @checks.is_admin()
     async def say_reply_np(
         self, ctx, channel: discord.TextChannel, message_id: str, *, message: str
     ):
@@ -164,7 +164,7 @@ class Util(commands.Cog):
         await found_message.reply(message, mention_author=False)
 
     @commands.command()
-    @checks.is_owner()
+    @checks.is_admin()
     async def say(self, ctx, channel: discord.TextChannel, *, message: str):
         await ctx.message.delete()
         await channel.send(message)
