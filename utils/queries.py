@@ -791,7 +791,7 @@ async def week_CSV_v2(self, guild_id: int, week_iso: int):
         AND hours != '-1' 
         AND YEARWEEK(dateOpen, 3) = {week_iso})""",
         f"""
-        (SELECT HOUR(dateOpen) ROM tickets_v2 
+        (SELECT HOUR(dateOpen) FROM tickets_v2 
         WHERE guildID = {guild_id} 
         AND YEARWEEK(dateOpen, 3) = {week_iso} 
         GROUP BY HOUR(dateOpen) 
