@@ -417,11 +417,20 @@ class DataManager:
     async def add_config_to_db(
         self, guild_id, log_id, inbox_id, responses_id, feedback_id, report_id
     ):
+        accepting = "This server is not currently accepting tickets."
         query = """
-            INSERT INTO config (guildID, logID, inboxID, responsesID, feedbackID, reportID) 
-            VALUES (%s, %s, %s, %s, %s, %s);
+            INSERT INTO config (guildID, logID, inboxID, responsesID, feedbackID, reportID, accepting) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s);
             """
-        params = (guild_id, log_id, inbox_id, responses_id, feedback_id, report_id)
+        params = (
+            guild_id,
+            log_id,
+            inbox_id,
+            responses_id,
+            feedback_id,
+            report_id,
+            accepting,
+        )
         await self.execute_query(query, False, False, params)
 
     # Load server config from the database
@@ -829,7 +838,7 @@ class DataManager:
         query = f"""
             SELECT * FROM ticket_types
             WHERE guildID = {guild_id}
-            ORDER BY typeID ASC;
+            ORDER BY orderID ASC;
             """
         types = await self.execute_query(query)
         return types
@@ -990,6 +999,11 @@ class DataManager:
             WHERE typeID = %s;
             """
         await self.execute_query(query, False, False, (json.dumps(roles), type_id))
+
+    async def update_type_order(self, guild_id, updates):
+        # updates = [(order, typeID)]
+        # just make a long query that runs however many updates it needs to
+        pass
 
     """
     -------------------------------------------------------------------------
@@ -1435,6 +1449,7 @@ class DataManager:
         for entry in types:
             (
                 type_id,
+                _,
                 _,
                 category_id,
                 type_name,

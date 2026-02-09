@@ -123,9 +123,8 @@ class Config(commands.Cog):
                     current_index = self.target.index(type)
                     break
 
-            await self._update_type_order(
-                self.target, current_index, position - 1
-            )  # move to under config class
+            # this will figure out what types need their orders updated
+            await self._update_type_order(self.target, current_index, position - 1)
             await interaction.followup.send(
                 embed=Embeds.success(
                     description=f"✅ Moved type to position {position}."
@@ -220,6 +219,7 @@ class Config(commands.Cog):
             return "subtype"
 
     async def _update_type_order(self, types, old_index, new_index):
+        # actually idk wtf this is doing honestly, come back to this
         moving_type = self.target.pop(old_index)
         self.target.insert(new_index, moving_type)
 
@@ -764,7 +764,7 @@ class Config(commands.Cog):
         self,
         interaction: discord.Interaction,
         name: Range[str, 1, 45],
-        description: Range[str, 1, 200],
+        description: Range[str, 1, 100],
         emoji: str,
         category: discord.CategoryChannel = None,
         parent: str = None,
@@ -974,7 +974,7 @@ class Config(commands.Cog):
     #     interaction: discord.Interaction,
     #     type: str,
     #     name: Range[str, 1, 45] = None,
-    #     description: Range[str, 1, 200] = None,
+    #     description: Range[str, 1, 100] = None,
     #     emoji: str = None,
     #     category: discord.CategoryChannel = None,
     #     parent: str = None,
@@ -994,6 +994,13 @@ class Config(commands.Cog):
     #         new_name = name if name else type_data["type_name"]
     #         new_description = description if description else type_data["type_descrip"]
     #         new_emoji = emoji if emoji else type_data["type_emoji"]
+    #         if not self._check_emoji(emoji):
+    #             await interaction.followup.send(
+    #                 embed=Embeds.error(
+    #                     description="❌ Invalid emoji. Please provide a valid Unicode emoji (Discord default emojis)."
+    #                 )
+    #             )
+    #             return
     #         new_category_id = category.id if category else type_data["category_id"]
     #         new_nsfw_id = nsfw.id if nsfw else type_data["nsfw_category_id"]
     #         new_redirect_text = redirect if redirect else type_data["redirectText"]
@@ -1001,7 +1008,7 @@ class Config(commands.Cog):
     #         # Special handling for parent
     #         new_parent_category_id = type_data["sub_type"]
     #         if parent:
-    #             parent_name, parent_id, parent_category_id = parent.split(",")
+    #             parent_name, parent_id, new_parent_category_id = parent.split(",")
 
     #         # Special handling for ping roles
     #         new_ping_roles = type_data["ping_roles"]
@@ -1066,17 +1073,17 @@ class Config(commands.Cog):
     #             pass
     #             # this is a normal type, its not a parent and it has no subtypes
     #             # you can do literally whatever to this
-
+    #         return
     #         await self.bot.data_manager.update_type_in_db(
     #             type_id,
     #             new_category_id,
-    #             name,
-    #             description,
-    #             emoji,
-    #             parent_category_id,
-    #             redirect,
+    #             new_name,
+    #             new_description,
+    #             new_emoji,
+    #             new_parent_category_id,
+    #             new_redirect,
     #             new_nsfw_id,
-    #             ping_roles,
+    #             new_ping_roles,
     #         )
     #         await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
     #         await interaction.followup.send(

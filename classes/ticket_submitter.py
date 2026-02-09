@@ -209,19 +209,26 @@ class ServerSelect(discord.ui.Select):
             )
             return
 
-        # Check if guild is accepting tickets
+        # Check if guild is set up / accepting tickets
         config = await self.bot.data_manager.get_or_load_config(guild_id)
-        if config is None or config["accepting"] != "true":
+        if not config:
             await self.error_out(
                 interaction,
                 "Ticket Creation is Disabled",
-                (
-                    config["accepting"]
-                    if config
-                    else "This server has not set up ticket creation yet."
-                ),
+                ("This server has not set up ticket creation yet."),
             )
             return
+        else:
+            accepting = config["accepting"]
+            if accepting != "true":
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        title="Ticket Creation is Disabled",
+                        description=accepting,
+                    ),
+                    ephemeral=True,
+                )
+                return
 
         # Load available ticket types
         types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
@@ -299,7 +306,7 @@ class DMCategoryButtonView(discord.ui.View):
                     await interaction.followup.send(
                         embed=Embeds.error(
                             description="❌ You're clicking a bit too quickly — "
-                            f"please wait {retry_after:.1f} seconds."
+                            f"please wait `{retry_after:.1f}` seconds."
                         ),
                         ephemeral=True,
                     )
@@ -347,11 +354,12 @@ class DMCategoryButtonView(discord.ui.View):
                 return
 
             config = await self.bot.data_manager.get_or_load_config(guild_id)
-            if config["accepting"] != "true":
+            accepting = config["accepting"]
+            if accepting != "true":
                 await interaction.followup.send(
                     embed=Embeds.error(
                         title="Ticket Creation is Disabled",
-                        description=config["accepting"],
+                        description=accepting,
                     ),
                     ephemeral=True,
                 )
@@ -444,6 +452,17 @@ class CategorySelect(discord.ui.Select):
             options=options,
         )
 
+    async def message_out(self, interaction: discord.Interaction, embed: discord.Embed):
+        await interaction.channel.send(embed=embed)
+
+        try:
+            await interaction.message.delete()
+        except discord.HTTPException:
+            pass
+
+        if self.view:
+            self.view.stop()
+
     async def callback(self, interaction: discord.Interaction):
         value = self.values[0].split()
         selected_type_id = int(value[0])
@@ -452,163 +471,120 @@ class CategorySelect(discord.ui.Select):
         dm_channel_id = self.dm_channel_id
         guild_id = self.guild_id
         guild = self.bot.get_guild(guild_id)
-        subtypes = []
 
+        type = next(
+            (entry for entry in self.types if entry["type_id"] == selected_type_id),
+            None,
+        )
+        if not type:
+            print("type_id wasnt an int for some reason")
+            return
+        name = type["type_name"]
+        emoji = type["type_emoji"]
+
+        # FIXME rework this system based on database updates to ticket types
+        # Check if the subtype embed needs sent
         if self.parent_category_id is None:
-            # Check for subtypes
-            subtypes = [
-                entry
-                for entry in self.types
-                if int(entry.get("sub_type")) == selected_category_id
-            ]
-        else:
-            selected_category_id = self.parent_category_id
+            for entry in self.types:
+                if entry["sub_type"] == selected_category_id:
+                    await interaction.response.defer(thinking=False)
+                    subtype_embed = Embeds.success(
+                        title="Select a Ticket Sub-Type",
+                        description=f"You selected ticket type **{emoji} {name}**.\n\nPlease choose "
+                        "the ticket sub-type that best fits your situation below.",
+                    )
+                    if guild.icon:
+                        subtype_embed.set_author(
+                            name=guild.name, icon_url=guild.icon.url
+                        )
+                        subtype_embed.set_thumbnail(url=guild.icon.url)
+                    else:
+                        subtype_embed.set_author(name=guild.name)
 
+                    # Show subtypes select
+                    newView = CategorySelectView(
+                        self.bot,
+                        self.guild_id,
+                        self.dm_channel_id,
+                        self.types,
+                        parent_category_id=selected_category_id,
+                    )
+                    await newView.setup()
+                    await interaction.edit_original_response(
+                        embed=subtype_embed, view=newView
+                    )
+                    newView.message = await interaction.original_response()
+                    return
+        else:
+            selected_category_id = (
+                type["category_id"]
+                if type["category_id"] != -1
+                else self.parent_category_id
+            )
+
+        # Now handle ticket responses (redirect, form)
+        # Handle redirect type
+        if selected_category_id == 0:
+            redirect_embed = Embeds.info(
+                title="Auto-Response [Ticket NOT Created]",
+                description=type["redirectText"],
+            )
+            redirect_embed.timestamp = datetime.now(timezone.utc)
+            if guild.icon:
+                redirect_embed.set_footer(text=guild.name, icon_url=guild.icon.url)
+            else:
+                redirect_embed.set_footer(text=guild.name)
+
+            await self.message_out(interaction, redirect_embed)
+            return
+
+        # Get the category
         category = await self.bot.cache.get_channel(selected_category_id, timeout=2)
         if not category:
             error_embed = Embeds.error(
                 description="❌ Couldn't find ticket category in the destination "
                 "server. Please contact a server admin if this error persists.",
             )
-            try:
-                await interaction.message.delete()
-            except discord.HTTPException:
-                pass
-            if self.view:
-                self.view.stop()
-            await interaction.channel.send(embed=error_embed)
+            await self.message_out(interaction, error_embed)
             return
 
-        # Only calls for parent types WITH subtypes
-        if len(subtypes) > 0:
-            await interaction.response.defer(thinking=False)
-            subtype_embed = Embeds.success(
-                title="Select a Ticket Sub-Type",
-                description=f"You selected ticket type **{category.name}**.\n\nPlease choose "
-                "the ticket sub-type that best fits your situation below.",
+        # Handle max channels in the category
+        if len(category.channels) >= 50:
+            # TODO check if queue is enabled --> queue here
+            error_embed = Embeds.error(
+                description="Thank you for reaching out to the moderation team!\n\n"
+                f"Unfortunately, tickets of type **{emoji} {name}** have "
+                "reached maximum capacity. Please try again later for an "
+                "opening, we thank you in advance for your patience."
+            )
+            await self.message_out(interaction, error_embed)
+            return
+
+        source_view = self.view
+        modal_template = type["form"]
+        ping_roles = type["ping_roles"]
+        if (not ping_roles) and (self.parent_category_id is not None):
+            ping_roles = next(
+                (
+                    entry["ping_roles"]
+                    for entry in self.types
+                    if entry["category_id"] == self.parent_category_id
+                ),
+                None,
             )
 
-            if guild.icon:
-                subtype_embed.set_author(name=guild.name, icon_url=guild.icon.url)
-                subtype_embed.set_thumbnail(url=guild.icon.url)
-            else:
-                subtype_embed.set_author(name=guild.name)
-
-            # Show subtypes select
-            newView = CategorySelectView(
-                self.bot,
-                self.guild_id,
-                self.dm_channel_id,
-                self.types,
-                parent_category_id=selected_category_id,
-            )
-            await newView.setup()
-            await interaction.edit_original_response(embed=subtype_embed, view=newView)
-            newView.message = await interaction.original_response()
-            return
-
-        # No subtypes selected, proceed past selection
-        else:
-            error_embed = None
-            # Handle redirect type
-            if selected_category_id == 0:
-                redirect_text = next(
-                    (
-                        entry["redirect_text"]
-                        for entry in self.types
-                        if int(entry["type_id"]) == selected_type_id
-                    ),
-                    None,
-                )
-
-                redirect_embed = Embeds.info(
-                    title="Auto-Response [Ticket NOT Created]",
-                    description=redirect_text,
-                )
-                redirect_embed.timestamp = datetime.now(timezone.utc)
-                if guild.icon:
-                    redirect_embed.set_footer(text=guild.name, icon_url=guild.icon.url)
-                else:
-                    redirect_embed.set_footer(text=guild.name)
-
-                try:
-                    await interaction.message.delete()
-                except discord.HTTPException:
-                    pass
-                if self.view:
-                    self.view.stop()
-                await interaction.channel.send(embed=redirect_embed)
-                return
-
-            # Handle max channels in target category
-            elif len(category.channels) >= 50:
-                # TODO check if queue is enabled --> queue here
-
-                error_embed = Embeds.error(
-                    description="Thank you for reaching out to the moderation team!\n\n"
-                    f"Unfortunately, tickets of type **{category.name}** have "
-                    "reached maximum capacity. Please try again later for an "
-                    "opening, we thank you in advance for your patience."
-                )
-            else:
-                # Determine if modal is valid or not
-                modal_template = next(
-                    (
-                        entry["form"]
-                        for entry in self.types
-                        if int(entry["type_id"]) == selected_type_id
-                    ),
-                    None,
-                )
-                if modal_template:
-                    source_view = self.view
-
-                    ping_roles = next(
-                        (
-                            entry["ping_roles"]
-                            for entry in self.types
-                            if int(entry["type_id"]) == selected_type_id
-                        ),
-                        None,
-                    )
-                    if (not ping_roles) and (self.parent_category_id is not None):
-                        ping_roles = next(
-                            (
-                                entry["ping_roles"]
-                                for entry in self.types
-                                if int(entry["category_id"]) == self.parent_category_id
-                            ),
-                            None,
-                        )
-
-                    await send_dynamic_modal(
-                        self.bot,
-                        interaction,
-                        self.guild_id,
-                        category,
-                        selected_type_id,
-                        selected_nsfw_id,
-                        dm_channel_id,
-                        ping_roles,
-                        modal_template,
-                        source_view,
-                    )
-                    return
-                # Handle invalid modal template
-                else:
-                    error_embed = Embeds.error(
-                        description="❌ The server you are trying to contact has improperly set "
-                        "up this ticket type option. Please contact a server admin."
-                    )
-
-            try:
-                await interaction.message.delete()
-            except discord.HTTPException:
-                pass
-            if self.view:
-                self.view.stop()
-            await interaction.channel.send(embed=error_embed)
-            return
+        await send_dynamic_modal(
+            self.bot,
+            interaction,
+            self.guild_id,
+            category,
+            selected_type_id,
+            selected_nsfw_id,
+            dm_channel_id,
+            ping_roles,
+            modal_template,
+            source_view,
+        )
 
     @classmethod
     async def create(cls, bot, guild_id, dm_channel_id, types, parent_category_id=None):

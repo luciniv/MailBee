@@ -461,130 +461,13 @@ class Stats(commands.Cog):
     @app_commands.describe(year="Select the year")
     @app_commands.choices(
         year=[
-            app_commands.Choice(name="2024", value="2024"),
-            app_commands.Choice(name="2025", value="2025"),
-        ]
-    )
-    @app_commands.describe(week="Enter a week number (ISO 8601)")
-    async def export_week(self, ctx, year: discord.app_commands.Choice[str], week: int):
-        try:
-            # Allows command to take longer than 3 seconds
-            await ctx.defer()
-            await self.bot.data_manager.flush_messages()
-
-            weekISO = ""
-            guild_ids = []
-            file = None
-
-            if week < 1 or week > 53:
-                errorEmbed = discord.Embed(
-                    title=f"",
-                    description="❌ Week number must be in the range 1-53",
-                    color=0xFF0000,
-                )
-
-                await ctx.send(embed=errorEmbed, ephemeral=True)
-                return
-
-            if week < 10:
-                weekISO = f"{year.value}0{week}"
-            else:
-                weekISO = f"{year.value}{week}"
-
-            for guild in self.bot.guilds:
-                if guild.id != 12345:
-                    guild_ids.append(guild.id)
-
-            statsEmbed = discord.Embed(
-                title=f"Weekly Statistics Export",
-                description=f"Download the attached CSV file to view data",
-                color=discord.Color.green(),
-            )
-            statsEmbed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url)
-
-            type_numbers = [int(num) for num, name in self.bot.data_manager.types]
-            result_list = []
-
-            query_list = queries.week_CSV(guild_ids, weekISO, type_numbers)
-
-            for query in query_list:
-                result = await self.bot.data_manager.execute_query(query)
-                if result is not None:
-                    result_list.append(result[0])
-
-            header = [
-                "Server ID",
-                "Server Name",
-                "Total Tickets Open",
-                "Total Tickets Closed",
-                "Num Tickets Opened This Week",
-                "Num Tickets Still Open From This Week",
-                "Num Tickets Closed From This Week",
-                "Total Tickets Closed This Week",
-                "Day Most Tickets Opened",
-                "Day Most Tickets Closed",
-                "Average Ticket Duration",
-                "Average First Response Time",
-                "Average Messages Per Ticket Resolved",
-                "Value: Average Ticket Robux",
-                "Value: Average Ticket Hours",
-                "Activity: Daily Time Most Tickets Opened",
-                "Activity: Daily Time Most Tickets Closed",
-                "Activity: Daily Time Most Mod Activity",
-                "Activity: Daily Time Least Mod Activity",
-                "Mod: Closed The Most Tickets",
-                "Mod: Sent The Most Replies",
-                "Mod: Sent The Most Discussions",
-                "Mod: Num Mods Answering Tickets",
-            ]
-
-            type_names = [name for num, name in self.bot.data_manager.types]
-            type_header = [
-                metric.format(name)
-                for name in type_names
-                for metric in [
-                    "Type: {} - Num Tickets Opened This Week",
-                    "Type: {} - Average Ticket Duration",
-                    "Type: {} - Average First Response Time",
-                ]
-            ]
-
-            # Link static headings to dynamic type headings
-            header.extend(type_header)
-
-            # Create CSV file from data
-            if len(result_list) != 0:
-                write_list = []
-
-                for guild_id, result in zip(guild_ids, result_list):
-                    guild = self.bot.get_guild(guild_id)
-                    data = [guild_id, guild.name]
-                    write_list.append((*data, *result))
-
-                file = csv_write.make_file(header, write_list)
-
-            else:
-                statsEmbed.add_field(name="No data found", value="", inline=False)
-            await ctx.send(embed=statsEmbed, file=file)
-
-        except Exception as e:
-            raise BotError(f"/export_week sent an error: {e}")
-
-    @commands.hybrid_command(
-        name="export_week_v2", description="Output a CSV file of one week's data"
-    )
-    @checks.is_admin()
-    @checks.is_guild()
-    @app_commands.describe(year="Select the year")
-    @app_commands.choices(
-        year=[
             app_commands.Choice(name="2025", value="2025"),
             app_commands.Choice(name="2026", value="2026"),
         ]
     )
     @app_commands.describe(week="Enter a week number (ISO 8601)")
     @app_commands.describe(guild_id="The ID of the guild to export data for")
-    async def export_week_v2(
+    async def export_week(
         self, ctx, year: discord.app_commands.Choice[str], week: int, guild_id: str
     ):
         try:
@@ -624,6 +507,7 @@ class Stats(commands.Cog):
 
             # Generate and execute query
             query, headers = await queries.week_CSV_v2(self, guild_id, int(weekISO))
+            print(query)
             result = await self.bot.data_manager.execute_query(query)
 
             file = None
@@ -638,7 +522,7 @@ class Stats(commands.Cog):
 
         except Exception as e:
             logger.exception(e)
-            raise BotError(f"/export_week_v2 sent an error: {e}")
+            raise BotError(f"/export_week sent an error: {e}")
 
     @commands.hybrid_command(
         name="export_server_stats",
