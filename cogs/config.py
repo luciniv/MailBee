@@ -1448,7 +1448,7 @@ class Config(commands.Cog):
             # analytics = config["analytics"]
 
             def convert_state(state):
-                if state.casefold() == "true":
+                if state and state.casefold() == "true":
                     return "Enabled"
                 else:
                     return "Disabled"
