@@ -811,11 +811,13 @@ class Config(commands.Cog):
                         embed=Embeds.error(description=error)
                     )
                     return
+            else:
+                ping_roles = []
 
             if redirect:
                 category_id = 0
                 nsfw = None
-                ping_roles = None
+                ping_roles = []
 
             else:
                 if not category_id:
