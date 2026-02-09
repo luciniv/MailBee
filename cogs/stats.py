@@ -576,7 +576,12 @@ class Stats(commands.Cog):
     @checks.is_admin()
     @checks.is_guild()
     @app_commands.describe(year="Select the year")
-    @app_commands.choices(year=[app_commands.Choice(name="2025", value="2025")])
+    @app_commands.choices(
+        year=[
+            app_commands.Choice(name="2025", value="2025"),
+            app_commands.Choice(name="2026", value="2026"),
+        ]
+    )
     @app_commands.describe(week="Enter a week number (ISO 8601)")
     @app_commands.describe(guild_id="The ID of the guild to export data for")
     async def export_week_v2(
