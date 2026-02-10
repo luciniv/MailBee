@@ -891,6 +891,7 @@ class DataManager:
     async def add_type_to_db(
         self,
         guild_id,
+        order_id,
         category_id,
         type_name,
         type_descrip,
@@ -903,11 +904,12 @@ class DataManager:
         form_json = self.template_form(type_name)
 
         query = """
-            INSERT INTO ticket_types (guildID, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText, NSFWCategoryID, pingRoles) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            INSERT INTO ticket_types (guildID, orderID, categoryID, typeName, typeDescrip, typeEmoji, formJson, subType, redirectText, NSFWCategoryID, pingRoles) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """
         params = (
             guild_id,
+            order_id,
             category_id,
             type_name,
             type_descrip,
@@ -1407,6 +1409,7 @@ class DataManager:
     def format_guild_type_entry(
         self,
         type_id,
+        order_id,
         category_id,
         type_name,
         type_descrip,
@@ -1419,6 +1422,7 @@ class DataManager:
     ):
         return {
             "type_id": type_id,
+            "order_id": order_id,
             "category_id": category_id,
             "type_name": type_name,
             "type_descrip": type_descrip,
@@ -1449,7 +1453,7 @@ class DataManager:
             (
                 type_id,
                 _,
-                _,
+                order_id,
                 category_id,
                 type_name,
                 type_descrip,
@@ -1463,6 +1467,7 @@ class DataManager:
             form = json.loads(form_json)
             data = self.format_guild_type_entry(
                 type_id,
+                order_id,
                 category_id,
                 type_name,
                 type_descrip,

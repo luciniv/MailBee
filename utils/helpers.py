@@ -77,9 +77,6 @@ async def fetch_channel_message(channel: discord.TextChannel, message_id: int):
     if not message:
         return None, "❌ Message not found, try re-entering the ID"
 
-    if message.embeds:
-        return None, "❌ Embeds are not supported, please provide a text only message"
-
     return message, None
 
 

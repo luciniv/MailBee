@@ -1399,7 +1399,11 @@ class Tickets(commands.Cog):
 
         types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
         if not types:
-            await ctx.send("❌ This server doesn't have any ticket types configured")
+            await ctx.send(
+                embed=Embeds.error(
+                    description="❌ This server doesn't have any ticket types configured"
+                )
+            )
             return
 
         content = (

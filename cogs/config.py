@@ -75,23 +75,23 @@ class Config(commands.Cog):
         self.bot = bot
 
     class TypeOrderView(TimeoutSafeView):
-        def __init__(self, bot, guild_id, type_id, target):
+        def __init__(self, bot, guild_id, type_id, neighbors):
             super().__init__(timeout=300)
             self.bot = bot
             self.guild_id = guild_id
             self.type_id = type_id
-            self.target = target
-            self.add_item(self.OrderSelect(bot, guild_id, type_id, target))
+            self.neighbors = neighbors
+            self.add_item(self.OrderSelect(bot, guild_id, type_id, neighbors))
 
         async def on_timeout(self):
             for child in self.children:
                 child.disabled = True
 
     class OrderSelect(discord.ui.Select):
-        def __init__(self, bot, guild_id, type_id, target):
+        def __init__(self, bot, guild_id, type_id, neighbors):
             options = [
-                SelectOption(label=f"Position {i + 1}", value=str(i + 1))
-                for i in range(len(target))
+                SelectOption(label=f"Position {i + 1}", value=str(i))
+                for i in range(len(neighbors))
             ]
 
             super().__init__(
@@ -103,13 +103,18 @@ class Config(commands.Cog):
             self.bot = bot
             self.guild_id = guild_id
             self.type_id = type_id
-            self.target = target
+            self.neighbors = neighbors
 
         async def callback(self, interaction: discord.Interaction):
             await interaction.response.defer()
-            position = int(self.values[0])
+            new_index = int(self.values[0])
 
-            if self.target[position - 1]["data"]["type_id"] == self.type_id:
+            type_data = await self.bot.data_manager.get_ticket_type(self.guild_id, self.type_id)
+            emoji = type_data["type_emoji"]
+            name = type_data["type_name"]
+            current_index = type_data["order_id"]
+
+            if new_index == current_index:
                 await interaction.followup.send(
                     embed=Embeds.error(
                         description="❌ This type is already in the selected position."
@@ -123,11 +128,10 @@ class Config(commands.Cog):
                     current_index = self.target.index(type)
                     break
 
-            # this will figure out what types need their orders updated
-            await self._update_type_order(self.target, current_index, position - 1)
+            await self._reorder_types(current_index, new_index, self.neighbors, self.guild_id)
             await interaction.followup.send(
                 embed=Embeds.success(
-                    description=f"✅ Moved type to position {position}."
+                    description=f"✅ Moved type **{emoji} {name}** to position {new_index + 1}."
                 )
             )
 
@@ -218,16 +222,19 @@ class Config(commands.Cog):
         else:
             return "subtype"
 
-    async def _update_type_order(self, types, old_index, new_index):
-        # actually idk wtf this is doing honestly, come back to this
-        moving_type = self.target.pop(old_index)
-        self.target.insert(new_index, moving_type)
+    async def _reorder_types(current_index, new_index, neighbors, guild_id):
+        return
+        # if current_index < new_index:
+        #     for i in range(current_index + 1, new_index + 1):
+        #         neighbors[i]["data"]["order_id"] -= 1
+        #     neighbors[current_index]["data"]["order_id"] = new_index + 1
 
-        updates = [
-            (index + 1, type["data"]["type_id"])
-            for index, type in enumerate(self.target)
-        ]
-        await self.bot.data_manager.update_type_order(self.guild_id, updates)
+        # elif current_index > new_index:
+        #     for i in range(new_index, current_index):
+        #         neighbors[i]["data"]["order_id"] += 1
+        #     neighbors[current_index]["data"]["order_id"] = new_index - 1
+        
+        # await self.bot.data_manager.update_type_order(self.guild_id, updates)
 
     def _check_emoji(self, emoji_str):
         if emoji_str in emj.EMOJI_DATA:
@@ -631,7 +638,7 @@ class Config(commands.Cog):
                             break
 
                 embed = Embeds.success(
-                    title=f"Ticket Type: {safe_partial_emoji(type_data['type_emoji'])} {type_data['type_name']}",
+                    title=f"Ticket Type: {type_data['type_emoji']} {type_data['type_name']}",
                     description=type_data["type_descrip"],
                 )
                 if subtypes:
@@ -639,7 +646,7 @@ class Config(commands.Cog):
                     for sub_type in subtypes:
                         emoji = sub_type["data"]["type_emoji"]
                         name = sub_type["data"]["type_name"]
-                        sub_type_list += f"{safe_partial_emoji(emoji)} " f"{name}\n"
+                        sub_type_list += f"{emoji} " f"{name}\n"
                     embed.add_field(
                         name="Sub Types",
                         value=sub_type_list,
@@ -650,7 +657,7 @@ class Config(commands.Cog):
                     name = type_parent["type_name"]
                     embed.add_field(
                         name="Parent Type",
-                        value=f"{safe_partial_emoji(emoji)} {name}",
+                        value=f"{emoji} {name}",
                         inline=False,
                     )
 
@@ -705,7 +712,7 @@ class Config(commands.Cog):
                     name = parent["data"]["type_name"]
                     description = parent["data"]["type_descrip"]
                     embed = Embeds.success(
-                        title=f"Main Type: {safe_partial_emoji(emoji)} {name}",
+                        title=f"Main Type: {emoji} {name}",
                         description=f"{description}\n\n** **",
                     )
 
@@ -715,7 +722,7 @@ class Config(commands.Cog):
                             name = sub_type["data"]["type_name"]
                             description = sub_type["data"]["type_descrip"]
                             embed.add_field(
-                                name=f"Sub Type: {safe_partial_emoji(emoji)} {name}",
+                                name=f"Sub Type: {emoji} {name}",
                                 value=description,
                                 inline=False,
                             )
@@ -818,7 +825,6 @@ class Config(commands.Cog):
                 category_id = 0
                 nsfw = None
                 ping_roles = []
-
             else:
                 if not category_id:
                     if parent_category_id:
@@ -865,8 +871,18 @@ class Config(commands.Cog):
                             )
                             return
 
+            # order_id = None
+            # if parent:
+            #     for parent_type in sorted_types:
+            #         if parent_type["data"]["type_id"] == int(parent_id):
+            #             order_id = len(parent_type["sub_types"])
+            #             break
+            # else:
+            #     order_id = len(sorted_types)
+
             await self.bot.data_manager.add_type_to_db(
                 guild_id,
+                0,
                 category_id,
                 name,
                 description,
@@ -911,6 +927,8 @@ class Config(commands.Cog):
             await interaction.response.defer()
             guild_id = interaction.guild.id
             type_name, type_id, type_subtype_id = type.split(",")
+            type_data = await self.bot.data_manager.get_ticket_type(guild_id, type_id)
+            current_index = type_data["order_id"]
 
             is_parent = False
             sorted_types = await self._list_format_types(guild_id)
@@ -930,6 +948,7 @@ class Config(commands.Cog):
                 return
 
             await self.bot.data_manager.delete_type_from_db(type_id)
+            # await self._reorder_types(current_index, None, sorted_types, guild_id)
             await self.bot.data_manager.get_or_load_guild_types(guild_id, False)
 
             await interaction.followup.send(
@@ -1138,20 +1157,20 @@ class Config(commands.Cog):
     #         type_name, type_id, type_subtype_id = type.split(",")
 
     #         type_structure = await self._list_format_types(guild_id)
-    #         target = []
+    #         neighbors = []
     #         if int(type_subtype_id) == -1:
-    #             target = type_structure
+    #             neighbors = type_structure
     #         else:
     #             for parent in type_structure:
     #                 if parent["data"]["type_id"] == int(type_subtype_id):
-    #                     target = parent["sub_types"]
+    #                     neighbors = parent["sub_types"]
     #                     break
 
-    #         if len(target) == 1:
+    #         if len(neighbors) == 1:
     #             await interaction.followup.send(
     #                 embed=Embeds.error(
-    #                     description="❌ Cannot reorder this ticket type as it is the only "
-    #                     "type in its category."
+    #                     description="❌ Cannot reorder this ticket type as it has no "
+    #                     "neighboring types."
     #                 )
     #             )
     #             return
@@ -1161,17 +1180,19 @@ class Config(commands.Cog):
     #             description=f"**Reordering:** {type_name}\n\n**Current Order:**",
     #         )
     #         count = 0
-    #         for ticket_type in target:
+    #         for ticket_type in neighbors:
+    #             emoji = ticket_type["data"]["type_emoji"]
+    #             name = ticket_type["data"]["type_name"]
     #             count += 1
     #             embed.add_field(
-    #                 name=f"**{count}.** {safe_partial_emoji(ticket_type['data']['type_emoji'])} {ticket_type['data']['type_name']}",
+    #                 name=f"**{count}.** {emoji} {name}",
     #                 value=" ",
     #                 inline=False,
     #             )
 
     #         await interaction.followup.send(
     #             embed=embed,
-    #             view=self.TypeOrderView(self.bot, guild_id, type_id, target),
+    #             view=self.TypeOrderView(self.bot, guild_id, type_id, neighbors),
     #         )
 
     #     except Exception as e:
