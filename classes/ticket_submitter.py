@@ -369,6 +369,16 @@ class DMCategoryButtonView(discord.ui.View):
                 dm_channel = user.dm_channel or await user.create_dm()
 
                 types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
+                if not types:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ This server has not set up any ticket "
+                            "types yet.\n\nPlease contact a server admin if you believe "
+                            "this is a mistake.",
+                        ),
+                        ephemeral=True,
+                    )
+                    return
 
                 embed = Embeds.info(
                     title="Select Ticket Type",

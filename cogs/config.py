@@ -1631,12 +1631,12 @@ class Config(commands.Cog):
             config = await self.bot.data_manager.get_or_load_config(guild.id)
             success_embed = discord.Embed(description="", color=discord.Color.green())
             if config["anon"] == "true":
-                success_embed.description = "✅ Moderator anonyminity setting changed to: **default non-anonymous**"
+                success_embed.description = "✅ Moderator anonyminity setting changed to: **Default non-anonymous**"
                 await self.bot.data_manager.set_anon_status(guild.id, "false")
                 await ctx.send(embed=success_embed)
             else:
                 success_embed.description = (
-                    "✅ Moderator anonyminity setting changed to: **default anonymous**"
+                    "✅ Moderator anonyminity setting changed to: **Default anonymous**"
                 )
                 await self.bot.data_manager.set_anon_status(guild.id, "true")
                 await ctx.send(embed=success_embed)
@@ -1657,13 +1657,13 @@ class Config(commands.Cog):
             success_embed = discord.Embed(description="", color=discord.Color.green())
             if config["aps"] == "true":
                 success_embed.description = (
-                    f"✅ Anonymous profiles setting changed to: **off**"
+                    f"✅ Anonymous profiles setting changed to: **Disabled**"
                 )
                 await self.bot.data_manager.set_aps(guild.id, "false")
                 await ctx.send(embed=success_embed)
             else:
                 success_embed.description = (
-                    f"✅ Anonymous profiles setting changed to: **on**"
+                    f"✅ Anonymous profiles setting changed to: **Enabled**"
                 )
                 await self.bot.data_manager.set_aps(guild.id, "true")
                 await ctx.send(embed=success_embed)

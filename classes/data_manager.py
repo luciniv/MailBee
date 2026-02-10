@@ -775,6 +775,7 @@ class DataManager:
 
         ap = await self.load_ap_from_db(guild_id, userID)
         if not ap:
+            await self.set_with_expiry(redis_key, json.dumps(None))
             return None
 
         formatted = self.format_aps(*ap[0])
@@ -1049,7 +1050,7 @@ class DataManager:
             """
         await self.execute_query(query, False)
         await self.update_cache(0)
-        await self.get_or_load_permissions(guild_id, False)
+        await self.redis.hdel(f"permissions:{guild_id}", str(roleID))
 
     """
     -------------------------------------------------------------------------
@@ -1112,7 +1113,6 @@ class DataManager:
             ORDER BY notes.date ASC;
             """
         content = await self.execute_query(query)
-        print(content)
         return content
 
     async def get_user_note_history(self, guild_id: int, user_id: int):
@@ -1123,7 +1123,6 @@ class DataManager:
             ORDER BY notes.date ASC;
             """
         content = await self.execute_query(query)
-        print(content)
         return content
 
     async def check_note_exists(self, note_id: int, guild_id: int) -> bool:
@@ -1132,7 +1131,6 @@ class DataManager:
             notes.noteID = {note_id} AND notes.guildID = {guild_id};
             """
         content = await self.execute_query(query)
-        print(content)
         if content:
             return True
         return False
@@ -1221,7 +1219,6 @@ class DataManager:
             WHERE guildID = {guild_id};
             """
         result = await self.execute_query(query)
-        print(result)
         if result:
             return json.loads(result[0][0])
         return None
@@ -1311,6 +1308,7 @@ class DataManager:
 
         config = await self.load_config_from_db(guild_id)
         if not config:
+            await self.set_with_expiry(redis_key, json.dumps(None))
             return None
 
         formatted = self.format_config(*config[0])
@@ -1443,6 +1441,7 @@ class DataManager:
         types = await self.get_types_from_db(guild_id)
 
         if not types:
+            await self.set_with_expiry(redis_key, json.dumps([]))
             return []
 
         result = []
