@@ -109,7 +109,9 @@ class Config(commands.Cog):
             await interaction.response.defer()
             new_index = int(self.values[0])
 
-            type_data = await self.bot.data_manager.get_ticket_type(self.guild_id, self.type_id)
+            type_data = await self.bot.data_manager.get_ticket_type(
+                self.guild_id, self.type_id
+            )
             emoji = type_data["type_emoji"]
             name = type_data["type_name"]
             current_index = type_data["order_id"]
@@ -128,7 +130,9 @@ class Config(commands.Cog):
                     current_index = self.target.index(type)
                     break
 
-            await self._reorder_types(current_index, new_index, self.neighbors, self.guild_id)
+            await self._reorder_types(
+                current_index, new_index, self.neighbors, self.guild_id
+            )
             await interaction.followup.send(
                 embed=Embeds.success(
                     description=f"✅ Moved type **{emoji} {name}** to position {new_index + 1}."
@@ -222,19 +226,18 @@ class Config(commands.Cog):
         else:
             return "subtype"
 
-    async def _reorder_types(current_index, new_index, neighbors, guild_id):
-        return
-        # if current_index < new_index:
-        #     for i in range(current_index + 1, new_index + 1):
-        #         neighbors[i]["data"]["order_id"] -= 1
-        #     neighbors[current_index]["data"]["order_id"] = new_index + 1
+    # async def _reorder_types(current_index, new_index, neighbors, guild_id):
+    #     if current_index < new_index:
+    #         for i in range(current_index + 1, new_index + 1):
+    #             neighbors[i]["data"]["order_id"] -= 1
+    #         neighbors[current_index]["data"]["order_id"] = new_index + 1
 
-        # elif current_index > new_index:
-        #     for i in range(new_index, current_index):
-        #         neighbors[i]["data"]["order_id"] += 1
-        #     neighbors[current_index]["data"]["order_id"] = new_index - 1
-        
-        # await self.bot.data_manager.update_type_order(self.guild_id, updates)
+    #     elif current_index > new_index:
+    #         for i in range(new_index, current_index):
+    #             neighbors[i]["data"]["order_id"] += 1
+    #         neighbors[current_index]["data"]["order_id"] = new_index - 1
+
+    #     await self.bot.data_manager.update_type_order(self.guild_id, updates)
 
     def _check_emoji(self, emoji_str):
         if emoji_str in emj.EMOJI_DATA:
@@ -871,18 +874,18 @@ class Config(commands.Cog):
                             )
                             return
 
-            # order_id = None
-            # if parent:
-            #     for parent_type in sorted_types:
-            #         if parent_type["data"]["type_id"] == int(parent_id):
-            #             order_id = len(parent_type["sub_types"])
-            #             break
-            # else:
-            #     order_id = len(sorted_types)
+            order_id = None
+            if parent:
+                for parent_type in sorted_types:
+                    if parent_type["data"]["type_id"] == int(parent_id):
+                        order_id = len(parent_type["sub_types"])
+                        break
+            else:
+                order_id = len(sorted_types)
 
             await self.bot.data_manager.add_type_to_db(
                 guild_id,
-                0,
+                order_id,
                 category_id,
                 name,
                 description,

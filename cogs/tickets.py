@@ -893,9 +893,7 @@ class Tickets(commands.Cog):
     @checks.is_ticket()
     @checks.is_user()
     @checks.is_guild()
-    async def inactive(
-        self, ctx, hours: str = "24", *, reason: str = "Ticket closed due to inactivity"
-    ):
+    async def inactive(self, ctx, hours: str = "24", *, reason: str = None):
         try:
             author = ctx.author
             channel = ctx.channel
@@ -913,56 +911,57 @@ class Tickets(commands.Cog):
             if hours_match:
                 hours = int(hours_match.group(1))
             else:
-                await channel.send(embed=errorEmbed)
-                return
+                reason = f"{hours} {reason if reason else ''}"
+                hours = 24
+
+            if not reason:
+                reason = "Ticket closed due to inactivity"
 
             if (hours < 1) or (hours > 72):
                 errorEmbed.description = "❌ Hours must be between 1 to 72 (inclusive)"
                 await channel.send(embed=errorEmbed)
                 return
-            else:
-                text = await convert_mentions(self.bot, reason, guild)
-                if len(text) > 3000:
-                    errorEmbed.description = (
-                        "❌ Reason must be at most 3000 characters. Note that "
-                        "channel links add ~70 additional characters each."
-                    )
-                    await channel.send(embed=errorEmbed)
-                    return
-                end_time = now + (hours * 3600)
-                timer = self.bot.channel_status.get_timer(channel_id)
-                statusEmbed = discord.Embed(
-                    title="",
-                    description=f"Status set to **inactive** 🕓 for {hours} hour(s).\n"
-                    f"This ticket will **close** <t:{int(end_time)}:R> "
-                    "(allowing up to 1 minute of potential delay)\n\n"
-                    f"**Reason:** {text}",
-                    color=discord.Color.green(),
+
+            text = await convert_mentions(self.bot, reason, guild)
+            if len(text) > 3000:
+                errorEmbed.description = (
+                    "❌ Reason must be at most 3000 characters. Note that "
+                    "channel links add ~70 additional characters each."
                 )
+                await channel.send(embed=errorEmbed)
+                return
+            end_time = now + (hours * 3600)
+            timer = self.bot.channel_status.get_timer(channel_id)
+            statusEmbed = discord.Embed(
+                title="",
+                description=f"Status set to **inactive** 🕓 for {hours} hour(s).\n"
+                f"This ticket will **close** <t:{int(end_time)}:R>\n\n"
+                f"**Reason:** {text}",
+                color=discord.Color.green(),
+            )
 
-                if timer is not None:
-                    statusEmbed.description = (
-                        f"Failed to change status to **inactive** 🕓, "
-                        "use `+active` to remove current inactive state"
-                    )
-                    statusEmbed.color = discord.Color.red()
-                    await channel.send(embed=statusEmbed)
-                    return
-
-                await self.bot.cache.store_guild_member(guild.id, author)
-                await self.bot.cache.store_user(author)
-
-                id_list = (channel.topic).split()
-                user_id = id_list[-2]
-
-                await self.bot.channel_status.set_emoji(channel, "inactive", True)
-                await self.bot.channel_status.add_timer(
-                    channel_id, end_time, author.id, user_id, reason
+            if timer is not None:
+                statusEmbed.description = (
+                    f"Failed to change status to **inactive** 🕓, "
+                    "use `+active` to remove current inactive state"
                 )
-                await self.bot.data_manager.save_timers_to_redis()
-
+                statusEmbed.color = discord.Color.red()
                 await channel.send(embed=statusEmbed)
                 return
+
+            await self.bot.cache.store_guild_member(guild.id, author)
+            await self.bot.cache.store_user(author)
+
+            id_list = (channel.topic).split()
+            user_id = id_list[-2]
+
+            await self.bot.channel_status.set_emoji(channel, "inactive", True)
+            await self.bot.channel_status.add_timer(
+                channel_id, end_time, author.id, user_id, reason
+            )
+            await self.bot.data_manager.save_timers_to_redis()
+
+            await channel.send(embed=statusEmbed)
 
         except Exception as e:
             logger.exception(e)
@@ -1323,11 +1322,7 @@ class Tickets(commands.Cog):
             emoji_name = status[(status.index(":") + 1) :]
             emoji_str = status[: status.index(":")]
 
-            current_name = self.bot.channel_status.pending_updates.get(
-                channel.id, channel.name
-            )
-            # FIXME, change this to check the timer
-            if current_name.startswith((emojis.emoji_map.get("inactive"))[0]):
+            if self.bot.channel_status.get_timer(channel.id):
                 errorEmbed = discord.Embed(
                     description="❌ Cannot change the status of an **inactive** ticket",
                     color=discord.Color.red(),
