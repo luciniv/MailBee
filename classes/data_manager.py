@@ -679,14 +679,23 @@ class DataManager:
         query = f"""
             SELECT ap_adjs.adj, ap_nouns.noun, ap_nouns.nounURL, ap_links.date FROM
             ap_links JOIN ap_adjs ON ap_links.adjID = ap_adjs.adjID
-            JOIN ap_nouns ON ap_links.nounID = ap_nouns.nounID
+            JOIN ap_nouns ON ap_links.guildID = ap_nouns.guildID
             WHERE ap_links.guildID = {guild_id}
-            AND ap_nouns.guildID = {guild_id}
             AND ap_links.modID = {user_id}
             ORDER BY ap_links.date DESC
             LIMIT 1;"""
         ap = await self.execute_query(query)
         return ap
+
+    async def load_all_aps(self, guild_id):
+        query = f"""
+            SELECT ap_adjs.adj, ap_nouns.noun, ap_links.date, ap_nouns.nounURL, ap_links.modID FROM
+            ap_links JOIN ap_adjs ON ap_links.adjID = ap_adjs.adjID
+            JOIN ap_nouns ON ap_links.guildID = ap_nouns.guildID
+            WHERE ap_links.guildID = {guild_id}
+            ORDER BY ap_links.date DESC;"""
+        aps = await self.execute_query(query)
+        return aps
 
     async def add_noun_to_db(self, guild_id, noun, noun_url):
         query = """
@@ -714,10 +723,12 @@ class DataManager:
         params = (guild_id, mod_id, noun_id, adj_id, epoch_time)
         await self.execute_query(query, False, False, params)
 
-    async def delete_noun_from_db(self, noun_id):
+    async def delete_noun_from_db(self, guild_id, noun_id):
         query = f"""
-            DELETE FROM ap_links WHERE nounID = {noun_id};
-            DELETE FROM ap_nouns WHERE nounID = {noun_id};
+            DELETE FROM ap_links WHERE guildID = {guild_id} 
+            AND nounID = {noun_id};
+            DELETE FROM ap_nouns WHERE guildID = {guild_id}
+            AND nounID = {noun_id};
             """
         await self.execute_query(query, False)
 
@@ -765,15 +776,15 @@ class DataManager:
     def format_aps(self, adj, noun, url, date):
         return {"adj": adj, "noun": noun, "url": url, "date": date}
 
-    async def get_or_load_ap(self, guild_id: int, userID: int, get=True):
-        redis_key = f"aps:{guild_id}:{userID}"
+    async def get_or_load_ap(self, guild_id: int, user_id: int, get=True):
+        redis_key = f"aps:{guild_id}:{user_id}"
         if get:
             cached = await self.redis.get(redis_key)
 
             if cached:
                 return json.loads(cached)
 
-        ap = await self.load_ap_from_db(guild_id, userID)
+        ap = await self.load_ap_from_db(guild_id, user_id)
         if not ap:
             await self.set_with_expiry(redis_key, json.dumps(None))
             return None
@@ -792,7 +803,8 @@ class DataManager:
     async def get_all_blacklist_from_db(self, guild_id):
         query = f"""
             SELECT * from blacklist
-            WHERE guildID = {guild_id};
+            WHERE guildID = {guild_id}
+            ORDER BY date ASC;
             """
         blacklist = await self.execute_query(query)
         return blacklist

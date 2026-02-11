@@ -2,18 +2,23 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from classes.error_handler import *
-from utils import checks
-from utils.logger import *
 from classes.embeds import Embeds
+from classes.error_handler import *
+from classes.paginator import Paginator
+from utils import checks
+from utils.helpers import *
+from utils.logger import *
 
 
 class Profiles(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def _format_ap_content(self, ap):
-        return (ap["adj"], ap["noun"], ap["date"], ap["url"], ap["mod_id"])
+    def _read_ap_content(self, ap):
+        return (ap["adj"], ap["noun"], ap["date"], ap["url"])
+
+    def _read_db_ap_content(self, ap):
+        return (ap[0], ap[1], ap[2], ap[3], ap[4])
 
     profile_group = app_commands.Group(name="profile", description="Manage profiles")
 
@@ -30,7 +35,6 @@ class Profiles(commands.Cog):
     ):
         try:
             await interaction.response.defer()
-            return
             guild = interaction.guild
 
             if user:
@@ -42,10 +46,7 @@ class Profiles(commands.Cog):
                         )
                     )
                 else:
-                    adjective = ap["adj"]
-                    noun = ap["noun"]
-                    date = ap["date"]
-                    url = ap["url"]
+                    adjective, noun, date, url = self._read_ap_content(ap)
 
                     if adjective == "none":
                         adjective = ""
@@ -62,7 +63,8 @@ class Profiles(commands.Cog):
                     )
                     await interaction.followup.send(embed=embed, ephemeral=True)
             else:
-                aps = await self.bot.data_manager.get_all_aps(guild.id)
+                pages = []
+                aps = await self.bot.data_manager.load_all_aps(guild.id)
                 if not aps:
                     await interaction.followup.send(
                         embed=Embeds.error(
@@ -70,26 +72,29 @@ class Profiles(commands.Cog):
                         )
                     )
                 else:
-                    for i in range(0, len(aps), 6):
-                        chunk = aps[i : i + 6]
+                    for i in range(0, len(aps), 5):
+                        chunk = aps[i : i + 5]
                         ap_embed = Embeds.success(title=f"Anonymous Profiles")
-                        ap_embed.set_author(name=guild.name, icon_url=url)
+                        ap_embed.set_author(
+                            name=guild.name,
+                            icon_url=guild.icon.url if guild.icon else None,
+                        )
 
                         for index, entry in enumerate(chunk, start=i + 1):
-                            abbrev, summary, author, content, date = (
-                                self._format_snip_content(entry)
+                            adjective, noun, date, url, mod_id = (
+                                self._read_db_ap_content(entry)
                             )
 
                             if adjective == "none":
                                 adjective = ""
                             ap_embed.add_field(
-                                name=f"<@{user_id}>",
-                                value=f"### {adjective} {noun}\n"
-                                f"**Image:** {'[Link](' + ap['url'] + ')' if ap['url'] else 'None'}\n"
+                                name=f"{adjective} {noun}\n",
+                                value=f"**Moderator:** <@{mod_id}>\n"
+                                f"**Image:** {'[Link](' + url + ')' if url else 'None'}\n"
                                 f"**Acquired:** <t:{date}:D> (<t:{date}:R>)",
                                 inline=False,
                             )
-                        pages.append(snip_embed)
+                        pages.append(ap_embed)
 
                     pages = add_footers(pages)
                     view = Paginator(pages)
@@ -99,6 +104,9 @@ class Profiles(commands.Cog):
 
         except Exception as e:
             logger.exception(f"/profile view sent an error: {e}")
+            raise BotError(
+                "An error occurred while fetching profiles. Please try again later."
+            )
 
     @profile_group.command(
         name="random", description="Generate a random, available profile to use"
@@ -177,9 +185,6 @@ class Profiles(commands.Cog):
                 )
         except Exception as e:
             logger.exception(f"/profile add sent an error: {e}")
-
-
-    
 
 
 async def setup(bot):

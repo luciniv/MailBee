@@ -8,9 +8,9 @@ from discord.ext import commands
 
 from classes.embeds import Embeds
 from classes.error_handler import *
-from utils.helpers import *
 from classes.paginator import Paginator
 from utils import checks, emojis
+from utils.helpers import *
 from utils.logger import *
 
 

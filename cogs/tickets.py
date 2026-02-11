@@ -13,9 +13,9 @@ from discord.ext import commands
 from ai_integration.prompt import *
 from classes.embeds import Embeds
 from classes.error_handler import *
-from utils.helpers import *
 from classes.ticket_submitter import DMCategoryButtonView, TicketRatingView
 from utils import checks, emojis, queries
+from utils.helpers import *
 from utils.logger import *
 
 
