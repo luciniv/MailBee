@@ -691,8 +691,9 @@ class DataManager:
         query = f"""
             SELECT ap_adjs.adj, ap_nouns.noun, ap_links.date, ap_nouns.nounURL, ap_links.modID FROM
             ap_links JOIN ap_adjs ON ap_links.adjID = ap_adjs.adjID
-            JOIN ap_nouns ON ap_links.guildID = ap_nouns.guildID
+            JOIN ap_nouns ON ap_links.nounID = ap_nouns.nounID
             WHERE ap_links.guildID = {guild_id}
+            AND ap_nouns.guildID = {guild_id}
             ORDER BY ap_links.date DESC;"""
         aps = await self.execute_query(query)
         return aps
