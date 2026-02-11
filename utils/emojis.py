@@ -5,7 +5,7 @@ emoji_map = {
     "alert": ("❗", False),
     "wait": ("⏳", False),
     "nsfw": ("🔞", False),
-    "inactive": ("🕓", True),
+    "inactive": ("🕓", False),
     "review": ("🔎", True),
     "contact": ("🧡", True),
     "reimburse": ("💚", True),
