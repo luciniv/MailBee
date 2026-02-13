@@ -70,74 +70,79 @@ class ExampleFormModal(discord.ui.Modal):
         )
 
 
+class TypeOrderView(TimeoutSafeView):
+    def __init__(self, bot, guild_id, type_id, neighbors):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.guild_id = guild_id
+        self.type_id = type_id
+        self.neighbors = neighbors
+        self.add_item(OrderSelect(bot, guild_id, type_id, neighbors))
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+
+
+class OrderSelect(discord.ui.Select):
+    def __init__(self, bot, guild_id, type_id, neighbors):
+        options = [
+            SelectOption(label=f"Position {i + 1}", value=str(i))
+            for i in range(len(neighbors))
+        ]
+
+        super().__init__(
+            placeholder="Choose a new position...",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+        self.bot = bot
+        self.guild_id = guild_id
+        self.type_id = type_id
+        self.neighbors = neighbors
+
+    async def callback(self, interaction: discord.Interaction):
+        print("got to callback")
+        await interaction.response.defer()
+        new_index = int(self.values[0])
+
+        type_data = await self.bot.data_manager.get_ticket_type(
+            self.guild_id, self.type_id
+        )
+        emoji = type_data["type_emoji"]
+        name = type_data["type_name"]
+        current_index = type_data["order_id"]
+
+        if new_index == current_index:
+            await interaction.followup.send(
+                embed=Embeds.error(
+                    description="❌ This type is already in the selected position."
+                )
+            )
+            return
+
+        config = self.bot.get_cog("Config")
+        await config._reorder_types(
+            current_index, new_index, self.neighbors, self.guild_id
+        )
+        await self.bot.data_manager.get_or_load_guild_types(self.guild_id, False)
+        await interaction.channel.send(
+            embed=Embeds.success(
+                description=f"✅ Moved type **{emoji} {name}** to position {new_index + 1}."
+            )
+        )
+        try:
+            await interaction.message.delete()
+        except discord.errors.HTTPException:
+            pass
+        if self.view:
+            self.view.stop()
+
+
 class Config(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
-    class TypeOrderView(TimeoutSafeView):
-        def __init__(self, bot, guild_id, type_id, neighbors):
-            super().__init__(timeout=300)
-            self.bot = bot
-            self.guild_id = guild_id
-            self.type_id = type_id
-            self.neighbors = neighbors
-            self.add_item(self.OrderSelect(bot, guild_id, type_id, neighbors))
-
-        async def on_timeout(self):
-            for child in self.children:
-                child.disabled = True
-
-    class OrderSelect(discord.ui.Select):
-        def __init__(self, bot, guild_id, type_id, neighbors):
-            options = [
-                SelectOption(label=f"Position {i + 1}", value=str(i))
-                for i in range(len(neighbors))
-            ]
-
-            super().__init__(
-                placeholder="Choose a position...",
-                min_values=1,
-                max_values=1,
-                options=options,
-            )
-            self.bot = bot
-            self.guild_id = guild_id
-            self.type_id = type_id
-            self.neighbors = neighbors
-
-        async def callback(self, interaction: discord.Interaction):
-            await interaction.response.defer()
-            new_index = int(self.values[0])
-
-            type_data = await self.bot.data_manager.get_ticket_type(
-                self.guild_id, self.type_id
-            )
-            emoji = type_data["type_emoji"]
-            name = type_data["type_name"]
-            current_index = type_data["order_id"]
-
-            if new_index == current_index:
-                await interaction.followup.send(
-                    embed=Embeds.error(
-                        description="❌ This type is already in the selected position."
-                    )
-                )
-                return
-
-            current_index = None
-            for type in self.target:
-                if type["data"]["type_id"] == self.type_id:
-                    current_index = self.target.index(type)
-                    break
-
-            await self._reorder_types(
-                current_index, new_index, self.neighbors, self.guild_id
-            )
-            await interaction.followup.send(
-                embed=Embeds.success(
-                    description=f"✅ Moved type **{emoji} {name}** to position {new_index + 1}."
-                )
-            )
 
     async def _key_format_types(self, guild_id):
         types = await self.bot.data_manager.get_or_load_guild_types(guild_id)
@@ -214,7 +219,7 @@ class Config(commands.Cog):
         return choices
 
     async def _categorize_type(self, type_data, guild_id):
-        if type_data["redirectText"]:
+        if type_data["category_id"] == 0:
             return "redirect"
 
         elif type_data["sub_type"] == -1:
@@ -226,18 +231,20 @@ class Config(commands.Cog):
         else:
             return "subtype"
 
-    # async def _reorder_types(current_index, new_index, neighbors, guild_id):
-    #     if current_index < new_index:
-    #         for i in range(current_index + 1, new_index + 1):
-    #             neighbors[i]["data"]["order_id"] -= 1
-    #         neighbors[current_index]["data"]["order_id"] = new_index + 1
+    async def _reorder_types(self, current_index, new_index, neighbors, guild_id):
+        new_list = neighbors.copy()
+        item = new_list.pop(current_index)
 
-    #     elif current_index > new_index:
-    #         for i in range(new_index, current_index):
-    #             neighbors[i]["data"]["order_id"] += 1
-    #         neighbors[current_index]["data"]["order_id"] = new_index - 1
+        if new_index is not None:
+            new_list.insert(new_index, item)
 
-    #     await self.bot.data_manager.update_type_order(self.guild_id, updates)
+        updates = []
+        for idx, entry in enumerate(new_list):
+            type_id = entry["data"]["type_id"]
+            if entry["data"]["order_id"] != idx:
+                updates.append((type_id, idx))
+
+        await self.bot.data_manager.update_type_order(guild_id, updates)
 
     def _check_emoji(self, emoji_str):
         if emoji_str in emj.EMOJI_DATA:
@@ -664,7 +671,7 @@ class Config(commands.Cog):
                         inline=False,
                     )
 
-                if type_data["redirectText"]:
+                if type_data["category_id"] == 0:
                     embed.add_field(
                         name="Redirect Text",
                         value=type_data["redirectText"],
@@ -951,7 +958,7 @@ class Config(commands.Cog):
                 return
 
             await self.bot.data_manager.delete_type_from_db(type_id)
-            # await self._reorder_types(current_index, None, sorted_types, guild_id)
+            await self._reorder_types(current_index, None, sorted_types, guild_id)
             await self.bot.data_manager.get_or_load_guild_types(guild_id, False)
 
             await interaction.followup.send(
@@ -976,246 +983,224 @@ class Config(commands.Cog):
 
         return matches[:25]
 
-    # @type_group.command(name="edit", description="Edit a ticket type's configuration")
-    # @checks.is_user_app()
-    # @checks.is_setup()
-    # @checks.is_guild_app()
-    # @app_commands.describe(
-    #     type="Ticket type to edit",
-    #     name="Type name",
-    #     description="Type description",
-    #     emoji="Emoji to show for select option",
-    #     category="Destination category for this ticket type",
-    #     parent="Parent type if this is a sub-type",
-    #     nsfw="NSFW category for this type",
-    #     redirect="Redirect text for redirect types",
-    #     ping_roles="SPACE SEPARATED list of role IDs",
-    # )
-    # async def type_edit(
-    #     self,
-    #     interaction: discord.Interaction,
-    #     type: str,
-    #     name: Range[str, 1, 45] = None,
-    #     description: Range[str, 1, 100] = None,
-    #     emoji: str = None,
-    #     category: discord.CategoryChannel = None,
-    #     parent: str = None,
-    #     nsfw: discord.CategoryChannel = None,
-    #     redirect: str = None,
-    #     ping_roles: str = None,
-    # ):
-    #     try:
-    #         await interaction.response.defer()
-    #         guild = interaction.guild
-    #         guild_id = guild.id
-    #         type_name, type_id, type_subtype_id = type.split(",")
-    #         type_data = await self.bot.data_manager.get_ticket_type(guild_id, type_id)
-    #         type_category = self._categorize_type(type_data, guild_id)
+    @type_group.command(name="edit", description="Edit a ticket type's configuration")
+    @checks.is_user_app()
+    @checks.is_setup()
+    @checks.is_guild_app()
+    @app_commands.describe(
+        type="Ticket type to edit",
+        name="Type name",
+        description="Type description",
+        emoji="Emoji to show for select option",
+        category="Destination category for this ticket type",
+        parent="Parent type if this is a sub-type",
+        nsfw="NSFW category for this type",
+        redirect="Redirect text for redirect types",
+        ping_roles="SPACE SEPARATED list of role IDs",
+    )
+    async def type_edit(
+        self,
+        interaction: discord.Interaction,
+        type: str,
+        name: Range[str, 1, 45] = None,
+        description: Range[str, 1, 100] = None,
+        emoji: str = None,
+        category: discord.CategoryChannel = None,
+        parent: str = None,
+        nsfw: discord.CategoryChannel = None,
+        redirect: str = None,
+        ping_roles: str = None,
+    ):
+        try:
+            await interaction.response.defer()
+            guild = interaction.guild
+            guild_id = guild.id
+            type_name, type_id, type_subtype_id = type.split(",")
+            type_data = await self.bot.data_manager.get_ticket_type(guild_id, type_id)
+            type_category = await self._categorize_type(type_data, guild_id)
+            type_emoji = type_data["type_emoji"]
 
-    #         # Set variables to either new or existing values
-    #         new_name = name if name else type_data["type_name"]
-    #         new_description = description if description else type_data["type_descrip"]
-    #         new_emoji = emoji if emoji else type_data["type_emoji"]
-    #         if not self._check_emoji(emoji):
-    #             await interaction.followup.send(
-    #                 embed=Embeds.error(
-    #                     description="❌ Invalid emoji. Please provide a valid Unicode emoji (Discord default emojis)."
-    #                 )
-    #             )
-    #             return
-    #         new_category_id = category.id if category else type_data["category_id"]
-    #         new_nsfw_id = nsfw.id if nsfw else type_data["nsfw_category_id"]
-    #         new_redirect_text = redirect if redirect else type_data["redirectText"]
+            # Set variables to either new or existing values
+            new_name = name if name else type_data["type_name"]
+            new_description = description if description else type_data["type_descrip"]
+            new_emoji = emoji if emoji else type_data["type_emoji"]
+            if not self._check_emoji(new_emoji):
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid emoji. Please provide a valid Unicode emoji (Discord default emojis)."
+                    )
+                )
+                return
+            new_category_id = category.id if category else type_data["category_id"]
+            new_nsfw_id = nsfw.id if nsfw else type_data["nsfw_category_id"]
+            new_redirect_text = redirect if redirect else type_data["redirectText"]
 
-    #         # Special handling for parent
-    #         new_parent_category_id = type_data["sub_type"]
-    #         if parent:
-    #             parent_name, parent_id, new_parent_category_id = parent.split(",")
+            # Set parent category ID
+            new_parent_category_id = type_data["sub_type"]
+            if parent:
+                parent_name, parent_id, new_parent_category_id = parent.split(",")
 
-    #         # Special handling for ping roles
-    #         new_ping_roles = type_data["ping_roles"]
-    #         if ping_roles:
-    #             new_ping_roles, error = await self._fetch_ping_roles(guild, ping_roles)
-    #             if error:
-    #                 await interaction.followup.send(
-    #                     embed=Embeds.error(description=error)
-    #                 )
-    #                 return
+            # Special handling for ping roles
+            new_ping_roles = type_data["ping_roles"]
+            if ping_roles:
+                new_ping_roles, error = await self._fetch_ping_roles(guild, ping_roles)
+                if error:
+                    await interaction.followup.send(
+                        embed=Embeds.error(description=error)
+                    )
+                    return
 
-    #         # Handle category, redirect, and parent based on type category
-    #         if type_category == "redirect":
-    #             pass
+            # Handle category, redirect, and parent based on type category
+            if type_category == "redirect":
+                if category:
+                    new_redirect_text = None
 
-    #             # accepts most changes, can change the parent, the name, descrip, emoji, and even nsfw, ping roles
-    #             # can also change redirect text
-    #             # however, if the category is changed, then it's becoming a non-redirect type
-    #             # the key part here is, if you choose to change the category, then redirect text is set to None
+            elif type_category == "parent":
+                if redirect:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Cannot set redirect text for a parent ticket type."
+                        )
+                    )
+                    return
+                if parent:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Cannot set a parent for a parent ticket type."
+                        )
+                    )
+                    return
+                if category:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Cannot change the category for a parent ticket type. "
+                            "Remove all sub-types first to change the category. "
+                            "(This logic will be changed in the future.)"
+                        )
+                    )
+                    return
+            else:
+                if redirect:
+                    new_category_id = 0
 
-    #         elif type_category == "parent":
-    #             if redirect:
-    #                 await interaction.followup.send(
-    #                     embed=Embeds.error(
-    #                         description="❌ Cannot set redirect text for a parent ticket type."
-    #                     )
-    #                 )
-    #                 return
+            await self.bot.data_manager.update_type_in_db(
+                type_id,
+                new_category_id,
+                new_name,
+                new_description,
+                new_emoji,
+                new_parent_category_id,
+                new_redirect_text,
+                new_nsfw_id,
+                new_ping_roles,
+            )
+            await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
+            await interaction.followup.send(
+                embed=Embeds.success(
+                    description=f"✅ Updated ticket type **{new_emoji} {new_name}**"
+                )
+            )
 
-    #             if parent:
-    #                 await interaction.followup.send(
-    #                     embed=Embeds.error(
-    #                         description="❌ Cannot set a parent for a parent ticket type."
-    #                     )
-    #                 )
-    #                 return
+        except Exception as e:
+            logger.exception(f"/type_edit error: {e}")
+            raise BotError(f"/type_edit sent an error: {e}")
 
-    #             if category:
-    #                 await interaction.followup.send(
-    #                     embed=Embeds.error(
-    #                         description="❌ Cannot change the category for a parent ticket type. "
-    #                         "Remove all sub-types first to change the category. "
-    #                         "(This logic will be changed in the future.)"
-    #                     )
-    #                 )
-    #                 return
+    @type_edit.autocomplete("type")
+    async def type_update_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_type_choices(guild)
 
-    #         elif type_category == "subtype":
-    #             if redirect:
-    #                 new_category_id = 0
-    #             if parent:
-    #                 pass
+        matches = []
 
-    #             # can change name, descrip, emoji, nsfw, pin roles
-    #             # CAN make it a redirect --> handle this case by modifying category to 0
-    #             # CAN change the parent, this is fine with any other changes as well
-    #             # CAN change the category as well! --> no limits here, can go to any category, even its current one
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
-    #             #
+        return matches[:25]
 
-    #         else:
-    #             pass
-    #             # this is a normal type, its not a parent and it has no subtypes
-    #             # you can do literally whatever to this
-    #         return
-    #         await self.bot.data_manager.update_type_in_db(
-    #             type_id,
-    #             new_category_id,
-    #             new_name,
-    #             new_description,
-    #             new_emoji,
-    #             new_parent_category_id,
-    #             new_redirect,
-    #             new_nsfw_id,
-    #             new_ping_roles,
-    #         )
-    #         await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
-    #         await interaction.followup.send(
-    #             embed=Embeds.success(description=f"✅ Updated ticket type {name}")
-    #         )
+    @type_edit.autocomplete("parent")
+    async def type_update_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_parent_type_choices(guild)
 
-    #     except Exception as e:
-    #         logger.exception(f"/type_edit error: {e}")
-    #         raise BotError(f"/type_edit sent an error: {e}")
+        matches = []
 
-    # @type_edit.autocomplete("type")
-    # async def type_update_autocomplete(
-    #     self, interaction: discord.Interaction, current: str
-    # ) -> List[app_commands.Choice[str]]:
-    #     guild = interaction.guild
-    #     choices = await self._load_type_choices(guild)
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
-    #     matches = []
+        return matches[:25]
 
-    #     for choice in choices:
-    #         if current.casefold() in choice.name.casefold():
-    #             matches.append(choice)
+    @type_group.command(name="order", description="Reorder ticket types")
+    @checks.is_admin()
+    @checks.is_guild()
+    @app_commands.describe(type="Ticket type to reorder")
+    async def type_order(self, interaction: discord.Interaction, type: str):
+        try:
+            guild_id = interaction.guild.id
+            type_name, type_id, type_subtype_id = type.split(",")
 
-    #     return matches[:25]
+            type_structure = await self._list_format_types(guild_id)
+            neighbors = []
+            if int(type_subtype_id) == -1:
+                neighbors = type_structure
+            else:
+                for parent in type_structure:
+                    if parent["data"]["category_id"] == int(type_subtype_id):
+                        neighbors = parent["sub_types"]
+                        break
 
-    # @type_edit.autocomplete("parent")
-    # async def type_update_autocomplete(
-    #     self, interaction: discord.Interaction, current: str
-    # ) -> List[app_commands.Choice[str]]:
-    #     guild = interaction.guild
-    #     choices = await self._load_parent_type_choices(guild)
+            if len(neighbors) == 1:
+                await interaction.response.send_message(
+                    embed=Embeds.error(
+                        description="❌ Cannot reorder this ticket type as it has no "
+                        "neighboring types."
+                    )
+                )
+                return
 
-    #     matches = []
+            embed = Embeds.success(
+                title=f"**Reordering:** {type_name}",
+                description="**Current Order:**",
+            )
+            count = 0
+            for ticket_type in neighbors:
+                emoji = ticket_type["data"]["type_emoji"]
+                name = ticket_type["data"]["type_name"]
+                count += 1
+                embed.add_field(
+                    name=f"**{count}.** {emoji} {name}",
+                    value=" ",
+                    inline=False,
+                )
 
-    #     for choice in choices:
-    #         if current.casefold() in choice.name.casefold():
-    #             matches.append(choice)
+            await interaction.response.send_message(
+                embed=embed, view=TypeOrderView(self.bot, guild_id, type_id, neighbors)
+            )
+            print("send first embed")
 
-    #     return matches[:25]
+        except Exception as e:
+            logger.exception(f"/type_order error: {e}")
+            raise BotError(f"/type_order sent an error: {e}")
 
-    # @type_group.command(name="order", description="Reorder ticket types")
-    # @checks.is_admin()
-    # @checks.is_guild()
-    # @app_commands.describe(type="Ticket type to reorder")
-    # @app_commands.describe(position="New position for the ticket type (1 = top)")
-    # async def type_order(
-    #     self, interaction: discord.Interaction, type: str, position: str
-    # ):
-    #     try:
-    #         await interaction.response.defer()
-    #         guild_id = interaction.guild.id
-    #         type_name, type_id, type_subtype_id = type.split(",")
+    @type_order.autocomplete("type")
+    async def type_update_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        choices = await self._load_type_choices(guild)
 
-    #         type_structure = await self._list_format_types(guild_id)
-    #         neighbors = []
-    #         if int(type_subtype_id) == -1:
-    #             neighbors = type_structure
-    #         else:
-    #             for parent in type_structure:
-    #                 if parent["data"]["type_id"] == int(type_subtype_id):
-    #                     neighbors = parent["sub_types"]
-    #                     break
+        matches = []
 
-    #         if len(neighbors) == 1:
-    #             await interaction.followup.send(
-    #                 embed=Embeds.error(
-    #                     description="❌ Cannot reorder this ticket type as it has no "
-    #                     "neighboring types."
-    #                 )
-    #             )
-    #             return
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
 
-    #         embed = Embeds.success(
-    #             title="Order Preview",
-    #             description=f"**Reordering:** {type_name}\n\n**Current Order:**",
-    #         )
-    #         count = 0
-    #         for ticket_type in neighbors:
-    #             emoji = ticket_type["data"]["type_emoji"]
-    #             name = ticket_type["data"]["type_name"]
-    #             count += 1
-    #             embed.add_field(
-    #                 name=f"**{count}.** {emoji} {name}",
-    #                 value=" ",
-    #                 inline=False,
-    #             )
-
-    #         await interaction.followup.send(
-    #             embed=embed,
-    #             view=self.TypeOrderView(self.bot, guild_id, type_id, neighbors),
-    #         )
-
-    #     except Exception as e:
-    #         logger.exception(f"/type_order error: {e}")
-    #         raise BotError(f"/type_order sent an error: {e}")
-
-    # @type_order.autocomplete("type")
-    # async def type_update_autocomplete(
-    #     self, interaction: discord.Interaction, current: str
-    # ) -> List[app_commands.Choice[str]]:
-    #     guild = interaction.guild
-    #     choices = await self._load_type_choices(guild)
-
-    #     matches = []
-
-    #     for choice in choices:
-    #         if current.casefold() in choice.name.casefold():
-    #             matches.append(choice)
-
-    #     return matches[:25]
+        return matches[:25]
 
     form_group = app_commands.Group(name="form", description="Manage ticket forms")
 

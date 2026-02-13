@@ -1017,9 +1017,11 @@ class DataManager:
         await self.execute_query(query, False, False, (json.dumps(roles), type_id))
 
     async def update_type_order(self, guild_id, updates):
-        # updates = [(order, typeID)]
-        # just make a long query that runs however many updates it needs to
-        pass
+        query = "UPDATE ticket_types SET orderID = CASE "
+        for type_id, order_id in updates:
+            query += f"WHEN typeID = {type_id} THEN {order_id} "
+        query += f"END WHERE guildID = {guild_id} AND typeID IN ({', '.join(str(type_id) for type_id, _ in updates)});"
+        await self.execute_query(query, False)
 
     """
     -------------------------------------------------------------------------
