@@ -248,7 +248,8 @@ class ServerSelect(discord.ui.Select):
         category_embed = Embeds.info(
             title="Select a Ticket Type",
             description="Please select a type for your ticket with the drop-down menu below.\n\n"
-            'If you are unsure what to choose, or your topic is not listed, select "Other."',
+            "Your ticket will not be created until you select a type and complete the resulting "
+            "form, so explore the available types as needed!",
         )
         if guild.icon:
             category_embed.set_author(name=guild.name, icon_url=guild.icon.url)
@@ -665,7 +666,8 @@ class BackButton(discord.ui.Button):
         category_embed = Embeds.info(
             title="Select a Ticket Type",
             description="Please select a type for your ticket with the drop-down menu below.\n\n"
-            'If you are unsure what to choose, or your topic is not listed, select "Other."',
+            "Your ticket will not be created until you select a type and complete the resulting "
+            "form, so explore the available types as needed!",
         )
         if guild.icon:
             category_embed.set_author(name=guild.name, icon_url=guild.icon.url)

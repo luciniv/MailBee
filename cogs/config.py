@@ -103,7 +103,6 @@ class OrderSelect(discord.ui.Select):
         self.neighbors = neighbors
 
     async def callback(self, interaction: discord.Interaction):
-        print("got to callback")
         await interaction.response.defer()
         new_index = int(self.values[0])
 
@@ -244,7 +243,8 @@ class Config(commands.Cog):
             if entry["data"]["order_id"] != idx:
                 updates.append((type_id, idx))
 
-        await self.bot.data_manager.update_type_order(guild_id, updates)
+        if updates:
+            await self.bot.data_manager.update_type_order(guild_id, updates)
 
     def _check_emoji(self, emoji_str):
         if emoji_str in emj.EMOJI_DATA:
@@ -793,6 +793,7 @@ class Config(commands.Cog):
             await interaction.response.defer()
             guild = interaction.guild
             guild_id = guild.id
+            channel = interaction.channel
             category_id = category.id if category else None
             parent_category_id = None
 
@@ -806,9 +807,18 @@ class Config(commands.Cog):
                 return
 
             sorted_types = await self._list_format_types(guild_id)
+
+            parent_id = None
+            if parent:
+                parent_name, parent_id, parent_category_id = parent.split(",")
+
             if category:
                 for parent_type in sorted_types:
                     if parent_type["data"]["category_id"] == category.id:
+                        if parent_id and parent_type["data"]["type_id"] == int(
+                            parent_id
+                        ):
+                            continue
                         emoji = parent_type["data"]["type_emoji"]
                         name = parent_type["data"]["type_name"]
                         await interaction.followup.send(
@@ -817,9 +827,6 @@ class Config(commands.Cog):
                             )
                         )
                         return
-
-            if parent:
-                parent_name, parent_id, parent_category_id = parent.split(",")
 
             if ping_roles:
                 ping_roles, error = await self._fetch_ping_roles(guild, ping_roles)
@@ -835,6 +842,23 @@ class Config(commands.Cog):
                 category_id = 0
                 nsfw = None
                 ping_roles = []
+
+                if redirect.isdigit():
+                    message, response = await fetch_channel_message(channel, redirect)
+                    if not message:
+                        await interaction.followup.send(
+                            embed=Embeds.error(description=response)
+                        )
+                        return
+                    else:
+                        redirect = message.content
+
+                redirect, response = await verify_text(self.bot, guild, redirect, 4000)
+                if not redirect:
+                    await interaction.followup.send(
+                        embed=Embeds.error(description=response)
+                    )
+                    return
             else:
                 if not category_id:
                     if parent_category_id:
@@ -1015,6 +1039,7 @@ class Config(commands.Cog):
             await interaction.response.defer()
             guild = interaction.guild
             guild_id = guild.id
+            channel = interaction.channel
             type_name, type_id, type_subtype_id = type.split(",")
             type_data = await self.bot.data_manager.get_ticket_type(guild_id, type_id)
             type_category = await self._categorize_type(type_data, guild_id)
@@ -1079,9 +1104,30 @@ class Config(commands.Cog):
                         )
                     )
                     return
+
             else:
                 if redirect:
                     new_category_id = 0
+
+            if new_redirect_text:
+                if redirect and redirect.isdigit():
+                    message, response = await fetch_channel_message(channel, redirect)
+                    if not message:
+                        await interaction.followup.send(
+                            embed=Embeds.error(description=response)
+                        )
+                        return
+                    else:
+                        redirect = message.content
+
+                new_redirect_text, response = await verify_text(
+                    self.bot, guild, redirect, 4000
+                )
+                if not new_redirect_text:
+                    await interaction.followup.send(
+                        embed=Embeds.error(description=response)
+                    )
+                    return
 
             await self.bot.data_manager.update_type_in_db(
                 type_id,
@@ -1181,7 +1227,6 @@ class Config(commands.Cog):
             await interaction.response.send_message(
                 embed=embed, view=TypeOrderView(self.bot, guild_id, type_id, neighbors)
             )
-            print("send first embed")
 
         except Exception as e:
             logger.exception(f"/type_order error: {e}")
