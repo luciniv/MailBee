@@ -1568,10 +1568,10 @@ class Config(commands.Cog):
             guild_id = guild.id
 
             statuses = await self.bot.data_manager.get_statuses(guild_id)
-            if len(statuses) >= 24:
+            if len(statuses) >= 20:
                 await interaction.followup.send(
                     embed=Embeds.error(
-                        description="❌ Maximum of 24 ticket statuses allowed."
+                        description="❌ Maximum of 20 ticket statuses allowed."
                     )
                 )
                 return
