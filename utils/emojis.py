@@ -12,3 +12,10 @@ emoji_map = {
     "appeal": ("💜", True),
     "phish": ("🐟", True),
 }
+
+default_statuses = [
+    {"emoji": "🆕", "name": "New ticket"},
+    {"emoji": "❗", "name": "Waiting for moderator"},
+    {"emoji": "⏳", "name": "Waiting for user"},
+    {"emoji": "🔎", "name": "Under review"},
+]

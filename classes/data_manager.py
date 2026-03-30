@@ -1025,6 +1025,40 @@ class DataManager:
 
     """
     -------------------------------------------------------------------------
+    ---------------------- STATUS MANAGEMENT FUNCTIONS ----------------------
+    -------------------------------------------------------------------------
+    """
+
+    def format_statuses(self, status_id, emoji, name):
+        return {"status_id": status_id, "emoji": emoji, "name": name}
+
+    async def get_statuses(self, guild_id):
+        query = f"""
+            SELECT statusID, emoji, name FROM statuses
+            WHERE guildID = {guild_id};
+            """
+        statuses = await self.execute_query(query)
+        if statuses:
+            return [self.format_statuses(*status) for status in statuses]
+        return []
+
+    async def add_status(self, guild_id, emoji, name):
+        query = """
+            INSERT INTO statuses (guildID, emoji, name) 
+            VALUES (%s, %s, %s);
+            """
+        params = (guild_id, emoji, name)
+        await self.execute_query(query, False, False, params)
+
+    async def delete_status(self, status_id):
+        query = f"""
+            DELETE FROM statuses
+            WHERE statusID = {status_id};
+            """
+        await self.execute_query(query, False)
+
+    """
+    -------------------------------------------------------------------------
     ---------------------- PERMISSIONS MANAGEMENT FUNCTIONS -----------------
     -------------------------------------------------------------------------
     """

@@ -14,7 +14,8 @@ from classes.error_handler import *
 from classes.paginator import *
 from classes.ticket_opener import get_overwrites
 from classes.ticket_submitter import TimeoutSafeView
-from utils import checks, emojis
+from utils import checks
+from utils.emojis import *
 from utils.helpers import *
 from utils.logger import *
 
@@ -418,15 +419,15 @@ class Config(commands.Cog):
 
         embed = Embeds.success(title=f"Title: {title}")
 
-        for field in fields:
+        for index, field in enumerate(fields, start=1):
             embed.add_field(
-                name=f"{field['label']}",
-                value=f"**Placeholder:** {field.get('placeholder', 'N/A')}\n"
-                f"**Style:** {field['style'].capitalize()}\n"
-                f"**Min Length:** {field.get('min_length', 1)}\n"
-                f"**Max Length:** {field.get('max_length', 1024)}\n"
-                f"**Required:** {field.get('required', True)}",
-                inline=False,
+            name=f"{index}) {field['label']}",
+            value=f"**Placeholder:** {field.get('placeholder', 'N/A')}\n"
+            f"**Style:** {field['style'].capitalize()}\n"
+            f"**Min Length:** {field.get('min_length', 1)}\n"
+            f"**Max Length:** {field.get('max_length', 1024)}\n"
+            f"**Required:** {field.get('required', True)}",
+            inline=False,
             )
         return embed
 
@@ -1481,6 +1482,203 @@ class Config(commands.Cog):
         except Exception as e:
             logger.exception(f"form view error: {e}")
             raise BotError(f"/form view sent an error: {e}")
+
+    status_group = app_commands.Group(
+        name="status", description="Manage ticket statuses"
+    )
+
+    # Manually update the status of a ticket channel
+    @status_group.command(name="set", description="Change the emoji status of a ticket")
+    @checks.is_ticket_app()
+    @checks.is_user_app()
+    @checks.is_guild_app()
+    @app_commands.describe(status="Select an emoji from the provided list")
+    async def status_set(self, interaction, status: str):
+        try:
+            await interaction.response.defer(ephemeral=True)
+            channel = interaction.channel
+            status_emoji, status_name = status.split(",")
+
+            new_status = status_name if (status_name in emoji_map) else status_emoji
+
+            if self.bot.channel_status.get_timer(channel.id):
+                errorEmbed = discord.Embed(
+                    description="❌ Cannot change the status of an **inactive** ticket",
+                    color=discord.Color.red(),
+                )
+                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
+                return
+
+            result = await self.bot.channel_status.set_emoji(channel, new_status, True)
+
+            statusEmbed = Embeds.success(
+                description=f"✅ Channel status set to **{status_emoji} {status_name}**"
+                "\n(*Please wait up to 5 minutes for edits to appear*)",
+            )
+            if not result:
+                statusEmbed.description = (
+                    f"❌ Failed to set channel status to **{status_emoji} {status_name}**, "
+                    "current or pending status is already set as this"
+                )
+                statusEmbed.color = discord.Color.red()
+            await interaction.followup.send(embed=statusEmbed, ephemeral=True)
+            return
+
+        except Exception as e:
+            logger.exception(e)
+            raise BotError(f"/status set sent an error: {e}")
+
+    @status_set.autocomplete("status")
+    async def status_remove_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        guild_statuses = await self.bot.data_manager.get_statuses(guild.id)
+        statuses = default_statuses + guild_statuses
+
+        choices = [
+            app_commands.Choice(
+                name=f"{status['emoji']} {status['name']}",
+                value=f"{status['emoji']},{status['name']}",
+            )
+            for status in statuses
+        ]
+
+        matches = []
+
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
+
+        return matches[:25]
+
+    @status_group.command(name="add", description="Add a new ticket status")
+    @checks.is_admin_app()
+    @checks.is_guild_app()
+    @app_commands.describe(
+        emoji="Emoji to show for this status",
+        name="Status name",
+    )
+    async def status_add(
+        self, interaction: discord.Interaction, emoji: str, name: Range[str, 1, 45]
+    ):
+        try:
+            await interaction.response.defer()
+            guild = interaction.guild
+            guild_id = guild.id
+
+            statuses = await self.bot.data_manager.get_statuses(guild_id)
+            if len(statuses) >= 24:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Maximum of 24 ticket statuses allowed."
+                    )
+                )
+                return
+
+            emoji = self._check_emoji(emoji)
+            if not emoji:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid emoji. Please provide a valid Unicode emoji (Discord default emojis)."
+                    )
+                )
+                return
+
+            if not bool(re.fullmatch(r"[A-Za-z0-9 ]+", name.casefold())):
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Status names must be alphanumeric only."
+                    )
+                )
+                return
+
+            await self.bot.data_manager.add_status(guild_id, emoji, name)
+            await interaction.followup.send(
+                embed=Embeds.success(
+                    description=f"✅ Added ticket status **{emoji} {name}**"
+                )
+            )
+
+        except Exception as e:
+            logger.exception(f"status_add error: {e}")
+            raise BotError(f"/status_add sent an error: {e}")
+
+    @status_group.command(name="remove", description="Remove a ticket status")
+    @checks.is_admin_app()
+    @checks.is_guild_app()
+    @app_commands.describe(status="Status to remove")
+    async def status_remove(self, interaction: discord.Interaction, status: str):
+        try:
+            await interaction.response.defer()
+            status_emoji, status_name, status_id = status.split(",")
+
+            await self.bot.data_manager.delete_status(status_id)
+
+            await interaction.followup.send(
+                embed=Embeds.success(
+                    description=f"✅ Removed ticket status **{status_emoji} {status_name}**"
+                )
+            )
+
+        except Exception as e:
+            logger.exception(f"/status_remove error: {e}")
+            raise BotError(f"/status_remove sent an error: {e}")
+
+    @status_remove.autocomplete("status")
+    async def status_remove_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        guild = interaction.guild
+        statuses = await self.bot.data_manager.get_statuses(guild.id)
+
+        choices = [
+            app_commands.Choice(
+                name=f"{status['emoji']} {status['name']}",
+                value=f"{status['emoji']},{status['name']},{status['status_id']}",
+            )
+            for status in statuses
+        ]
+
+        matches = []
+
+        for choice in choices:
+            if current.casefold() in choice.name.casefold():
+                matches.append(choice)
+
+        return matches[:25]
+
+    @status_group.command(name="view", description="View all ticket statuses")
+    @checks.is_admin_app()
+    @checks.is_guild_app()
+    async def status_view(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer()
+            guild_id = interaction.guild.id
+
+            statuses = await self.bot.data_manager.get_statuses(guild_id)
+
+            if not statuses:
+                await interaction.followup.send(
+                    embed=Embeds.success(description="No ticket statuses set.")
+                )
+                return
+
+            embed = Embeds.success(title="Ticket Statuses")
+            for status in statuses:
+                emoji = status["emoji"]
+                name = status["name"]
+                embed.add_field(
+                    name=f"{emoji} {name}",
+                    value=" ",
+                    inline=False,
+                )
+
+            await interaction.followup.send(embed=embed)
+
+        except Exception as e:
+            logger.exception(f"/status_view error: {e}")
+            raise BotError(f"/status_view sent an error: {e}")
 
     @commands.command(name="config")
     @checks.is_admin()

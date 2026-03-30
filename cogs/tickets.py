@@ -15,6 +15,7 @@ from classes.embeds import Embeds
 from classes.error_handler import *
 from classes.ticket_submitter import DMCategoryButtonView, TicketRatingView
 from utils import checks, emojis, queries
+from utils.emojis import *
 from utils.helpers import *
 from utils.logger import *
 
@@ -1306,85 +1307,6 @@ class Tickets(commands.Cog):
         except Exception as e:
             logger.exception(e)
             raise BotError(f"/move sent an error: {e}")
-
-    # Manually update the status of a ticket channel
-    @app_commands.command(
-        name="status", description="Change the emoji status of a ticket"
-    )
-    @checks.is_ticket_app()
-    @checks.is_user_app()
-    @checks.is_guild_app()
-    @app_commands.describe(status="Select an emoji from the provided list")
-    async def status(self, interaction, status: str):
-        try:
-            await interaction.response.defer(ephemeral=True)
-            channel = interaction.channel
-            emoji_name = status[(status.index(":") + 1) :]
-            emoji_str = status[: status.index(":")]
-
-            if self.bot.channel_status.get_timer(channel.id):
-                errorEmbed = discord.Embed(
-                    description="❌ Cannot change the status of an **inactive** ticket",
-                    color=discord.Color.red(),
-                )
-                await interaction.followup.send(embed=errorEmbed, ephemeral=True)
-                return
-
-            result = await self.bot.channel_status.set_emoji(channel, emoji_str, True)
-
-            statusEmbed = Embeds.success(
-                description=f"✅ Channel status set to **{emoji_name}**"
-                "\n(*Please wait up to 5 minutes for edits to appear*)",
-            )
-            if not result:
-                statusEmbed.description = (
-                    f"❌ Failed to set channel status to **{emoji_name}**, current "
-                    "or pending status is already set as this"
-                )
-                statusEmbed.color = discord.Color.red()
-            await interaction.followup.send(embed=statusEmbed, ephemeral=True)
-            return
-
-        except Exception as e:
-            logger.exception(e)
-            raise BotError(f"/status sent an error: {e}")
-
-    @status.autocomplete("status")
-    async def move_autocomplete(
-        self, interaction: discord.Interaction, current: str
-    ) -> List[app_commands.Choice[str]]:
-        guild = interaction.guild
-        if not guild:
-            return []
-
-        # TODO: eventually this should be a database table
-        statuses = {
-            None: [
-                ("🆕 - New ticket", "new"),
-                ("❗️ - Waiting for moderator response", "alert"),
-                ("⏳ - Waiting for user response", "wait"),
-                ("🔎 - Under review", "review"),
-            ],
-            "346515443869286410": [
-                ("🧡 - Admin assist (Contact)", "contact"),
-                ("💚 - Admin assist (Reimbursements)", "reimburse"),
-                ("💜 - Admin assist (Appeal Assist)", "appeal"),
-                ("🐟 - Phishing links", "phish"),
-            ],
-        }
-
-        final_statuses = []
-        for key, status_list in statuses.items():
-            if key is None or key == str(guild.id):
-                final_statuses.extend(status_list)
-
-        matches = [
-            app_commands.Choice(name=description, value=f"{keyword}:{description}")
-            for description, keyword in final_statuses
-            if current.casefold() in description.casefold()
-        ]
-
-        return matches[:25]
 
     @commands.command(name="button")
     @checks.is_admin()

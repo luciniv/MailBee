@@ -185,6 +185,7 @@ class ChannelStatus:
             if pending_name == new_name:
                 return False
 
+            # if current emoji is custom, this is None
             current_emoji_str = next(
                 (
                     emoji
@@ -203,7 +204,9 @@ class ChannelStatus:
                         return False
 
                     # If current name is permanent, drop new name
-                    if emojis.emoji_map.get(current_emoji_str)[1]:
+                    if (emojis.emoji_map.get(current_emoji_str)[1]) or (
+                        current_emoji_str in emoji.EMOJI_DATA
+                    ):
                         return False
 
                     # Delete timer if switching from inactive to alert
@@ -220,7 +223,7 @@ class ChannelStatus:
 
     # normal emoji changes are FALSE for manual and have NONE for nsfw_state
     # nsfw_state changes are TRUE for manual and have TRUE/FALSE for nsfw_state
-    # inactive / other perm emojis are TRUE for manual and have NONE for nsfw_state
+    # inactive / all other perm emojis are TRUE for manual and have NONE for nsfw_state
 
     # the inactive emojis specifically cant be overwritten unless by a non-manual wait
 
@@ -251,7 +254,13 @@ class ChannelStatus:
                 self.queue_update(channel, emoji_str, None, manual)
                 return True
 
-            selected_emoji = (emojis.emoji_map.get(emoji_str))[0]
+            selected_emoji = emojis.emoji_map.get(emoji_str, None)
+            if selected_emoji:
+                selected_emoji = selected_emoji[0]
+            else:
+                # temp fix for passing emoji directly
+                selected_emoji = emoji_str
+
             # Remove prefixed emoji if there is one
             if (channel.name)[0] in emoji.EMOJI_DATA and (
                 not channel.name.startswith((emojis.emoji_map.get("nsfw"))[0])
