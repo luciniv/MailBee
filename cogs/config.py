@@ -421,13 +421,13 @@ class Config(commands.Cog):
 
         for index, field in enumerate(fields, start=1):
             embed.add_field(
-            name=f"{index}) {field['label']}",
-            value=f"**Placeholder:** {field.get('placeholder', 'N/A')}\n"
-            f"**Style:** {field['style'].capitalize()}\n"
-            f"**Min Length:** {field.get('min_length', 1)}\n"
-            f"**Max Length:** {field.get('max_length', 1024)}\n"
-            f"**Required:** {field.get('required', True)}",
-            inline=False,
+                name=f"{index}) {field['label']}",
+                value=f"**Placeholder:** {field.get('placeholder', 'N/A')}\n"
+                f"**Style:** {field['style'].capitalize()}\n"
+                f"**Min Length:** {field.get('min_length', 1)}\n"
+                f"**Max Length:** {field.get('max_length', 1024)}\n"
+                f"**Required:** {field.get('required', True)}",
+                inline=False,
             )
         return embed
 
@@ -1497,7 +1497,7 @@ class Config(commands.Cog):
         try:
             await interaction.response.defer(ephemeral=True)
             channel = interaction.channel
-            status_emoji, status_name = status.split(",")
+            status_emoji, status_name = status.split(";")
 
             new_status = status_name if (status_name in emoji_map) else status_emoji
 
@@ -1539,7 +1539,7 @@ class Config(commands.Cog):
         choices = [
             app_commands.Choice(
                 name=f"{status['emoji']} {status['name']}",
-                value=f"{status['emoji']},{status['name']}",
+                value=f"{status['emoji']};{status['name']}",
             )
             for status in statuses
         ]
@@ -1585,10 +1585,10 @@ class Config(commands.Cog):
                 )
                 return
 
-            if not bool(re.fullmatch(r"[A-Za-z0-9 ]+", name.casefold())):
+            if ";" in name:
                 await interaction.followup.send(
                     embed=Embeds.error(
-                        description="❌ Status names must be alphanumeric only."
+                        description="❌ Status names cannot contain semicolons."
                     )
                 )
                 return
@@ -1611,7 +1611,7 @@ class Config(commands.Cog):
     async def status_remove(self, interaction: discord.Interaction, status: str):
         try:
             await interaction.response.defer()
-            status_emoji, status_name, status_id = status.split(",")
+            status_emoji, status_name, status_id = status.split(";")
 
             await self.bot.data_manager.delete_status(status_id)
 
@@ -1635,7 +1635,7 @@ class Config(commands.Cog):
         choices = [
             app_commands.Choice(
                 name=f"{status['emoji']} {status['name']}",
-                value=f"{status['emoji']},{status['name']},{status['status_id']}",
+                value=f"{status['emoji']};{status['name']};{status['status_id']}",
             )
             for status in statuses
         ]
