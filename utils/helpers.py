@@ -192,3 +192,8 @@ def add_footers(pages):
             text=f"Use the buttons below to navigate (Page {page + 1}/{len(pages)})"
         )
     return pages
+
+
+def is_valid_image_url(url):
+    image_extensions = (".jpg", ".jpeg", ".png", ".gif", ".webp")
+    return url.lower().endswith(image_extensions)

@@ -596,6 +596,15 @@ class DataManager:
         id = await self.execute_query(query)
         return id
 
+    async def get_type_ID(self, channel_id):
+        query = f"""
+            SELECT typeID
+            FROM tickets_v2
+            WHERE tickets_v2.channelID = {channel_id};
+            """
+        id = await self.execute_query(query)
+        return id
+
     # Create a new ticket entry in the database
     async def create_ticket(self, ticket: Ticket, channel_id, ticket_id, thread_id):
         timestamp = datetime.now(timezone.utc)
@@ -651,7 +660,7 @@ class DataManager:
 
     """ DATABASE """
 
-    # Load all ajectives
+    # Load all adjectives
     async def load_adjs_from_db(self):
         query = f"""
             SELECT * FROM ap_adjs;"""

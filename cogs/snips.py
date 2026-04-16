@@ -7,12 +7,32 @@ from discord import app_commands
 from discord.app_commands import Range
 from discord.ext import commands
 
-from classes.error_handler import *
 from classes.embeds import Embeds
-from utils.helpers import *
+from classes.error_handler import *
 from classes.paginator import *
+from classes.ticket_submitter import TimeoutSafeView
 from utils import checks
+from utils.helpers import *
 from utils.logger import *
+
+
+class SnipView(TimeoutSafeView):
+    def __init__(self, content):
+        super().__init__(timeout=300)
+        self.add_item(SnipButton(content))
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+
+
+class SnipButton(discord.ui.Button):
+    def __init__(self, content):
+        super().__init__(style=discord.ButtonStyle.success, label="Output Snip Content")
+        self.content = content
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"`{self.content}`", ephemeral=True)
 
 
 class Snips(commands.Cog):
@@ -149,7 +169,7 @@ class Snips(commands.Cog):
                 full_snip
             )
             snip_embed = self._format_snip_embed(abbrev, summary, author, content, date)
-            await channel.send(embed=snip_embed)
+            await channel.send(embed=snip_embed, view=SnipView(content))
 
         except Exception as e:
             logger.exception(e)
@@ -312,7 +332,7 @@ class Snips(commands.Cog):
                 full_snip
             )
             snip_embed = self._format_snip_embed(abbrev, summary, author, content, date)
-            await interaction.followup.send(embed=snip_embed)
+            await interaction.followup.send(embed=snip_embed, view=SnipView(content))
 
         except Exception as e:
             logger.exception(e)

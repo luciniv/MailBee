@@ -1231,57 +1231,47 @@ class Tickets(commands.Cog):
         try:
             guild = ctx.guild
             channel = ctx.channel
-            author = ctx.author
-
-            errorEmbed = discord.Embed(
-                description="❌ This command can only be used in ticket channels.",
-                color=discord.Color.red(),
-            )
 
             ticket_is_nsfw = False
-            types_raw = await self.bot.data_manager.get_or_load_guild_types(guild.id)
-            for type in types_raw:
-                if int(type["nsfw_category_id"]) == channel.category.id:
-                    ticket_is_nsfw = True
-                    break
 
-            if ticket_is_nsfw:
-                errorEmbed.description = (
-                    "❌ This ticket is already in a NSFW category.\n"
-                    "Use `/move` to move it manually elsewhere."
+            type_id = await self.bot.data_manager.get_type_ID(channel.id)
+            type_data = await self.bot.data_manager.get_ticket_type(guild.id, type_id)
+
+            nsfw_id = type_data.get("nsfw_category_id", -1)
+            if nsfw_id == -1:
+                config = self.bot.get_cog("Analytics")
+                if config:
+                    types = await config._list_format_types(guild.id)
+                    for type in types:
+                        if type["category_id"] == channel.category.id:
+                            nsfw_id = type["nsfw_category_id"]
+                            break
+
+            if nsfw_id == -1:
+                await ctx.send(
+                    embed=Embeds.error(
+                        description="❌ This ticket's type does not have a NSFW category set.\n"
+                        "Use `/move` to move it manually."
+                    )
                 )
-                await ctx.send(embed=errorEmbed)
                 return
 
-            nsfw_id = -1
-            for type in types_raw:
-                if int(type["category_id"]) == channel.category.id:
-                    nsfw_id = int(type["nsfw_category_id"])
-
-            if nsfw_id in (0, -1):
-                errorEmbed.description = (
-                    "❌ This ticket's type does not have a NSFW category set.\n"
-                    "Use `/move` to move it manually."
+            if nsfw_id == channel.category.id:
+                await ctx.send(
+                    embed=Embeds.error(
+                        description="❌ This ticket is already in the NSFW category."
+                    )
                 )
-                await ctx.send(embed=errorEmbed)
                 return
 
             category = await self.bot.cache.get_channel(nsfw_id)
 
             if category is None:
-                errorEmbed = discord.Embed(
-                    description="❌ NSFW category for this ticket's type doesn't exist.",
-                    color=discord.Color.red(),
+                await ctx.send(
+                    embed=Embeds.error(
+                        description="❌ NSFW category for this ticket's type doesn't exist."
+                    )
                 )
-                await ctx.send(embed=errorEmbed)
-                return
-
-            if category.id == channel.category.id:
-                errorEmbed = discord.Embed(
-                    description="❌ This ticket is already in its NSFW category.",
-                    color=discord.Color.red(),
-                )
-                await ctx.send(embed=errorEmbed)
                 return
 
             try:
@@ -1290,18 +1280,19 @@ class Tickets(commands.Cog):
                 )
                 await self.bot.channel_status.set_emoji(channel, None, False, True)
             except Exception:
-                errorEmbed.description = (
-                    "❌ Failed to edit channel. Please try again later."
+                await ctx.send(
+                    embed=Embeds.error(
+                        description="❌ Failed to edit channel. Please try again later."
+                    )
                 )
-                await ctx.send(embed=errorEmbed)
                 return
 
-            successEmbed = Embeds.success(
+            success_embed = Embeds.success(
                 description=f"✅ Moved this channel to **{category.name}**\n"
                 "**NOTE:** This channel's emoji status may take up to "
                 "5 minutes to update",
             )
-            await ctx.send(embed=successEmbed, delete_after=10)
+            await ctx.send(embed=success_embed, delete_after=10)
             return
 
         except Exception as e:
