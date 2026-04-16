@@ -28,7 +28,7 @@ class SnipView(TimeoutSafeView):
 
 class SnipButton(discord.ui.Button):
     def __init__(self, content):
-        super().__init__(style=discord.ButtonStyle.success, label="Output Snip Content")
+        super().__init__(style=discord.ButtonStyle.success, label="Copy Snip Content")
         self.content = content
 
     async def callback(self, interaction: discord.Interaction):
