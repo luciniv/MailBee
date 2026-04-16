@@ -37,8 +37,6 @@ class Analytics(commands.Cog):
 
     async def cog_load(self):
         if self.bot.mode == "prod":
-            logger.log("SYSTEM", "------- CATCHING BACKLOG -----------------")
-            await self.catch_modmail_backlog()
             await self.process_queue()
         else:
             logger.log("SYSTEM", "------- DEV MODE: SKIPPING BACKLOG -----------------")
