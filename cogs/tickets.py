@@ -1231,15 +1231,18 @@ class Tickets(commands.Cog):
         try:
             guild = ctx.guild
             channel = ctx.channel
+            message = ctx.message
 
             ticket_is_nsfw = False
 
             type_id = await self.bot.data_manager.get_type_ID(channel.id)
-            type_data = await self.bot.data_manager.get_ticket_type(guild.id, type_id)
+            type_data = await self.bot.data_manager.get_ticket_type(
+                guild.id, type_id[0][0]
+            )
 
             nsfw_id = type_data.get("nsfw_category_id", -1)
             if nsfw_id == -1:
-                config = self.bot.get_cog("Analytics")
+                config = self.bot.get_cog("Config")
                 if config:
                     types = await config._list_format_types(guild.id)
                     for type in types:
@@ -1292,6 +1295,7 @@ class Tickets(commands.Cog):
                 "**NOTE:** This channel's emoji status may take up to "
                 "5 minutes to update",
             )
+            await message.delete()
             await ctx.send(embed=success_embed, delete_after=10)
             return
 

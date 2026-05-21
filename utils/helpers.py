@@ -196,4 +196,7 @@ def add_footers(pages):
 
 def is_valid_image_url(url):
     image_extensions = (".jpg", ".jpeg", ".png", ".gif", ".webp")
-    return url.lower().endswith(image_extensions)
+    url_pattern = re.compile(r"^https://([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[^\s]*)?$")
+    if url_pattern.match(url) and url.lower().endswith(image_extensions):
+        return True
+    return False

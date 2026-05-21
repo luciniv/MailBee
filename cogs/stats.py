@@ -507,7 +507,6 @@ class Stats(commands.Cog):
 
             # Generate and execute query
             query, headers = await queries.week_CSV_v2(self, guild_id, int(weekISO))
-            print(query)
             result = await self.bot.data_manager.execute_query(query)
 
             file = None

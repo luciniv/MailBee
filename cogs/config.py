@@ -929,7 +929,9 @@ class Config(commands.Cog):
             )
             await self.bot.data_manager.get_or_load_guild_types(guild.id, False)
             await interaction.followup.send(
-                embed=Embeds.success(description=f"✅ Added ticket type {emoji} {name}")
+                embed=Embeds.success(
+                    description=f"✅ Added ticket type **{emoji} {name}**"
+                )
             )
 
         except Exception as e:

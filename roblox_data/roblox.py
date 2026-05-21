@@ -223,10 +223,10 @@ async def get_roblox_data(game_type: tuple, guild_id: int, user_id: int) -> list
     try:
         user_info = await get_roblox_user_data(guild_id, user_id, game_type[2])
         if user_info:
-            values = await get_roblox_game_data(
-                game_type[0], game_type[1], user_info[1]
-            )
-            user_info.extend(values)
+            # values = await get_roblox_game_data(
+            # game_type[0], game_type[1], user_info[1]
+            # )
+            user_info.extend([-1, -1])
             return user_info
         else:
             return None

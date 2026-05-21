@@ -312,23 +312,23 @@ class TicketOpener:
                     ticket.roblox_username if ticket.roblox_username else "N/A"
                 )
                 roblox_id = ticket.roblox_id if ticket.roblox_id != -1 else "N/A"
-                robux_spent = ticket.robux_spent if ticket.robux_spent != -1 else "N/A"
-                hours_played = (
-                    ticket.hours_played if ticket.hours_played != -1 else "N/A"
-                )
+                # robux_spent = ticket.robux_spent if ticket.robux_spent != -1 else "N/A"
+                # hours_played = (
+                #    ticket.hours_played if ticket.hours_played != -1 else "N/A"
+                # )
 
                 ticket_embed.add_field(name="", value="", inline=False)
                 ticket_embed.add_field(
                     name="Roblox Username", value=roblox_username, inline=True
                 )
                 ticket_embed.add_field(name="Roblox ID", value=roblox_id, inline=True)
-                ticket_embed.add_field(name="", value="", inline=False)
-                ticket_embed.add_field(
-                    name="Robux Spent", value=robux_spent, inline=True
-                )
-                ticket_embed.add_field(
-                    name="Hours Ingame", value=hours_played, inline=True
-                )
+                # ticket_embed.add_field(name="", value="", inline=False)
+                # ticket_embed.add_field(
+                #    name="Robux Spent", value=robux_spent, inline=True
+                # )
+                # ticket_embed.add_field(
+                #    name="Hours Ingame", value=hours_played, inline=True
+                # )
 
             # Member-nonspecific info
             ticket_embed.add_field(name="", value="", inline=False)

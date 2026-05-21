@@ -18,53 +18,91 @@ class Profiles(commands.Cog):
     profile_group = app_commands.Group(name="profile", description="Manage profiles")
 
     @profile_group.command(
-        name="list", description="List all available adjectives and nouns"
+        name="list", description="List all available adjectives and nouns for profiles"
+    )
+    @app_commands.describe(type="Choose to list adjectives or nouns")
+    @app_commands.choices(
+        type=[
+            app_commands.Choice(name="Adjectives", value="Adjectives"),
+            app_commands.Choice(name="Nouns", value="Nouns"),
+        ]
     )
     @checks.is_user_app()
     @checks.is_guild_app()
-    async def profile_list(self, interaction: discord.Interaction):
+    async def profile_list(self, interaction: discord.Interaction, type: str):
         try:
             await interaction.response.defer(ephemeral=True)
-            guild_id = interaction.guild.id
+            guild = interaction.guild
+            pages = []
 
-            adjectives = await self.bot.data_manager.load_adjs_from_db()
-            nouns = await self.bot.data_manager.load_nouns_from_db(guild_id)
-
-            if not adjectives and not nouns:
-                await interaction.followup.send(
-                    embed=Embeds.error(
-                        description="❌ There are currently no adjectives or nouns available for anonymous profiles."
+            if type == "Adjectives":
+                adjs = await self.bot.data_manager.load_adjs_from_db()
+                if not adjs:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ There are currently no adjectives in the database."
+                        )
                     )
-                )
-                return
+                else:
+                    for i in range(0, len(adjs), 20):
+                        chunk = adjs[i : i + 20]
+                        ap_embed = Embeds.success(title=f"Anonymous Profile Adjectives")
+                        ap_embed.set_author(
+                            name=guild.name,
+                            icon_url=guild.icon.url if guild.icon else None,
+                        )
 
-            embed = Embeds.success(title="Available Adjectives and Nouns")
-            if adjectives:
-                embed.add_field(
-                    name="Adjectives",
-                    value="\n".join(adjectives),
-                    inline=False,
-                )
-            else:
-                embed.add_field(
-                    name="Adjectives", value="No adjectives available", inline=False
-                )
+                        content = "\n".join(
+                            [
+                                f"{count + i + 1}) **{adj[1]}**"
+                                for count, adj in enumerate(chunk)
+                            ]
+                        )
+                        ap_embed.description = content
+                        pages.append(ap_embed)
 
-            if nouns:
-                embed.add_field(
-                    name="Nouns",
-                    value="\n".join(nouns),
-                    inline=False,
-                )
-            else:
-                embed.add_field(name="Nouns", value="No nouns available", inline=False)
+                    pages = add_footers(pages)
+                    view = Paginator(pages)
+                    view.message = await interaction.followup.send(
+                        embed=pages[0], view=view
+                    )
 
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            elif type == "Nouns":
+                nouns = await self.bot.data_manager.load_nouns_from_db(guild.id)
+                if not nouns:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ There are currently no nouns for this server."
+                        )
+                    )
+                else:
+                    for i in range(0, len(nouns), 20):
+                        chunk = nouns[i : i + 20]
+                        ap_embed = Embeds.success(title=f"Anonymous Profile Nouns")
+                        ap_embed.set_author(
+                            name=guild.name,
+                            icon_url=guild.icon.url if guild.icon else None,
+                        )
+
+                        content = "\n".join(
+                            [
+                                f"{count + i + 1}) **{noun[1]}**"
+                                for count, noun in enumerate(chunk)
+                            ]
+                        )
+                        ap_embed.description = content
+                        pages.append(ap_embed)
+
+                    pages = add_footers(pages)
+                    view = Paginator(pages)
+                    view.message = await interaction.followup.send(
+                        embed=pages[0], view=view
+                    )
 
         except Exception as e:
             logger.exception(f"/profile list sent an error: {e}")
             raise BotError(
-                "An error occurred while fetching the profile lists. Please try again later."
+                "An error occurred while fetching profiles. Please try again later."
             )
 
     @profile_group.command(
@@ -79,7 +117,7 @@ class Profiles(commands.Cog):
         self, interaction: discord.Interaction, user: discord.Member = None
     ):
         try:
-            await interaction.response.defer()
+            await interaction.response.defer(ephemeral=True)
             guild = interaction.guild
 
             if user:
@@ -91,21 +129,14 @@ class Profiles(commands.Cog):
                         )
                     )
                 else:
-                    adjective, noun, date, url = (
-                        ap["adj"],
-                        ap["noun"],
-                        ap["date"],
-                        ap["url"],
-                    )
+                    adjective, noun, url = (ap["adj"], ap["noun"], ap["url"])
 
-                    if adjective == "none":
+                    if adjective == "None":
                         adjective = ""
-                    embed = Embeds.success(
-                        description=f"### {adjective} {noun}\n"
-                        f"**Acquired:** <t:{date}:D> (<t:{date}:R>)",
-                    )
+                    embed = Embeds.success(description=f"### {adjective} {noun}")
                     if url is not None:
                         embed.set_thumbnail(url=url)
+                        embed.description += f"\n[Image Link]({url})"
                     embed.set_author(
                         name=f"{user.name} | {user.id}",
                         icon_url=(user.avatar and user.avatar.url)
@@ -115,6 +146,7 @@ class Profiles(commands.Cog):
             else:
                 pages = []
                 aps = await self.bot.data_manager.load_all_aps(guild.id)
+
                 if not aps:
                     await interaction.followup.send(
                         embed=Embeds.error(
@@ -131,21 +163,19 @@ class Profiles(commands.Cog):
                         )
 
                         for index, entry in enumerate(chunk, start=i + 1):
-                            adjective, noun, date, url, mod_id = (
+                            adjective, noun, url, mod_id = (
                                 entry[0],
                                 entry[1],
                                 entry[2],
                                 entry[3],
-                                entry[4],
                             )
 
-                            if adjective == "none":
+                            if adjective == "None":
                                 adjective = ""
                             ap_embed.add_field(
                                 name=f"{adjective} {noun}\n",
                                 value=f"**Moderator:** <@{mod_id}>\n"
-                                f"**Image:** {'[Link](' + url + ')' if url else 'None'}\n"
-                                f"**Acquired:** <t:{date}:D> (<t:{date}:R>)",
+                                f"**Image:** {'[Link](' + url + ')' if url else 'None'}",
                                 inline=False,
                             )
                         pages.append(ap_embed)
@@ -184,7 +214,7 @@ class Profiles(commands.Cog):
                 noun = ap["noun"]
                 url = ap["url"]
 
-                if adjective == "none":
+                if adjective == "None":
                     adjective = ""
                 profileEmbed = discord.Embed(
                     description=f"### {adjective} {noun}",
@@ -192,10 +222,7 @@ class Profiles(commands.Cog):
                 )
                 if url is not None:
                     profileEmbed.set_thumbnail(url=url)
-                profileEmbed.set_author(
-                    name=f"Random Anonymous Profile",
-                    icon_url=guild.icon.url if guild.icon else None,
-                )
+                    profileEmbed.description += f"\n[Image Link]({url})"
                 await interaction.followup.send(embed=profileEmbed)
         except Exception as e:
             logger.exception(f"/profile random sent an error: {e}")
@@ -227,17 +254,45 @@ class Profiles(commands.Cog):
                 )
                 return
 
-            output = "✅ Anonymous profiles updated:\n\n"
+            if image_url and not is_valid_image_url(image_url):
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ The image URL is not valid. Please provide a direct link to an image (starting with https:// and ending in .jpg, .png, etc.)."
+                    )
+                )
+                return
+
+            embed = Embeds.success()
+            output = "✅ Anonymous profiles updated:\n"
 
             if adjective:
+                if not bool(re.fullmatch(r"[A-Za-z0-9 ]+", adjective.casefold())):
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Adjectives must be alphanumeric only."
+                        )
+                    )
+                    return
                 await self.bot.data_manager.add_adj_to_db(adjective)
                 output += f"- Adjective **{adjective}** added\n"
 
             if noun:
+                if not bool(re.fullmatch(r"[A-Za-z0-9 ]+", noun.casefold())):
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Nouns must be alphanumeric only."
+                        )
+                    )
+                    return
                 await self.bot.data_manager.add_noun_to_db(guild_id, noun, image_url)
                 output += f"- Noun **{noun}** added\n"
 
-            await interaction.followup.send(embed=Embeds.success(description=output))
+            if image_url:
+                output += f"- Image URL for noun **{noun}** set to {image_url}\n"
+                embed.set_thumbnail(url=image_url)
+
+            embed.description = output
+            await interaction.followup.send(embed=embed)
 
         except Exception as e:
             logger.exception(f"/profile add sent an error: {e}")
@@ -252,23 +307,26 @@ class Profiles(commands.Cog):
     async def profile_remove(
         self,
         interaction: discord.Interaction,
-        adjective: str,
-        noun: str,
+        adjective: str = None,
+        noun: str = None,
     ):
         try:
             await interaction.response.defer(ephemeral=True)
             guild_id = interaction.guild.id
-            adjective_id, noun_id = adjective, noun
+            adjective_id, adjective_text = (
+                adjective.split(",") if adjective else (None, None)
+            )
+            noun_id, noun_text = noun.split(",") if noun else (None, None)
 
-            output = "✅ Anonymous profiles updated:\n\n"
+            output = "✅ Anonymous profiles updated:\n"
 
             if adjective_id:
-                await self.bot.data_manager.delete_adj_from_db(adjective)
-                output += f"- Adjective **{adjective}** removed\n"
+                await self.bot.data_manager.delete_adj_from_db(adjective_id)
+                output += f"- Adjective **{adjective_text}** removed\n"
 
             if noun_id:
-                await self.bot.data_manager.delete_noun_from_db(guild_id, noun)
-                output += f"- Noun **{noun}** removed\n"
+                await self.bot.data_manager.delete_noun_from_db(guild_id, noun_id)
+                output += f"- Noun **{noun_text}** removed\n"
 
             await interaction.followup.send(embed=Embeds.success(description=output))
         except Exception as e:
@@ -280,8 +338,8 @@ class Profiles(commands.Cog):
     ):
         adjectives = await self.bot.data_manager.load_adjs_from_db()
         return [
-            app_commands.Choice(name=adj, value=adj)
-            for adj in adjectives
+            app_commands.Choice(name=adj, value=f"{id},{adj}")
+            for id, adj in adjectives
             if current.lower() in adj.lower()
         ][:25]
 
@@ -292,76 +350,82 @@ class Profiles(commands.Cog):
         guild_id = interaction.guild.id
         nouns = await self.bot.data_manager.load_nouns_from_db(guild_id)
         return [
-            app_commands.Choice(name=noun, value=noun)
-            for noun in nouns
+            app_commands.Choice(name=noun, value=f"{id},{noun}")
+            for id, noun in nouns
             if current.lower() in noun.lower()
         ][:25]
 
-    @profile_group.command(name="set", description="Set a user's anonymous profile")
+    @profile_group.command(
+        name="assign", description="Assign a user an anonymous profile"
+    )
     @app_commands.describe(
         user="User to set the profile for",
         adjective="Adjective for the profile",
         noun="Noun for the profile",
-        image_url="Optional image URL for the profile",
     )
     @checks.is_admin_app()
     @checks.is_guild_app()
-    async def profile_set(
+    async def profile_assign(
         self,
         interaction: discord.Interaction,
         user: discord.Member,
         adjective: str,
         noun: str,
-        image_url: str = None,
     ):
         try:
             await interaction.response.defer(ephemeral=True)
             guild = interaction.guild
+            adjective_id, adjective_text = adjective.split(",")
+            noun_id, noun_text = noun.split(",")
 
-            success = await self.bot.data_manager.set_user_ap(
-                guild.id, user.id, adjective, noun, image_url
+            link = await self.bot.data_manager.find_link(
+                guild.id, adjective_id, noun_id
             )
-            if success:
-                await interaction.followup.send(
-                    embed=Embeds.success(
-                        description=f"✅ Anonymous profile for {user.mention} "
-                        f"set to **{adjective} {noun}**."
-                    ),
-                    ephemeral=True,
-                )
-            else:
+            if link:
                 await interaction.followup.send(
                     embed=Embeds.error(
-                        description=f"❌ The **{adjective} {noun}** anonymous profile "
-                        "is already in use. Please choose a different adjective and "
+                        description=f"❌ This anonymous profile is already in use "
+                        "in this server. Please choose a different adjective and "
                         "noun combination."
-                    ),
-                    ephemeral=True,
+                    )
                 )
+                return
+
+            await self.bot.data_manager.add_link_to_db(
+                guild.id, user.id, adjective_id, noun_id
+            )
+
+            await interaction.followup.send(
+                embed=Embeds.success(
+                    description=f"✅ Set anonymous profile for {user.mention} "
+                    f"to **{adjective_text if adjective_text != 'None' else ''} {noun_text}**."
+                )
+            )
+
         except Exception as e:
             logger.exception(f"/profile set sent an error: {e}")
 
-    @profile_set.autocomplete("adjective")
+    @profile_assign.autocomplete("adjective")
     async def profile_set_adjective_autocomplete(
         self, interaction: discord.Interaction, current: str
     ):
         guild = interaction.guild
-        adjectives = await self.bot.data_manager.get_ap_adjectives(guild.id)
+        adjectives = await self.bot.data_manager.load_adjs_from_db()
         return [
-            app_commands.Choice(name=adj, value=adj)
-            for adj in adjectives
+            app_commands.Choice(name=adj, value=f"{id},{adj}")
+            for id, adj in adjectives
             if current.lower() in adj.lower()
         ][:25]
 
-    @profile_set.autocomplete("noun")
+    @profile_assign.autocomplete("noun")
     async def profile_set_noun_autocomplete(
         self, interaction: discord.Interaction, current: str
     ):
         guild = interaction.guild
-        nouns = await self.bot.data_manager.get_ap_nouns(guild.id)
+        nouns = await self.bot.data_manager.load_nouns_from_db(guild.id)
         return [
-            app_commands.Choice(name=noun, value=noun)
-            for noun in nouns
+            app_commands.Choice(name=noun, value=f"{id},{noun}")
+            for id, noun in nouns
             if current.lower() in noun.lower()
         ][:25]
 
@@ -376,20 +440,19 @@ class Profiles(commands.Cog):
             await interaction.response.defer(ephemeral=True)
             guild = interaction.guild
 
-            success = await self.bot.data_manager.clear_user_ap(guild.id, user.id)
-            if success:
+            ap = await self.bot.data_manager.get_or_load_ap(guild.id, user.id)
+            if ap is not None:
+                await self.bot.data_manager.delete_link_from_db(guild.id, user.id)
                 await interaction.followup.send(
                     embed=Embeds.success(
                         description=f"✅ Anonymous profile for {user.mention} has been cleared."
-                    ),
-                    ephemeral=True,
+                    )
                 )
             else:
                 await interaction.followup.send(
                     embed=Embeds.error(
                         description=f"❌ {user.mention} does not currently have an anonymous profile to clear."
-                    ),
-                    ephemeral=True,
+                    )
                 )
         except Exception as e:
             logger.exception(f"/profile clear sent an error: {e}")
@@ -403,17 +466,17 @@ class Profiles(commands.Cog):
     async def profile_test(self, interaction: discord.Interaction, image_url: str):
         try:
             await interaction.response.defer(ephemeral=True)
+
             if is_valid_image_url(image_url):
-                await interaction.followup.send(
-                    embed=Embeds.success(description="✅ The image URL is valid."),
-                    ephemeral=True,
-                )
+                embed = Embeds.success(description="✅ The image URL is valid.")
+                embed.set_thumbnail(url=image_url)
+                await interaction.followup.send(embed=embed)
+
             else:
                 await interaction.followup.send(
                     embed=Embeds.error(
-                        description="❌ The image URL is not valid. Please provide a direct link to an image (ending in .jpg, .png, etc.)."
-                    ),
-                    ephemeral=True,
+                        description="❌ The image URL is not valid. Please provide a direct link to an image (starting with https:// and ending in .jpg, .png, etc.)."
+                    )
                 )
         except Exception as e:
             logger.exception(f"/profile test sent an error: {e}")

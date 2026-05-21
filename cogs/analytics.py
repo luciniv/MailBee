@@ -553,7 +553,7 @@ class Analytics(commands.Cog):
                     or author.display_avatar.url,
                 )
             elif ap:
-                if ap["adj"] == "none":
+                if ap["adj"] == "None":
                     ap["adj"] = ""
                 send_embed.set_author(
                     name=f"{ap['adj']} {ap['noun']}", icon_url=ap["url"]

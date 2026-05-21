@@ -598,7 +598,7 @@ class DataManager:
 
     async def get_type_ID(self, channel_id):
         query = f"""
-            SELECT typeID
+            SELECT type
             FROM tickets_v2
             WHERE tickets_v2.channelID = {channel_id};
             """
@@ -663,7 +663,8 @@ class DataManager:
     # Load all adjectives
     async def load_adjs_from_db(self):
         query = f"""
-            SELECT * FROM ap_adjs;"""
+            SELECT * FROM ap_adjs
+            ORDER BY adj ASC;"""
         adjs = await self.execute_query(query)
         return adjs
 
@@ -671,7 +672,8 @@ class DataManager:
     async def load_nouns_from_db(self, guild_id):
         query = f"""
             SELECT ap_nouns.nounID, ap_nouns.noun FROM
-            ap_nouns WHERE ap_nouns.guildID = {guild_id};"""
+            ap_nouns WHERE ap_nouns.guildID = {guild_id}
+            ORDER BY ap_nouns.noun ASC;"""
         nouns = await self.execute_query(query)
         return nouns
 
@@ -683,27 +685,35 @@ class DataManager:
         links = await self.execute_query(query)
         return links
 
+    async def find_link(self, guild_id, adj_id, noun_id):
+        query = f"""
+            SELECT modID FROM ap_links
+            WHERE guildID = {guild_id}
+            AND adjID = {adj_id}
+            AND nounID = {noun_id};"""
+        mod_id = await self.execute_query(query)
+        return mod_id
+
     # Load specific user's AP from the database
     async def load_ap_from_db(self, guild_id, user_id):
         query = f"""
-            SELECT ap_adjs.adj, ap_nouns.noun, ap_nouns.nounURL, ap_links.date FROM
+            SELECT ap_adjs.adj, ap_nouns.noun, ap_nouns.nounURL FROM
             ap_links JOIN ap_adjs ON ap_links.adjID = ap_adjs.adjID
-            JOIN ap_nouns ON ap_links.guildID = ap_nouns.guildID
+            JOIN ap_nouns ON ap_links.nounID = ap_nouns.nounID
+            AND ap_links.guildID = ap_nouns.guildID
             WHERE ap_links.guildID = {guild_id}
-            AND ap_links.modID = {user_id}
-            ORDER BY ap_links.date DESC
-            LIMIT 1;"""
+            AND ap_links.modID = {user_id};"""
         ap = await self.execute_query(query)
         return ap
 
     async def load_all_aps(self, guild_id):
         query = f"""
-            SELECT ap_adjs.adj, ap_nouns.noun, ap_links.date, ap_nouns.nounURL, ap_links.modID FROM
+            SELECT ap_adjs.adj, ap_nouns.noun, ap_nouns.nounURL, ap_links.modID FROM
             ap_links JOIN ap_adjs ON ap_links.adjID = ap_adjs.adjID
-            JOIN ap_nouns ON ap_links.nounID = ap_nouns.nounID
+            JOIN ap_nouns ON ap_links.nounID = ap_nouns.nounID 
+            AND ap_links.guildID = ap_nouns.guildID
             WHERE ap_links.guildID = {guild_id}
-            AND ap_nouns.guildID = {guild_id}
-            ORDER BY ap_links.date DESC;"""
+            ORDER BY ap_nouns.noun DESC;"""
         aps = await self.execute_query(query)
         return aps
 
@@ -723,15 +733,17 @@ class DataManager:
         params = adj
         await self.execute_query(query, False, False, params)
 
-    async def add_link_to_db(self, guild_id, mod_id, noun_id, adj_id):
-        epoch_time = int(time.time())
-
+    async def add_link_to_db(self, guild_id, mod_id, adj_id, noun_id):
         query = """
-            INSERT INTO ap_links (guildID, modID, nounID, adjID, date) 
-            VALUES (%s, %s, %s, %s, %s);
+            INSERT INTO ap_links (guildID, modID, adjID, nounID) 
+            VALUES (%s, %s, %s, %s) as new_link
+            ON DUPLICATE KEY UPDATE
+                adjID = new_link.adjID,
+                nounID = new_link.nounID;
             """
-        params = (guild_id, mod_id, noun_id, adj_id, epoch_time)
+        params = (guild_id, mod_id, adj_id, noun_id)
         await self.execute_query(query, False, False, params)
+        await self.get_or_load_ap(guild_id, mod_id, get=False)
 
     async def delete_noun_from_db(self, guild_id, noun_id):
         query = f"""
@@ -756,6 +768,7 @@ class DataManager:
             AND modID = {mod_id};
             """
         await self.execute_query(query, False)
+        await self.get_or_load_ap(guild_id, mod_id, get=False)
 
     async def edit_noun_url(self, noun_id, noun_url):
         query = f"""
@@ -766,9 +779,12 @@ class DataManager:
         params = (noun_url,)
         await self.execute_query(query, False, False, params)
 
+    def format_random_ap(self, adj, noun, url):
+        return {"adj": adj, "noun": noun, "url": url}
+
     async def generate_random_ap(self, guild_id):
         query = f"""
-            SELECT adjs.adjID, adjs.adj, nouns.nounID, nouns.noun, nouns.nounURL
+            SELECT adjs.adj, nouns.noun, nouns.nounURL
             FROM ap_adjs AS adjs
             CROSS JOIN ap_nouns AS nouns
             WHERE nouns.guildID = {guild_id}
@@ -779,12 +795,13 @@ class DataManager:
             LIMIT 1;
             """
         ap = await self.execute_query(query)
-        return ap
+        formatted = self.format_random_ap(*ap[0])
+        return formatted
 
     """ CACHE """
 
-    def format_aps(self, adj, noun, url, date):
-        return {"adj": adj, "noun": noun, "url": url, "date": date}
+    def format_aps(self, adj, noun, url):
+        return {"adj": adj, "noun": noun, "url": url}
 
     async def get_or_load_ap(self, guild_id: int, user_id: int, get=True):
         redis_key = f"aps:{guild_id}:{user_id}"
@@ -795,6 +812,7 @@ class DataManager:
                 return json.loads(cached)
 
         ap = await self.load_ap_from_db(guild_id, user_id)
+
         if not ap:
             await self.set_with_expiry(redis_key, json.dumps(None))
             return None
@@ -1544,7 +1562,7 @@ class DataManager:
     async def get_ticket_type(self, guild_id: int, type_id: int):
         types = await self.get_or_load_guild_types(guild_id)
         for type in types:
-            if str(type["type_id"]) == type_id:
+            if type["type_id"] == int(type_id):
                 return type
         return None
 
