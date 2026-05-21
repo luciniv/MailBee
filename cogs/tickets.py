@@ -1246,7 +1246,8 @@ class Tickets(commands.Cog):
                 if config:
                     types = await config._list_format_types(guild.id)
                     for type in types:
-                        if type["category_id"] == channel.category.id:
+                        type = type["data"]
+                        if int(type["category_id"]) == channel.category.id:
                             nsfw_id = type["nsfw_category_id"]
                             break
 

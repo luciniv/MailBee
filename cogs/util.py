@@ -26,6 +26,16 @@ class Util(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(name="vs")
+    @checks.is_user()
+    async def vs(self, ctx, *, args: str = None):
+        await ctx.send(
+            embed=Embeds.info(
+                description="Psst... MailBee commands run [noun] [verb]. Use +sv or +snipview instead.",
+            ),
+            delete_after=10,
+        )
+
     def allowed_file(self, filename: str) -> bool:
         return any(filename.lower().endswith(ext) for ext in ALLOWED_EXTS)
 
