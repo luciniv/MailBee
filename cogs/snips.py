@@ -188,37 +188,36 @@ class Snips(commands.Cog):
                 url = guild.icon.url
 
             snips = await self.bot.data_manager.get_or_load_snips(guild.id)
-            if snips:
-                if len(snips) == 0:
-                    await ctx.send(
-                        embed=Embeds.success(
-                            title=f"Snip List", description="No snips found"
+            if snips and len(snips) != 0:
+                for i in range(0, len(snips), 6):
+                    chunk = snips[i : i + 6]
+                    snip_embed = Embeds.success(title=f"Snip List")
+                    snip_embed.set_author(name=guild.name, icon_url=url)
+
+                    for index, entry in enumerate(chunk, start=i + 1):
+                        abbrev, summary, author, content, date = (
+                            self._format_snip_content(entry)
                         )
+
+                        if len(content) > 200:
+                            content = content[:197] + "..."
+
+                        snip_embed.add_field(
+                            name=f"**Name:** {abbrev}",
+                            value=f"**Summary:** {summary}\n"
+                            f"**Content:** {content}\n"
+                            f"**Author:** <@{author}>\n"
+                            f"**Date:** <t:{date}:D> (<t:{date}:R>)\n{'⎯' * 20}",
+                            inline=False,
+                        )
+                    pages.append(snip_embed)
+            else:
+                await ctx.send(
+                    embed=Embeds.success(
+                        title=f"Snip List", description="No snips found"
                     )
-                    return
-                else:
-                    for i in range(0, len(snips), 6):
-                        chunk = snips[i : i + 6]
-                        snip_embed = Embeds.success(title=f"Snip List")
-                        snip_embed.set_author(name=guild.name, icon_url=url)
-
-                        for index, entry in enumerate(chunk, start=i + 1):
-                            abbrev, summary, author, content, date = (
-                                self._format_snip_content(entry)
-                            )
-
-                            if len(content) > 200:
-                                content = content[:197] + "..."
-
-                            snip_embed.add_field(
-                                name=f"**Name:** {abbrev}",
-                                value=f"**Summary:** {summary}\n"
-                                f"**Content:** {content}\n"
-                                f"**Author:** <@{author}>\n"
-                                f"**Date:** <t:{date}:D> (<t:{date}:R>)\n{'⎯' * 20}",
-                                inline=False,
-                            )
-                        pages.append(snip_embed)
+                )
+                return
 
             pages = add_footers(pages)
             view = Paginator(pages)

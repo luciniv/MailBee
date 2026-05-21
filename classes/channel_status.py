@@ -18,6 +18,7 @@ class ChannelStatus:
         self.channel_status_worker_task = None
         self.timer_worker_task = None
         self.timers = {}  # Stores ticket close timers
+        self.inactivity_alert_worker_task = None
 
     async def start_worker(self):
         try:
@@ -25,6 +26,9 @@ class ChannelStatus:
                 self.channel_status_worker()
             )
             self.timer_worker_task = asyncio.create_task(self.timer_worker())
+            self.inactivity_alert_worker_task = asyncio.create_task(
+                self.inactivity_alert_worker()
+            )
             logger.success("Workers started")
 
         except Exception as e:
@@ -34,6 +38,7 @@ class ChannelStatus:
         try:
             self.channel_status_worker_task.cancel()
             self.timer_worker_task.cancel()
+            self.inactivity_alert_worker_task.cancel()
             logger.success("Channel workers shut down")
 
         except Exception as e:
@@ -166,6 +171,32 @@ class ChannelStatus:
 
             except Exception:
                 await asyncio.sleep(5)
+
+    async def inactivity_alert_worker(self):
+        while True:
+            try:
+                await asyncio.sleep(21600)  # Check every 6 hours
+
+                # guild = self.bot.get_guild(self.bot.guild_id)
+                # if not guild:
+                # continue
+
+                # goal: set emoji to warning sign if ticket has not received a moderator response
+                # in the past X amount of time
+                # amount of time set in server config, pull from cache
+
+                # use database to view tickets
+                # select all open tickets for a server --> look at messages
+                # pull latest message, if there ISNT any messages or its from a user, check respective dates
+                # date since ticket made, date since user message sent
+
+                # what do i need? how much of this can do as a query?
+                # output should be channel IDs
+
+                # skip update if not new / alert status (ex: inactive, custom status)
+
+            except Exception as e:
+                logger.exception(f"Inactivity alert worker sent an error: {e}")
 
     # Queues a channel name update, replacing any previous updates for that channel
     def queue_update(
