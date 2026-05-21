@@ -713,7 +713,7 @@ class DataManager:
             JOIN ap_nouns ON ap_links.nounID = ap_nouns.nounID 
             AND ap_links.guildID = ap_nouns.guildID
             WHERE ap_links.guildID = {guild_id}
-            ORDER BY ap_nouns.noun DESC;"""
+            ORDER BY ap_nouns.noun ASC;"""
         aps = await self.execute_query(query)
         return aps
 

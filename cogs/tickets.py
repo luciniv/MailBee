@@ -1241,13 +1241,15 @@ class Tickets(commands.Cog):
             )
 
             nsfw_id = type_data.get("nsfw_category_id", -1)
-            if nsfw_id == -1:
+            parent_id = type_data.get("sub_type", -1)
+            if nsfw_id == -1 and parent_id != -1:
+                # type itself doesnt have a nsfw category, only proceed if has a parent
                 config = self.bot.get_cog("Config")
                 if config:
                     types = await config._list_format_types(guild.id)
                     for type in types:
                         type = type["data"]
-                        if int(type["category_id"]) == channel.category.id:
+                        if int(type["category_id"]) == parent_id:
                             nsfw_id = type["nsfw_category_id"]
                             break
 
@@ -1263,7 +1265,7 @@ class Tickets(commands.Cog):
             if nsfw_id == channel.category.id:
                 await ctx.send(
                     embed=Embeds.error(
-                        description="❌ This ticket is already in the NSFW category."
+                        description="❌ This ticket is already in its NSFW category."
                     )
                 )
                 return

@@ -1022,9 +1022,11 @@ class Config(commands.Cog):
         category="Destination category for this ticket type",
         parent="Parent type if this is a sub-type",
         nsfw="NSFW category for this type",
+        remove_nsfw="Pick True to remove the NSFW category from this type",
         redirect="Redirect text for redirect types",
         ping_roles="SPACE SEPARATED list of role IDs",
     )
+    @app_commands.choices(remove_nsfw=[app_commands.Choice(name="True", value="True")])
     async def type_edit(
         self,
         interaction: discord.Interaction,
@@ -1035,6 +1037,7 @@ class Config(commands.Cog):
         category: discord.CategoryChannel = None,
         parent: str = None,
         nsfw: discord.CategoryChannel = None,
+        remove_nsfw: str = None,
         redirect: str = None,
         ping_roles: str = None,
     ):
@@ -1060,7 +1063,12 @@ class Config(commands.Cog):
                 )
                 return
             new_category_id = category.id if category else type_data["category_id"]
-            new_nsfw_id = nsfw.id if nsfw else type_data["nsfw_category_id"]
+            new_nsfw_id = (
+                (nsfw.id if nsfw else type_data["nsfw_category_id"])
+                if not remove_nsfw
+                else -1
+            )
+
             new_redirect_text = redirect if redirect else type_data["redirectText"]
 
             # Set parent category ID
