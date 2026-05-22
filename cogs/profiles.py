@@ -363,7 +363,7 @@ class Profiles(commands.Cog):
         adjective="Adjective for the profile",
         noun="Noun for the profile",
     )
-    @checks.is_admin_app()
+    @checks.is_user_app()
     @checks.is_guild_app()
     async def profile_assign(
         self,
@@ -375,8 +375,18 @@ class Profiles(commands.Cog):
         try:
             await interaction.response.defer(ephemeral=True)
             guild = interaction.guild
+            author = interaction.user
             adjective_id, adjective_text = adjective.split(",")
             noun_id, noun_text = noun.split(",")
+
+            if user.id != author.id and not await checks._check_is_admin(
+                guild.id, author, interaction.channel, self.bot.data_manager
+            ):
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ You can only assign yourself an anonymous profile."
+                    )
+                )
 
             link = await self.bot.data_manager.find_link(
                 guild.id, adjective_id, noun_id
@@ -384,7 +394,7 @@ class Profiles(commands.Cog):
             if link:
                 await interaction.followup.send(
                     embed=Embeds.error(
-                        description=f"❌ This anonymous profile is already in use "
+                        description="❌ This anonymous profile is already in use "
                         "in this server. Please choose a different adjective and "
                         "noun combination."
                     )
@@ -431,14 +441,22 @@ class Profiles(commands.Cog):
 
     @profile_group.command(name="clear", description="Clear a user's anonymous profile")
     @app_commands.describe(user="User to clear the profile for")
-    @checks.is_admin_app()
+    @checks.is_user_app()
     @checks.is_guild_app()
-    async def profile_clear(
-        self, interaction: discord.Interaction, user: discord.Member
-    ):
+    async def profile_clear(self, interaction: discord.Interaction, user: discord.User):
         try:
             await interaction.response.defer(ephemeral=True)
             guild = interaction.guild
+            author = interaction.user
+
+            if user.id != author.id and not await checks._check_is_admin(
+                guild.id, author, interaction.channel, self.bot.data_manager
+            ):
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ You can only clear your own anonymous profile."
+                    )
+                )
 
             ap = await self.bot.data_manager.get_or_load_ap(guild.id, user.id)
             if ap is not None:

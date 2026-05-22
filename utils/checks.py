@@ -20,13 +20,12 @@ def is_owner():
 # Checks if user has Admin permissions for that channel or their ID is set as bot admin in MailBee's permissions cache
 def is_admin():
     async def predicate(ctx):
-        result = await _check_is_admin(
-            guild_id=ctx.guild.id,
-            user=ctx.author,
-            channel=ctx.channel,
-            command_name=ctx.command.name,
-            data_manager=ctx.bot.data_manager,
-        )
+        guild_id = ctx.guild.id
+        user = ctx.author
+        channel = ctx.channel
+        data_manager = ctx.bot.data_manager
+
+        result = await _check_is_admin(guild_id, user, channel, data_manager)
         if not result:
             raise AccessError(
                 f"You do not have access to use the **{ctx.command.name}** command.",
@@ -39,13 +38,12 @@ def is_admin():
 
 def is_admin_app():
     async def predicate(interaction: Interaction):
-        result = await _check_is_admin(
-            guild_id=interaction.guild.id,
-            user=interaction.user,
-            channel=interaction.channel,
-            command_name=interaction.command.name,
-            data_manager=interaction.client.data_manager,
-        )
+        guild_id = interaction.guild.id
+        user = interaction.user
+        channel = interaction.channel
+        data_manager = interaction.client.data_manager
+
+        result = await _check_is_admin(guild_id, user, channel, data_manager)
         if not result:
             raise AppAccessError(
                 f"You do not have access to use the **{interaction.command.name}** command.",
@@ -56,7 +54,7 @@ def is_admin_app():
     return app_commands.check(predicate)
 
 
-async def _check_is_admin(guild_id, user, channel, command_name, data_manager):
+async def _check_is_admin(guild_id, user, channel, data_manager):
     usrRoles = getattr(user, "roles", [])
 
     search_access = [
