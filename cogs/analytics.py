@@ -17,6 +17,8 @@ from utils.logger import *
 
 MAX_FILE_SIZE = 20 * 1024 * 1024
 
+FORWARD_BOTS = [469652514501951518, 426537812993638400]
+
 
 class MessageReceivedButton(discord.ui.View):
     def __init__(self):
@@ -708,6 +710,37 @@ class Analytics(commands.Cog):
             return
         return None
 
+    async def forward_to_log(self, message: discord.Message, thread_id: str):
+        thread = await self.bot.cache.get_channel(thread_id)
+        print(message.flags.value)
+
+        # If the message already has embeds, forward
+        if message.flags.value == 32768:
+            print("Forwarding immediately")
+            try:
+                await message.forward(thread)
+            except Exception as e:
+                logger.exception(f"Error forwarding message {message.id} to log: {e}")
+                return
+            return
+
+        # Otherwise wait for it to be edited
+        try:
+            for _ in range(10):
+                await asyncio.sleep(2)
+
+                if message.flags.value == 32768:
+                    try:
+                        await message.forward(thread)
+                    except Exception as e:
+                        logger.exception(
+                            f"Error forwarding message {message.id} to log: {e}"
+                        )
+                        return
+                    return
+        except asyncio.TimeoutError:
+            return
+
     # Populate queue with unprocessed messages
     async def catch_modmail_backlog(self):
         for guild in self.bot.guilds:
@@ -959,7 +992,8 @@ class Analytics(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         # Temp, allows Mantid to still work (allows Modmail message processing)
-        if message.author.bot and message.author.id != 575252669443211264:
+        id = message.author.id
+        if message.author.bot and id != 575252669443211264 and id not in FORWARD_BOTS:
             return
 
         # Process valid commands
@@ -969,13 +1003,13 @@ class Analytics(commands.Cog):
 
         if isinstance(message.channel, discord.DMChannel):
             limited, retry, was_notified = self.bot.queue.check_user_action_cooldown(
-                "dm_start", message.author.id
+                "dm_start", id
             )
 
             if limited:
                 if not was_notified:
                     self.bot.queue.user_action_cooldowns["dm_start"]["notified"][
-                        message.author.id
+                        id
                     ] = True
                     error_embed = discord.Embed(
                         description=f"❌ You're messaging me too quickly — retry in {retry:.1f} seconds.",
@@ -1001,7 +1035,12 @@ class Analytics(commands.Cog):
                     thread_id = id_list[-1]
                     user_id = id_list[-2]
 
-                    if message.content.startswith("+"):
+                    if id in FORWARD_BOTS:
+                        print("forward bot message sent")
+                        asyncio.create_task(self.forward_to_log(message, thread_id))
+                        return
+
+                    elif message.content.startswith("+"):
                         asyncio.create_task(
                             self.route_to_dm(
                                 message, this_channel, author, thread_id, user_id, None
@@ -1017,7 +1056,7 @@ class Analytics(commands.Cog):
                             message.id,
                             None,
                             this_channel_id,
-                            message.author.id,
+                            id,
                             format_time,
                             "Discussion",
                             True,
@@ -1038,7 +1077,7 @@ class Analytics(commands.Cog):
             channel = message.channel
             message_id = message.id
             guild = message.guild
-            this_author_id = message.author.id
+            this_author_id = id
             this_authorName = message.author.name
             timestamp = message.created_at
             format_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
@@ -1156,7 +1195,7 @@ class Analytics(commands.Cog):
                     pass
         else:
             # Calls if message is from the Modmail bot in a #modmail-log channel
-            if message.author.id == 575252669443211264:
+            if id == 575252669443211264:
                 if message.embeds:
                     await self.process_modmail(message, False)
 
