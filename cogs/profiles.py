@@ -313,10 +313,53 @@ class Profiles(commands.Cog):
         try:
             await interaction.response.defer(ephemeral=True)
             guild_id = interaction.guild.id
-            adjective_id, adjective_text = (
-                adjective.split(",") if adjective else (None, None)
-            )
-            noun_id, noun_text = noun.split(",") if noun else (None, None)
+
+            if not adjective and not noun:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ You must specify at least an adjective or a noun to remove."
+                    )
+                )
+                return
+
+            adjective_id, adjective_text = (None, None)
+            noun_id, noun_text = (None, None)
+
+            if adjective:
+                try:
+                    adjective_id, adjective_text = adjective.split(",")
+                except ValueError:
+                    adjective_text = adjective
+                    adjective_id = await self.bot.data_manager.get_adj_id(
+                        adjective_text
+                    )
+                    if len(adjective_id) == 0:
+                        await interaction.followup.send(
+                            embed=Embeds.error(
+                                description=f"❌ Adjective **{adjective_text}** is not a valid choice."
+                            )
+                        )
+                        return
+                    else:
+                        adjective_id = adjective_id[0][0]
+
+            if noun:
+                try:
+                    noun_id, noun_text = noun.split(",")
+                except ValueError:
+                    noun_text = noun
+                    noun_id = await self.bot.data_manager.get_noun_id(
+                        guild_id, noun_text
+                    )
+                    if len(noun_id) == 0:
+                        await interaction.followup.send(
+                            embed=Embeds.error(
+                                description=f"❌ Noun **{noun_text}** is not a valid choice."
+                            )
+                        )
+                        return
+                    else:
+                        noun_id = noun_id[0][0]
 
             output = "✅ Anonymous profiles updated:\n"
 
@@ -376,8 +419,39 @@ class Profiles(commands.Cog):
             await interaction.response.defer(ephemeral=True)
             guild = interaction.guild
             author = interaction.user
-            adjective_id, adjective_text = adjective.split(",")
-            noun_id, noun_text = noun.split(",")
+
+            adjective_id, adjective_text = (None, None)
+            noun_id, noun_text = (None, None)
+
+            try:
+                adjective_id, adjective_text = adjective.split(",")
+            except ValueError:
+                adjective_text = adjective
+                adjective_id = await self.bot.data_manager.get_adj_id(adjective_text)
+                if len(adjective_id) == 0:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description=f"❌ Adjective **{adjective_text}** is not a valid choice."
+                        )
+                    )
+                    return
+                else:
+                    adjective_id = adjective_id[0][0]
+
+            try:
+                noun_id, noun_text = noun.split(",")
+            except ValueError:
+                noun_text = noun
+                noun_id = await self.bot.data_manager.get_noun_id(guild.id, noun_text)
+                if len(noun_id) == 0:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description=f"❌ Noun **{noun_text}** is not a valid choice."
+                        )
+                    )
+                    return
+                else:
+                    noun_id = noun_id[0][0]
 
             if user.id != author.id and not await checks._check_is_admin(
                 guild.id, author, interaction.channel, self.bot.data_manager

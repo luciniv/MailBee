@@ -660,6 +660,29 @@ class DataManager:
 
     """ DATABASE """
 
+    # Get ID from adjective name
+    async def get_adj_id(self, adj):
+        query = f"""
+            SELECT adjID FROM ap_adjs
+            WHERE adj = '{adj}'
+            ORDER BY adjID DESC
+            LIMIT 1;
+            """
+        adj_id = await self.execute_query(query)
+        return adj_id
+
+    # Get ID from noun name and guild
+    async def get_noun_id(self, guild_id, noun):
+        query = f"""
+            SELECT nounID FROM ap_nouns
+            WHERE guildID = {guild_id}
+            AND noun = '{noun}'
+            ORDER BY nounID DESC
+            LIMIT 1;
+            """
+        noun_id = await self.execute_query(query)
+        return noun_id
+
     # Load all adjectives
     async def load_adjs_from_db(self):
         query = f"""

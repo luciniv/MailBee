@@ -633,7 +633,15 @@ class Config(commands.Cog):
             sorted_types = await self._list_format_types(guild_id)
 
             if type:
-                type_name, type_id, type_subtype_id = type.split(",")
+                try:
+                    type_name, type_id, type_subtype_id = type.split(",")
+                except ValueError:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Invalid type selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                        )
+                    )
+                    return
                 type_data = None
                 subtypes = None
                 type_parent = None
@@ -811,7 +819,15 @@ class Config(commands.Cog):
 
             parent_id = None
             if parent:
-                parent_name, parent_id, parent_category_id = parent.split(",")
+                try:
+                    parent_name, parent_id, parent_category_id = parent.split(",")
+                except ValueError:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Invalid parent selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                        )
+                    )
+                    return
 
             if category:
                 for parent_type in sorted_types:
@@ -963,7 +979,17 @@ class Config(commands.Cog):
         try:
             await interaction.response.defer()
             guild_id = interaction.guild.id
-            type_name, type_id, type_subtype_id = type.split(",")
+
+            try:
+                type_name, type_id, type_subtype_id = type.split(",")
+            except ValueError:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid type selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                    )
+                )
+                return
+
             type_data = await self.bot.data_manager.get_ticket_type(guild_id, type_id)
             current_index = type_data["order_id"]
 
@@ -1046,7 +1072,17 @@ class Config(commands.Cog):
             guild = interaction.guild
             guild_id = guild.id
             channel = interaction.channel
-            type_name, type_id, type_subtype_id = type.split(",")
+
+            try:
+                type_name, type_id, type_subtype_id = type.split(",")
+            except ValueError:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid type selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                    )
+                )
+                return
+
             type_data = await self.bot.data_manager.get_ticket_type(guild_id, type_id)
             type_category = await self._categorize_type(type_data, guild_id)
             type_emoji = type_data["type_emoji"]
@@ -1074,7 +1110,15 @@ class Config(commands.Cog):
             # Set parent category ID
             new_parent_category_id = type_data["sub_type"]
             if parent:
-                parent_name, parent_id, new_parent_category_id = parent.split(",")
+                try:
+                    parent_name, parent_id, new_parent_category_id = parent.split(",")
+                except ValueError:
+                    await interaction.followup.send(
+                        embed=Embeds.error(
+                            description="❌ Invalid parent selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                        )
+                    )
+                    return
 
             # Special handling for ping roles
             new_ping_roles = type_data["ping_roles"]
@@ -1199,7 +1243,15 @@ class Config(commands.Cog):
     async def type_order(self, interaction: discord.Interaction, type: str):
         try:
             guild_id = interaction.guild.id
-            type_name, type_id, type_subtype_id = type.split(",")
+            try:
+                type_name, type_id, type_subtype_id = type.split(",")
+            except ValueError:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid type selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                    )
+                )
+                return
 
             type_structure = await self._list_format_types(guild_id)
             neighbors = []
@@ -1287,7 +1339,16 @@ class Config(commands.Cog):
                 )
                 return
 
-            type_name, type_id, type_subtype_id = type.split(",")
+            try:
+                type_name, type_id, type_subtype_id = type.split(",")
+            except ValueError:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid type selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                    )
+                )
+                return
+
             await self.bot.data_manager.set_form(type_id, form_content)
             await self.bot.data_manager.get_or_load_guild_types(
                 interaction.guild.id, False
@@ -1325,9 +1386,18 @@ class Config(commands.Cog):
         try:
             await interaction.response.defer(ephemeral=False)
             guild_id = interaction.guild.id
-            type_name, type_id, type_subtype_id = type.split(",")
-            form = None
 
+            try:
+                type_name, type_id, type_subtype_id = type.split(",")
+            except ValueError:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid type selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                    )
+                )
+                return
+
+            form = None
             types = await self._key_format_types(guild_id)
             form = types[type_id]["form"]
 
@@ -1394,9 +1464,17 @@ class Config(commands.Cog):
         try:
             await interaction.response.defer(ephemeral=True)
             guild_id = interaction.guild.id
-            type_name, type_id, type_subtype_id = type.split(",")
-            form = None
+            try:
+                type_name, type_id, type_subtype_id = type.split(",")
+            except ValueError:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid type selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                    )
+                )
+                return
 
+            form = None
             types = await self._key_format_types(guild_id)
             form = types[type_id]["form"]
 
@@ -1507,7 +1585,16 @@ class Config(commands.Cog):
         try:
             await interaction.response.defer(ephemeral=True)
             channel = interaction.channel
-            status_emoji, status_name = status.split(";")
+
+            try:
+                status_emoji, status_name = status.split(";")
+            except ValueError:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid status selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                    )
+                )
+                return
 
             new_status = status_name if (status_name in emoji_map) else status_emoji
 
@@ -1621,7 +1708,15 @@ class Config(commands.Cog):
     async def status_remove(self, interaction: discord.Interaction, status: str):
         try:
             await interaction.response.defer()
-            status_emoji, status_name, status_id = status.split(";")
+            try:
+                status_emoji, status_name, status_id = status.split(";")
+            except ValueError:
+                await interaction.followup.send(
+                    embed=Embeds.error(
+                        description="❌ Invalid status selection. Please ensure you are clicking a dropdown option and not just typing in the field."
+                    )
+                )
+                return
 
             await self.bot.data_manager.delete_status(status_id)
 
