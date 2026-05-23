@@ -461,6 +461,7 @@ class Profiles(commands.Cog):
                         description="❌ You can only assign yourself an anonymous profile."
                     )
                 )
+                return
 
             link = await self.bot.data_manager.find_link(
                 guild.id, adjective_id, noun_id
