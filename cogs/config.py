@@ -1639,7 +1639,7 @@ class Config(commands.Cog):
             raise BotError(f"/status set sent an error: {e}")
 
     @status_set.autocomplete("status")
-    async def status_remove_autocomplete(
+    async def status_set_autocomplete(
         self, interaction: discord.Interaction, current: str
     ) -> List[app_commands.Choice[str]]:
         guild = interaction.guild
