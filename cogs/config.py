@@ -1019,6 +1019,7 @@ class Config(commands.Cog):
             )
 
         except Exception as e:
+            logger.exception(e)
             raise BotError(f"/type_remove sent an error: {e}")
 
     @type_remove.autocomplete("type")

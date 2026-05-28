@@ -712,11 +712,9 @@ class Analytics(commands.Cog):
 
     async def forward_to_log(self, message: discord.Message, thread_id: str):
         thread = await self.bot.cache.get_channel(thread_id)
-        print(message.flags.value)
 
         # If the message already has embeds, forward
         if message.flags.value == 32768:
-            print("Forwarding immediately")
             try:
                 await message.forward(thread)
             except Exception as e:
@@ -1036,7 +1034,6 @@ class Analytics(commands.Cog):
                     user_id = id_list[-2]
 
                     if id in FORWARD_BOTS:
-                        print("forward bot message sent")
                         asyncio.create_task(self.forward_to_log(message, thread_id))
                         return
 
