@@ -233,8 +233,21 @@ class Config(commands.Cog):
 
     async def _reorder_types(self, current_index, new_index, neighbors, guild_id):
         new_list = neighbors.copy()
-        item = new_list.pop(current_index)
+        actual_index = next(
+            (
+                i
+                for i, t in enumerate(new_list)
+                if t["data"]["order_id"] == current_index
+            ),
+            None,
+        )
+        if actual_index is None:
+            logger.warning(
+                f"_reorder_types: no item found with order_id {current_index}"
+            )
+            return
 
+        item = new_list.pop(actual_index)
         if new_index is not None:
             new_list.insert(new_index, item)
 
@@ -243,7 +256,6 @@ class Config(commands.Cog):
             type_id = entry["data"]["type_id"]
             if entry["data"]["order_id"] != idx:
                 updates.append((type_id, idx))
-
         if updates:
             await self.bot.data_manager.update_type_order(guild_id, updates)
 
