@@ -423,6 +423,9 @@ class Config(commands.Cog):
             line = self._get_line(form_text)
             index += 1
 
+        if len(fields) == 0:
+            return None, index, "❌ Form must contain at least one question."
+
         return {"title": title, "fields": fields}, None, None
 
     async def _make_form_embed(self, form_json):
