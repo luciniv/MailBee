@@ -672,8 +672,10 @@ class Config(commands.Cog):
                             break
 
                 embed = Embeds.success(
-                    title=f"Ticket Type: {type_data['type_emoji']} {type_data['type_name']}",
-                    description=type_data["type_descrip"],
+                    description=f"### Ticket Type: {type_data['type_emoji']} {type_data['type_name']}",
+                )
+                embed.add_field(
+                    name="Description", value=type_data["type_descrip"], inline=False
                 )
                 if subtypes:
                     sub_type_list = ""
@@ -746,9 +748,9 @@ class Config(commands.Cog):
                     name = parent["data"]["type_name"]
                     description = parent["data"]["type_descrip"]
                     embed = Embeds.success(
-                        title=f"Main Type: {emoji} {name}",
-                        description=f"{description}\n\n** **",
+                        description=f"### Main Ticket Type: {emoji} {name}",
                     )
+                    embed.add_field(name="Description", value=description, inline=False)
 
                     if parent["sub_types"]:
                         for sub_type in parent["sub_types"]:
@@ -1560,7 +1562,7 @@ class Config(commands.Cog):
                 "Question: How urgent is this?\n"
                 "Placeholder: From 1 to 10\n"
                 "Style: short\n"
-                "Min: 1\n"
+                "Min: 0\n"
                 "Max: 50\n"
                 "Required: false"
             )
