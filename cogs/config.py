@@ -698,9 +698,14 @@ class Config(commands.Cog):
                     )
 
                 if type_data["category_id"] == 0:
+                    redirect = type_data["redirectText"]
                     embed.add_field(
                         name="Redirect Text",
-                        value=type_data["redirectText"],
+                        value=(
+                            redirect
+                            if len(redirect) < 1024
+                            else redirect[:1021] + "..."
+                        ),
                         inline=False,
                     )
                 else:
