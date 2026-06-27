@@ -384,8 +384,7 @@ class DMCategoryButtonView(discord.ui.View):
                 embed = Embeds.info(
                     title="Select Ticket Type",
                     description="Please select a type for your ticket with the "
-                    "drop-down menu below.\n\nIf you're unsure what to choose, or "
-                    'your topic isn\'t listed, select "Other."',
+                    "drop-down menu below.",
                 )
                 if guild.icon:
                     embed.set_author(name=guild.name, icon_url=guild.icon.url)
