@@ -210,7 +210,7 @@ async def send_closing(
             closeUserEmbed.set_author(name=name, icon_url=url)
         else:
             if ap is not None:
-                if ap["adj"] == "none":
+                if ap["adj"] == "None":
                     ap["adj"] = ""
                 closeUserEmbed.set_author(
                     name=f"{ap['adj']} {ap['noun']}", icon_url=ap["url"]
