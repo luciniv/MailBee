@@ -284,7 +284,7 @@ class TicketOpener:
 
             # Populate ticket info embed depending on the member object existing
             ticket_embed.add_field(name="Opener @", value=f"<@{user.id}>", inline=True)
-            ticket_embed.add_field(name="Opener ID", value=user.id, inline=True)
+            ticket_embed.add_field(name="Opener ID", value=f"`{user.id}`", inline=True)
             # Member-specific info
             if member is not None:
                 roles = member.roles
