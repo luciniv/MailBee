@@ -309,9 +309,9 @@ class TicketOpener:
                     inline=True,
                 )
                 roblox_username = (
-                    ticket.roblox_username if ticket.roblox_username else "N/A"
+                    f"`{ticket.roblox_username}`" if ticket.roblox_username else "N/A"
                 )
-                roblox_id = ticket.roblox_id if ticket.roblox_id != -1 else "N/A"
+                roblox_id = f"`{ticket.roblox_id}`" if ticket.roblox_id != -1 else "N/A"
                 # robux_spent = ticket.robux_spent if ticket.robux_spent != -1 else "N/A"
                 # hours_played = (
                 #    ticket.hours_played if ticket.hours_played != -1 else "N/A"
