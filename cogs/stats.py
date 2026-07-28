@@ -176,10 +176,10 @@ class Stats(commands.Cog):
                 name="Tickets closed (moderator ranking)", value="closed"
             ),
             app_commands.Choice(
-                name="Tickets messages sent (moderator ranking)", value="sent"
+                name="Ticket messages sent (moderator ranking)", value="sent"
             ),
             app_commands.Choice(
-                name="Tickets chats sent (moderator ranking)", value="discussion"
+                name="Ticket chats sent (moderator ranking)", value="discussion"
             )
         ]
     )
