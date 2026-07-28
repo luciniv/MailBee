@@ -254,7 +254,7 @@ def leaderboard_queries(type: str, guild_id: int, interval: str):
                 GROUP BY tickets_v2.closerID
                 ORDER BY count DESC;"""
 
-    elif type == "sent":
+    elif type in ["sent", "discussion"]:
         if interval != "TOTAL":
             query += f""" 
                 SELECT authorID, COUNT(*) AS count
@@ -262,7 +262,7 @@ def leaderboard_queries(type: str, guild_id: int, interval: str):
                 INNER JOIN ticket_messages_v2
                 ON tickets_v2.channelID = ticket_messages_v2.channelID
                 WHERE tickets_v2.guildID = {guild_id}
-                AND ticket_messages_v2.type = 'Sent'
+                AND ticket_messages_v2.type = '{type.capitalize()}'
                 AND ticket_messages_v2.date >= NOW() - INTERVAL {interval}
                 GROUP BY ticket_messages_v2.authorID
                 ORDER BY count DESC;"""
@@ -273,7 +273,7 @@ def leaderboard_queries(type: str, guild_id: int, interval: str):
                 INNER JOIN ticket_messages_v2
                 ON tickets_v2.channelID = ticket_messages_v2.channelID
                 WHERE tickets_v2.guildID = {guild_id}
-                AND ticket_messages_v2.type = 'Sent'
+                AND ticket_messages_v2.type = '{type.capitalize()}'
                 GROUP BY ticket_messages_v2.authorID
                 ORDER BY count DESC;"""
 

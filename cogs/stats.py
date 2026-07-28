@@ -178,6 +178,9 @@ class Stats(commands.Cog):
             app_commands.Choice(
                 name="Tickets messages sent (moderator ranking)", value="sent"
             ),
+            app_commands.Choice(
+                name="Tickets chats sent (moderator ranking)", value="discussion"
+            )
         ]
     )
     @app_commands.describe(timeframe="Select a timeframe for the output data")
@@ -212,75 +215,57 @@ class Stats(commands.Cog):
             query = queries.leaderboard_queries(type_value, guild_id, time_value)
             result = await self.bot.data_manager.execute_query(query)
 
-            if result is not None:  # Go ahead to build embed
-                if len(result) == 0:
+            if result is None or len(result) == 0:
+                statsEmbed = Embeds.success(
+                    title=f"Leaderboard {time_name}",
+                    description=f"{type_name}",
+                )
+                statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
+                statsEmbed.add_field(name="No data found", value="", inline=False)
+                await interaction.followup.send(embed=statsEmbed)
+                return
+
+            else:
+                final_result = result
+                if type_value in ("open", "duration", "response"):
+                    final_result = []
+                    for entry in result:
+                        if self.bot.get_guild(entry[0]) is not None:
+                            final_result.append(entry)
+
+                for i in range(0, len(final_result), 10):
+                    chunk = final_result[i : i + 10]
                     statsEmbed = Embeds.success(
                         title=f"Leaderboard {time_name}",
                         description=f"{type_name}",
                     )
                     statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-                    statsEmbed.add_field(name="No data found", value="", inline=False)
-                    await interaction.followup.send(embed=statsEmbed)
-                    return
 
-                else:
-                    final_result = result
-                    if type_value in ("open", "duration", "response"):
-                        final_result = []
-                        for entry in result:
-                            if self.bot.get_guild(entry[0]) is not None:
-                                final_result.append(entry)
-
-                    for i in range(0, len(final_result), 10):
-                        chunk = final_result[i : i + 10]
-                        statsEmbed = Embeds.success(
-                            title=f"Leaderboard {time_name}",
-                            description=f"{type_name}",
-                        )
-                        statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
-
-                        for index, row in enumerate(chunk, start=i + 1):
-                            if type_value == "open":
-                                if not (self.bot.get_guild(row[0]) is None):
-                                    statsEmbed.add_field(
-                                        name="",
-                                        value=f"{index}) **{(self.bot.get_guild(row[0])).name}**"
-                                        f" - **{row[1]}** ticket(s)",
-                                        inline=False,
-                                    )
-
-                            elif type_value == "duration":
-                                if not (self.bot.get_guild(row[0]) is None):
-                                    statsEmbed.add_field(
-                                        name="",
-                                        value=f"{index}) **{(self.bot.get_guild(row[0])).name}**"
-                                        f" - **{queries.format_time(row[1])}**",
-                                        inline=False,
-                                    )
-
-                            elif type_value == "response":
-                                if not (self.bot.get_guild(row[0]) is None):
-                                    statsEmbed.add_field(
-                                        name="",
-                                        value=f"{index}) **{(self.bot.get_guild(row[0])).name}**"
-                                        f" - **{queries.format_time(row[1])}**",
-                                        inline=False,
-                                    )
-
-                            elif type_value == "closed":
+                    for index, row in enumerate(chunk, start=i + 1):
+                        if type_value in ["open", "duration", "response"]:
+                            if not (self.bot.get_guild(row[0]) is None):
                                 statsEmbed.add_field(
                                     name="",
-                                    value=f"{index}) <@{row[0]}> - **{row[1]}** ticket(s)",
+                                    value=f"{index}) **{(self.bot.get_guild(row[0])).name}**"
+                                    f" - **{row[1]}** ticket(s)",
                                     inline=False,
                                 )
 
-                            elif type_value == "sent":
-                                statsEmbed.add_field(
-                                    name="",
-                                    value=f"{index}) <@{row[0]}> - **{row[1]}** message(s)",
-                                    inline=False,
-                                )
-                        pages.append(statsEmbed)
+                        elif type_value == "closed":
+                            statsEmbed.add_field(
+                                name="",
+                                value=f"{index}) <@{row[0]}> - **{row[1]}** ticket(s)",
+                                inline=False,
+                            )
+
+                        elif type_value in ["sent", "discussion"]:
+                            statsEmbed.add_field(
+                                name="",
+                                value=f"{index}) <@{row[0]}> - **{row[1]}** message(s)",
+                                inline=False,
+                            )
+                    pages.append(statsEmbed)
+            
 
             pages = add_footers(pages)
             view = Paginator(pages)
