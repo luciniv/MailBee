@@ -9,8 +9,9 @@ import discord
 from discord import Embed
 from discord.permissions import PermissionOverwrite
 
-from utils.helpers import Ticket
+from classes.embeds import Embeds
 from roblox_data.roblox import *
+from utils.helpers import Ticket
 from utils.logger import *
 
 
@@ -73,10 +74,10 @@ class TicketOpener:
             type_name = ticket.type_name
             nsfw = ticket.nsfw
 
-            error_embed = discord.Embed(description="", color=discord.Color.red())
-
             # Generate ticket ID
             ticket_id = await self.bot.data_manager.get_next_ticket_id(guild.id)
+
+            # Get dm channel
             dm_channel = user.dm_channel or await user.create_dm()
             if dm_channel is None:
                 return
@@ -113,11 +114,10 @@ class TicketOpener:
                 except Exception:
                     pass
             else:
-                error_embed.description = (
+                await dm_channel.send(embed=Embeds.error(description = (
                     "❌ Could not find ticket logging channel in destination server. ",
-                    "Please try again or contact a server admin if this issue persists.",
-                )
-                await dm_channel.send(embed=error_embed)
+                    "Please try again or contact a server admin if this issue persists."
+                )))
                 return False
 
             # Create logging thread
@@ -139,12 +139,10 @@ class TicketOpener:
                 if thread is not None:
                     await self.bot.cache.store_channel(thread)
                 else:
-                    error_embed.description = "❌ Unable to create logging thread. Contact a server admin with this error."
-                    await dm_channel.send(embed=error_embed)
+                    await dm_channel.send(embed=Embeds.error(description="❌ Unable to create logging thread. Contact a server admin with this error."))
                     return False
             else:
-                error_embed.description = "❌ Unable to send opening log. Contact a server admin with this error."
-                await dm_channel.send(embed=error_embed)
+                await dm_channel.send(embed=Embeds.error(description="❌ Unable to send opening log. Contact a server admin with this error."))
                 return False
 
             # Create ticket channel
@@ -152,15 +150,16 @@ class TicketOpener:
                 guild, category, user, thread.id, nsfw
             )
             if channel is None:
-                error_embed.description = (
+                logger.warning(f"Ticket category {category.name} in {guild.name} was full")
+                await dm_channel.send(embed=Embeds.error(description=(
                     "Thank you for reaching out to the moderation team!\n\n"
                     f"Unfortunately, tickets of type **{type_name}** have "
                     "reached maximum capacity. Please try again later for an "
-                    "opening, we thank you in advance for your patience.",
-                )
-                await dm_channel.send(embed=error_embed)
+                    "opening. We thank you in advance for your patience."
+                )))
                 await thread.delete()
                 await log_message.delete()
+                await info_message.delete()
                 return False
             await self.bot.cache.store_channel(channel)
 
@@ -187,8 +186,7 @@ class TicketOpener:
             )
 
             # Delete info message
-            if info_message:
-                await info_message.delete()
+            await info_message.delete()
 
             # Finish log embed
             log_embed.add_field(
@@ -201,12 +199,11 @@ class TicketOpener:
 
         except Exception as e:
             if dm_channel:
-                error_embed.description = (
+                await dm_channel.send(embed=Embeds.error(description=(
                     "❌ An unexpected error occurred while opening your ticket. "
                     "Please try again later or contact a server admin if this "
                     "issue persists."
-                )
-                await dm_channel.send(embed=error_embed)
+                )))
             logger.exception("ticket_opener sent an exception:", e)
 
     async def create_ticket_channel(self, guild, category, user, threadID, NSFW):
@@ -232,10 +229,11 @@ class TicketOpener:
                     )
             except Exception:
                 return None
+ 
             return ticket_channel
 
         except Exception as e:
-            logger.exception(f"create channel exception: {e}")
+            logger.error(f"Creating a ticket channel failed (channel was likely not made)")
             return None
 
     async def handle_server_embeds(
