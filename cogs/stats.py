@@ -242,12 +242,21 @@ class Stats(commands.Cog):
                     statsEmbed.set_author(name=guild.name, icon_url=guild.icon.url)
 
                     for index, row in enumerate(chunk, start=i + 1):
-                        if type_value in ["open", "duration", "response"]:
+                        if type_value == "open":
                             if not (self.bot.get_guild(row[0]) is None):
                                 statsEmbed.add_field(
                                     name="",
                                     value=f"{index}) **{(self.bot.get_guild(row[0])).name}**"
                                     f" - **{row[1]}** ticket(s)",
+                                    inline=False,
+                                )
+
+                        elif type_value in ["duration", "response"]:
+                            if not (self.bot.get_guild(row[0]) is None):
+                                statsEmbed.add_field(
+                                    name="",
+                                    value=f"{index}) **{(self.bot.get_guild(row[0])).name}**"
+                                    f" - **{queries.format_time(row[1])}**",
                                     inline=False,
                                 )
 
